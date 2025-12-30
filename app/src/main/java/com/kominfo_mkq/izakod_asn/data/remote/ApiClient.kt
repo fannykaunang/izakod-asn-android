@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
 object ApiClient {
 
     // Base URL untuk Next.js server
-    private const val BASE_URL = "http://192.168.110.236:3000/"
+    const val BASE_URL = "http://192.168.110.236:3000/"
     const val API_KEY = "zkENw7654FBWHmNupvi2BbcXxhPHvF"
 
     private val apiKeyInterceptor = Interceptor { chain ->

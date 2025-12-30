@@ -1,99 +1,120 @@
 package com.kominfo_mkq.izakod_asn.data.repository
 
-import com.kominfo_mkq.izakod_asn.data.model.ApiResponse
-import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanRequest
-import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanResponse
-import com.kominfo_mkq.izakod_asn.data.model.KategoriListResponse
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.io.IOException
 
-/**
- * Repository untuk Laporan Kegiatan
- */
 class LaporanRepository {
 
-    private val apiService = ApiClient.eabsenApiService
+    suspend fun uploadImages(
+        context: Context,
+        laporanId: Int,
+        imageUris: List<Uri>
+    ): UploadResult {
+        return withContext(Dispatchers.IO) {
+            try {
+                android.util.Log.d("LaporanRepository", "📤 Starting upload for laporan_id: $laporanId")
+                android.util.Log.d("LaporanRepository", "📤 Number of images: ${imageUris.size}")
 
-    /**
-     * Get list kategori kegiatan
-     */
-    suspend fun getKategoriList(): ApiResponse<KategoriListResponse> = withContext(Dispatchers.IO) {
-        try {
-            val response = apiService.getKategoriList(isActive = 1)
+                val client = OkHttpClient()
 
-            if (response.isSuccessful) {
-                val body = response.body()
+                // Create multipart request body
+                val requestBodyBuilder = MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("laporan_id", laporanId.toString())
 
-                if (body != null && body.success) {
-                    ApiResponse(
-                        success = true,
-                        data = body
-                    )
-                } else {
-                    ApiResponse(
-                        success = false,
-                        error = "Gagal memuat kategori"
-                    )
+                // Add each image file
+                imageUris.forEachIndexed { index, uri ->
+                    try {
+                        val inputStream = context.contentResolver.openInputStream(uri)
+                        val bytes = inputStream?.readBytes()
+                        inputStream?.close()
+
+                        if (bytes != null) {
+                            val fileName = getFileNameFromUri(context, uri) ?: "image_$index.jpg"
+                            val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+
+                            android.util.Log.d("LaporanRepository", "📎 Adding file: $fileName (${bytes.size} bytes)")
+
+                            requestBodyBuilder.addFormDataPart(
+                                "files",
+                                fileName,
+                                bytes.toRequestBody(mimeType.toMediaTypeOrNull())
+                            )
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("LaporanRepository", "❌ Error reading image $index: ${e.message}")
+                    }
                 }
-            } else {
-                ApiResponse(
-                    success = false,
-                    error = "Error: ${response.code()} ${response.message()}"
-                )
+
+                val requestBody = requestBodyBuilder.build()
+
+                // Build request
+                val request = Request.Builder()
+                    .url("${ApiClient.BASE_URL}/api/file-upload")
+                    .addHeader("EabsenApiKey", ApiClient.API_KEY)
+                    .post(requestBody)
+                    .build()
+
+                android.util.Log.d("LaporanRepository", "📡 Sending request to: ${ApiClient.BASE_URL}/api/file-upload")
+
+                // Execute request
+                val response = client.newCall(request).execute()
+                val responseBody = response.body?.string()
+
+                android.util.Log.d("LaporanRepository", "📡 Response code: ${response.code}")
+                android.util.Log.d("LaporanRepository", "📡 Response body: $responseBody")
+
+                if (response.isSuccessful && responseBody != null) {
+                    val json = JSONObject(responseBody)
+                    val success = json.optBoolean("success", false)
+
+                    if (success) {
+                        android.util.Log.d("LaporanRepository", "✅ Upload successful!")
+                        UploadResult(success = true, error = null)
+                    } else {
+                        val message = json.optString("message", "Upload failed")
+                        android.util.Log.e("LaporanRepository", "❌ Upload failed: $message")
+                        UploadResult(success = false, error = message)
+                    }
+                } else {
+                    val error = "Upload failed: HTTP ${response.code}"
+                    android.util.Log.e("LaporanRepository", "❌ $error")
+                    UploadResult(success = false, error = error)
+                }
+            } catch (e: IOException) {
+                android.util.Log.e("LaporanRepository", "❌ Network error: ${e.message}", e)
+                UploadResult(success = false, error = "Network error: ${e.message}")
+            } catch (e: Exception) {
+                android.util.Log.e("LaporanRepository", "❌ Upload error: ${e.message}", e)
+                UploadResult(success = false, error = e.message)
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            ApiResponse(
-                success = false,
-                error = e.message ?: "Network error"
-            )
         }
     }
 
-    /**
-     * Create new laporan kegiatan
-     */
-    suspend fun createLaporan(
-        request: CreateLaporanRequest
-    ): ApiResponse<CreateLaporanResponse> = withContext(Dispatchers.IO) {
-        try {
-            val response = apiService.createLaporan(request)
-
-            if (response.isSuccessful) {
-                val body = response.body()
-
-                if (body != null && body.success) {
-                    ApiResponse(
-                        success = true,
-                        data = body
-                    )
-                } else {
-                    ApiResponse(
-                        success = false,
-                        error = body?.message ?: "Gagal membuat laporan"
-                    )
-                }
-            } else {
-                // Parse error body
-                val errorBody = response.errorBody()?.string()
-                val requiresAttendance = errorBody?.contains("requiresAttendance") == true
-
-                ApiResponse(
-                    success = false,
-                    error = if (requiresAttendance) {
-                        "Anda belum absen pada tanggal yang dipilih. Silakan absen terlebih dahulu."
-                    } else {
-                        "Error: ${response.code()} ${response.message()}"
-                    }
-                )
+    private fun getFileNameFromUri(context: Context, uri: Uri): String? {
+        var fileName: String? = null
+        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (nameIndex >= 0 && cursor.moveToFirst()) {
+                fileName = cursor.getString(nameIndex)
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            ApiResponse(
-                success = false,
-                error = e.message ?: "Network error"
-            )
         }
+        return fileName
     }
 }
+
+data class UploadResult(
+    val success: Boolean,
+    val error: String?
+)

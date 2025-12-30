@@ -2,12 +2,14 @@ package com.kominfo_mkq.izakod_asn.ui.viewmodel
 
 import android.content.Context
 import android.location.Location
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.location.LocationServices
 import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.KategoriKegiatan
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
+import com.kominfo_mkq.izakod_asn.data.repository.LaporanRepository
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +28,7 @@ data class CreateLaporanUiState(
     val errorMessage: String? = null,
     val requiresAttendance: Boolean = false,
     val hasCheckedAttendance: Boolean = false,
+    val selectedImages: List<Uri> = emptyList(),
 
     // Form fields
     val tanggalKegiatan: String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
@@ -60,7 +63,19 @@ data class CreateLaporanUiState(
  */
 class CreateLaporanViewModel : ViewModel() {
 
+    fun addImages(uris: List<Uri>) {
+        val currentImages = _uiState.value.selectedImages
+        val newImages = (currentImages + uris).take(5) // Max 5 images
+        _uiState.value = _uiState.value.copy(selectedImages = newImages)
+    }
+
+    fun removeImage(uri: Uri) {
+        val newImages = _uiState.value.selectedImages.filter { it != uri }
+        _uiState.value = _uiState.value.copy(selectedImages = newImages)
+    }
+
     private val apiService = ApiClient.eabsenApiService
+    private val repository = LaporanRepository()
 
     private val _uiState = MutableStateFlow(CreateLaporanUiState())
     val uiState: StateFlow<CreateLaporanUiState> = _uiState.asStateFlow()
@@ -256,7 +271,7 @@ class CreateLaporanViewModel : ViewModel() {
     /**
      * Submit laporan
      */
-    fun submitLaporan(status: String) {
+    fun submitLaporan(context: Context, status: String) {
         if (!validateForm()) {
             _uiState.value = _uiState.value.copy(
                 errorMessage = "Mohon lengkapi semua field yang wajib diisi",
@@ -321,6 +336,31 @@ class CreateLaporanViewModel : ViewModel() {
                 )
 
                 if (response.isSuccessful && response.body()?.success == true) {
+                    val laporanId = response.body()?.laporanId
+                    android.util.Log.d("CreateLaporanViewModel", "✅ Laporan created with ID: $laporanId")
+
+                    if (laporanId != null && state.selectedImages.isNotEmpty()) {
+                        android.util.Log.d("CreateLaporanViewModel", "📤 Uploading ${state.selectedImages.size} images...")
+
+                        try {
+                            val uploadResult = repository.uploadImages(
+                                context = context, // You need to pass context
+                                laporanId = laporanId,
+                                imageUris = state.selectedImages
+                            )
+
+                            if (uploadResult.success) {
+                                android.util.Log.d("CreateLaporanViewModel", "✅ Images uploaded successfully")
+                            } else {
+                                android.util.Log.e("CreateLaporanViewModel", "❌ Image upload failed: ${uploadResult.error}")
+                                // Don't fail the whole operation, just log
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("CreateLaporanViewModel", "❌ Image upload exception: ${e.message}")
+                            // Don't fail the whole operation
+                        }
+                    }
+
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isSuccess = true

@@ -53,6 +53,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
 
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("io.coil-kt:coil-compose:2.5.0")
 
     // Add this line to fix the 'tasks' unresolved reference
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")

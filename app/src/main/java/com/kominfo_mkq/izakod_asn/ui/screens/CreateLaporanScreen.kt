@@ -2,20 +2,28 @@ package com.kominfo_mkq.izakod_asn.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -25,6 +33,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.CreateLaporanViewModel
 import com.kominfo_mkq.izakod_asn.data.model.KategoriKegiatan
 import java.text.SimpleDateFormat
@@ -94,7 +103,7 @@ fun CreateLaporanScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, "Kembali")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Kembali")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -199,6 +208,14 @@ fun CreateLaporanScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            ImageUploadSection(
+                selectedImages = uiState.selectedImages,
+                onAddImages = { viewModel.addImages(it) },
+                onRemoveImage = { viewModel.removeImage(it) }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // Link Reference Section
             LinkSection(
                 linkReferensi = uiState.linkReferensi,
@@ -210,8 +227,8 @@ fun CreateLaporanScreen(
             // Action Buttons
             ActionButtons(
                 isLoading = uiState.isLoading,
-                onSaveDraft = { viewModel.submitLaporan("Draft") },
-                onSubmit = { viewModel.submitLaporan("Diajukan") },
+                onSaveDraft = { viewModel.submitLaporan(context, "Draft") },
+                onSubmit = { viewModel.submitLaporan(context, "Diajukan") },
                 onCancel = onNavigateBack
             )
 
@@ -945,5 +962,90 @@ private fun formatDate(dateString: String): String {
         date?.let { outputFormat.format(it) } ?: dateString
     } catch (e: Exception) {
         dateString
+    }
+}
+
+@Composable
+private fun ImageUploadSection(
+    selectedImages: List<Uri>,
+    onAddImages: (List<Uri>) -> Unit,
+    onRemoveImage: (Uri) -> Unit
+) {
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris -> if (uris.isNotEmpty()) onAddImages(uris) }
+
+    SectionCard(
+        title = "Foto Kegiatan",
+        icon = Icons.Default.Image
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                "Upload foto kegiatan (maksimal 5 foto)",
+                style = MaterialTheme.typography.bodySmall
+            )
+
+            if (selectedImages.isNotEmpty()) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(selectedImages.size) { index ->
+                        ImagePreview(
+                            uri = selectedImages[index],
+                            onRemove = { onRemoveImage(selectedImages[index]) }
+                        )
+                    }
+                }
+            }
+
+            if (selectedImages.size < 5) {
+                OutlinedButton(
+                    onClick = { imagePickerLauncher.launch("image/*") },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.AddPhotoAlternate, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Tambah Foto (${selectedImages.size}/5)")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ImagePreview(uri: Uri, onRemove: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(100.dp)
+            .clip(RoundedCornerShape(8.dp))
+    ) {
+        AsyncImage(
+            model = uri,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+
+        IconButton(
+            onClick = onRemove,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .size(24.dp)
+                .background(
+                    MaterialTheme.colorScheme.error.copy(0.9f),
+                    CircleShape
+                )
+        ) {
+            Icon(
+                Icons.Default.Close,
+                null,
+                tint = Color.White,
+                modifier = Modifier.size(16.dp)
+            )
+        }
     }
 }
