@@ -1,14 +1,30 @@
 package com.kominfo_mkq.izakod_asn.navigation
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.kominfo_mkq.izakod_asn.ui.components.StatusType
 import com.kominfo_mkq.izakod_asn.ui.screens.*
 
 /**
@@ -80,64 +96,46 @@ fun IZAKODNavigation(
 
         // Report List Screen
         composable(Screen.ReportList.route) {
-            val sampleReports = remember {
-                listOf(
-                    LaporanKegiatan(
-                        id = "1",
-                        tanggal = "28 Desember 2024",
-                        namaKegiatan = "Rapat Koordinasi Tim Pengembangan",
-                        kategori = "Rapat/Pertemuan",
-                        durasi = "2 jam 30 menit",
-                        status = StatusType.APPROVED
-                    ),
-                    LaporanKegiatan(
-                        id = "2",
-                        tanggal = "27 Desember 2024",
-                        namaKegiatan = "Verifikasi Data Pegawai ASN",
-                        kategori = "Administrasi",
-                        durasi = "4 jam",
-                        status = StatusType.PENDING
-                    ),
-                    LaporanKegiatan(
-                        id = "3",
-                        tanggal = "26 Desember 2024",
-                        namaKegiatan = "Pembuatan Laporan Bulanan",
-                        kategori = "Pelaporan",
-                        durasi = "3 jam",
-                        status = StatusType.REVISED,
-                        catatan = "Mohon dilengkapi dengan data statistik terbaru"
-                    ),
-                    LaporanKegiatan(
-                        id = "4",
-                        tanggal = "25 Desember 2024",
-                        namaKegiatan = "Monitoring Sistem E-Absen",
-                        kategori = "Teknologi",
-                        durasi = "5 jam",
-                        status = StatusType.APPROVED
-                    ),
-                    LaporanKegiatan(
-                        id = "5",
-                        tanggal = "24 Desember 2024",
-                        namaKegiatan = "Sosialisasi Aplikasi IZAKOD",
-                        kategori = "Sosialisasi",
-                        durasi = "3 jam 30 menit",
-                        status = StatusType.REJECTED,
-                        catatan = "Dokumentasi kegiatan tidak lengkap"
-                    )
-                )
-            }
-
             ReportListScreen(
-                reports = sampleReports,
-                onReportClick = { reportId ->
-                    navController.navigate(Screen.ReportDetail.createRoute(reportId))
+                onBack = { navController.popBackStack() },
+                onReportClick = { laporanId ->
+                    navController.navigate("laporan_detail/$laporanId")
                 },
-                onCreateReport = {
-                    navController.navigate(Screen.CreateReport.route)
-                },
-                onBack = {
-                    navController.popBackStack()
+                onCreateReport = { /* ... */ },
+                reports = emptyList() // Not used anymore, kept for compatibility
+            )
+        }
+
+        composable(
+            route = "laporan_detail/{laporanId}",
+            arguments = listOf(
+                navArgument("laporanId") {
+                    type = NavType.StringType
                 }
+            )
+        ) { backStackEntry ->
+            val laporanId = backStackEntry.arguments?.getString("laporanId") ?: ""
+
+            ReportDetailScreen(
+                laporanId = laporanId,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToEdit = { id ->
+                    // TODO: Navigate to edit screen
+                    navController.navigate("laporan_edit/$id")
+                }
+            )
+        }
+
+        composable(
+            route = "laporan_edit_placeholder/{laporanId}",
+            arguments = listOf(navArgument("laporanId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val laporanId = backStackEntry.arguments?.getString("laporanId") ?: ""
+
+            PlaceholderScreen(
+                title = "Edit Laporan",
+                message = "Laporan ID: $laporanId",
+                navController = navController
             )
         }
 
@@ -172,18 +170,14 @@ fun IZAKODNavigation(
 
         // Edit Report Screen - TODO
         composable(
-            route = Screen.EditReport.route,
-            arguments = listOf(
-                navArgument("reportId") { type = NavType.StringType }
-            )
+            route = "laporan_edit/{laporanId}",
+            arguments = listOf(navArgument("laporanId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val reportId = backStackEntry.arguments?.getString("reportId")
+            val laporanId = backStackEntry.arguments?.getString("laporanId") ?: ""
 
-            // TODO: Implement EditReportScreen
-            PlaceholderScreen(
-                title = "Edit Laporan",
-                message = "Report ID: $reportId\n\nScreen ini akan digunakan untuk mengedit laporan kegiatan.",
-                onBack = { navController.popBackStack() }
+            EditLaporanScreen(
+                laporanId = laporanId,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
@@ -252,6 +246,96 @@ fun IZAKODNavigation(
                 message = "Screen ini akan digunakan untuk mencetak laporan kegiatan.",
                 onBack = { navController.popBackStack() }
             )
+        }
+    }
+}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PlaceholderScreen(
+    title: String,
+    message: String = ""
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(title) },
+                navigationIcon = {
+                    IconButton(onClick = { /* navController.popBackStack() */ }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge
+                )
+                if (message.isNotEmpty()) {
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                Text(
+                    text = "Coming soon...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PlaceholderScreen(
+    title: String,
+    message: String = "",
+    navController: NavHostController
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(title) },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Default.ArrowBack, "Back")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(title, style = MaterialTheme.typography.titleLarge)
+                if (message.isNotEmpty()) {
+                    Text(message, style = MaterialTheme.typography.bodyMedium)
+                }
+                Text(
+                    "Coming soon...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

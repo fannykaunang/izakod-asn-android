@@ -1,6 +1,7 @@
+// Updated ReportListScreen.kt - Connect to real API
+
 package com.kominfo_mkq.izakod_asn.ui.screens
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -10,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,19 +22,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kominfo_mkq.izakod_asn.ui.components.*
 import com.kominfo_mkq.izakod_asn.ui.theme.*
-
-data class LaporanKegiatan(
-    val id: String,
-    val tanggal: String,
-    val namaKegiatan: String,
-    val kategori: String,
-    val durasi: String,
-    val status: StatusType,
-    val catatan: String? = null
-)
+import com.kominfo_mkq.izakod_asn.ui.viewmodel.LaporanListViewModel
+import com.kominfo_mkq.izakod_asn.data.model.LaporanKegiatan as ApiLaporanKegiatan
+import java.text.SimpleDateFormat
+import java.util.*
 
 enum class FilterType {
     ALL,
@@ -45,17 +41,40 @@ enum class FilterType {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportListScreen(
-    reports: List<LaporanKegiatan>,
+    onBack: () -> Unit,
     onReportClick: (String) -> Unit,
     onCreateReport: () -> Unit,
-    onBack: () -> Unit
+    reports: List<LaporanKegiatan>, // Keep for backward compatibility
+    viewModel: LaporanListViewModel = viewModel()
 ) {
+    val uiState by viewModel.uiState.collectAsState()
+
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(FilterType.ALL) }
     var showFilterDialog by remember { mutableStateOf(false) }
 
-    val filteredReports = remember(reports, searchQuery, selectedFilter) {
-        reports.filter { report ->
+    // Load data when screen opens
+    LaunchedEffect(Unit) {
+        viewModel.loadLaporan()
+    }
+
+    // Convert API model to UI model
+    val apiReports = remember(uiState.laporanList) {
+        uiState.laporanList.map { apiLaporan ->
+            LaporanKegiatan(
+                id = apiLaporan.laporanId.toString(),
+                tanggal = formatDate(apiLaporan.tanggalKegiatan),
+                namaKegiatan = apiLaporan.namaKegiatan,
+                kategori = apiLaporan.kategoriNama ?: "Kategori",
+                durasi = "${apiLaporan.waktuMulai} - ${apiLaporan.waktuSelesai}",
+                status = mapStatus(apiLaporan.statusLaporan),
+                catatan = apiLaporan.catatanVerifikator
+            )
+        }
+    }
+
+    val filteredReports = remember(apiReports, searchQuery, selectedFilter) {
+        apiReports.filter { report ->
             val matchesSearch = report.namaKegiatan.contains(searchQuery, ignoreCase = true) ||
                     report.kategori.contains(searchQuery, ignoreCase = true)
 
@@ -85,12 +104,20 @@ fun ReportListScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Kembali"
                         )
                     }
                 },
                 actions = {
+                    // Refresh button
+                    IconButton(onClick = { viewModel.loadLaporan() }) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh"
+                        )
+                    }
+
                     IconButton(onClick = { showFilterDialog = true }) {
                         Badge(
                             containerColor = if (selectedFilter != FilterType.ALL)
@@ -128,153 +155,203 @@ fun ReportListScreen(
             )
         }
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .padding(paddingValues)
         ) {
-            // Search Bar
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                placeholder = { Text("Cari laporan...") },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = null
-                    )
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Clear"
-                            )
+            when {
+                uiState.isLoading -> {
+                    // Loading state
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            CircularProgressIndicator()
+                            Text("Memuat laporan...")
                         }
                     }
-                },
-                shape = RoundedCornerShape(16.dp),
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = PrimaryLight,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                )
-            )
-
-            // Filter Chips
-            LazyRow(
-                modifier = Modifier.padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                item {
-                    FilterChip(
-                        selected = selectedFilter == FilterType.ALL,
-                        onClick = { selectedFilter = FilterType.ALL },
-                        label = { Text("Semua") }
-                    )
                 }
-                item {
-                    FilterChip(
-                        selected = selectedFilter == FilterType.PENDING,
-                        onClick = { selectedFilter = FilterType.PENDING },
-                        label = { Text("Diajukan") },
-                        leadingIcon = {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(StatusPending)
-                            )
-                        }
-                    )
-                }
-                item {
-                    FilterChip(
-                        selected = selectedFilter == FilterType.APPROVED,
-                        onClick = { selectedFilter = FilterType.APPROVED },
-                        label = { Text("Disetujui") },
-                        leadingIcon = {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(StatusApproved)
-                            )
-                        }
-                    )
-                }
-                item {
-                    FilterChip(
-                        selected = selectedFilter == FilterType.REJECTED,
-                        onClick = { selectedFilter = FilterType.REJECTED },
-                        label = { Text("Ditolak") },
-                        leadingIcon = {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(StatusRejected)
-                            )
-                        }
-                    )
-                }
-                item {
-                    FilterChip(
-                        selected = selectedFilter == FilterType.REVISED,
-                        onClick = { selectedFilter = FilterType.REVISED },
-                        label = { Text("Perlu Revisi") },
-                        leadingIcon = {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(StatusRevised)
-                            )
-                        }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Report List
-            if (filteredReports.isEmpty()) {
-                EmptyState(
-                    message = if (searchQuery.isNotEmpty())
-                        "Tidak ada laporan yang cocok dengan pencarian"
-                    else
-                        "Belum ada laporan kegiatan",
-                    onAction = if (searchQuery.isEmpty()) onCreateReport else null,
-                    actionText = "Buat Laporan"
-                )
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    item {
+                uiState.isError -> {
+                    // Error state
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Error,
+                            null,
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(Modifier.height(16.dp))
                         Text(
-                            text = "${filteredReports.size} Laporan",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            uiState.errorMessage ?: "Terjadi kesalahan",
+                            style = MaterialTheme.typography.titleMedium
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(Modifier.height(16.dp))
+                        Button(onClick = { viewModel.loadLaporan() }) {
+                            Icon(Icons.Default.Refresh, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Coba Lagi")
+                        }
                     }
-
-                    items(filteredReports, key = { it.id }) { report ->
-                        ReportCard(
-                            report = report,
-                            onClick = { onReportClick(report.id) }
+                }
+                else -> {
+                    // Success state
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Search Bar
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 16.dp),
+                            placeholder = { Text("Cari laporan...") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = null
+                                )
+                            },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Clear"
+                                        )
+                                    }
+                                }
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = PrimaryLight,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
                         )
-                    }
 
-                    item {
-                        Spacer(modifier = Modifier.height(80.dp))
+                        // Filter Chips
+                        LazyRow(
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            item {
+                                FilterChip(
+                                    selected = selectedFilter == FilterType.ALL,
+                                    onClick = { selectedFilter = FilterType.ALL },
+                                    label = { Text("Semua") }
+                                )
+                            }
+                            item {
+                                FilterChip(
+                                    selected = selectedFilter == FilterType.PENDING,
+                                    onClick = { selectedFilter = FilterType.PENDING },
+                                    label = { Text("Diajukan") },
+                                    leadingIcon = {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(StatusPending)
+                                        )
+                                    }
+                                )
+                            }
+                            item {
+                                FilterChip(
+                                    selected = selectedFilter == FilterType.APPROVED,
+                                    onClick = { selectedFilter = FilterType.APPROVED },
+                                    label = { Text("Disetujui") },
+                                    leadingIcon = {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(StatusApproved)
+                                        )
+                                    }
+                                )
+                            }
+                            item {
+                                FilterChip(
+                                    selected = selectedFilter == FilterType.REJECTED,
+                                    onClick = { selectedFilter = FilterType.REJECTED },
+                                    label = { Text("Ditolak") },
+                                    leadingIcon = {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(StatusRejected)
+                                        )
+                                    }
+                                )
+                            }
+                            item {
+                                FilterChip(
+                                    selected = selectedFilter == FilterType.REVISED,
+                                    onClick = { selectedFilter = FilterType.REVISED },
+                                    label = { Text("Perlu Revisi") },
+                                    leadingIcon = {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(StatusRevised)
+                                        )
+                                    }
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Report List
+                        if (filteredReports.isEmpty()) {
+                            EmptyState(
+                                message = if (searchQuery.isNotEmpty())
+                                    "Tidak ada laporan yang cocok dengan pencarian"
+                                else
+                                    "Belum ada laporan kegiatan",
+                                onAction = if (searchQuery.isEmpty()) onCreateReport else null,
+                                actionText = "Buat Laporan"
+                            )
+                        } else {
+                            LazyColumn(
+                                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                item {
+                                    Text(
+                                        text = "${filteredReports.size} Laporan",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                }
+
+                                items(filteredReports, key = { it.id }) { report ->
+                                    ReportCard(
+                                        report = report,
+                                        onClick = { onReportClick(report.id) }
+                                    )
+                                }
+
+                                item {
+                                    Spacer(modifier = Modifier.height(80.dp))
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -282,6 +359,7 @@ fun ReportListScreen(
     }
 }
 
+// Keep existing ReportCard composable
 @Composable
 fun ReportCard(
     report: LaporanKegiatan,
@@ -377,7 +455,6 @@ fun ReportCard(
                 }
             }
 
-            // Catatan jika status ditolak atau perlu revisi
             if ((report.status == StatusType.REJECTED || report.status == StatusType.REVISED)
                 && report.catatan != null) {
                 Spacer(modifier = Modifier.height(12.dp))
@@ -465,3 +542,40 @@ fun EmptyState(
         }
     }
 }
+
+// Helper functions
+private fun formatDate(dateString: String): String {
+    return try {
+        // ✅ Same fix
+        val datePart = dateString.split("T")[0]
+
+        val inputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val outputFormat = SimpleDateFormat("dd MMM yyyy", Locale("id", "ID"))
+
+        val date = inputFormat.parse(datePart)
+        date?.let { outputFormat.format(it) } ?: dateString
+    } catch (e: Exception) {
+        dateString.split("T")[0]
+    }
+}
+
+private fun mapStatus(status: String): StatusType {
+    return when (status.lowercase()) {
+        "pending", "diajukan" -> StatusType.PENDING
+        "diverifikasi", "approved" -> StatusType.APPROVED
+        "ditolak", "rejected" -> StatusType.REJECTED
+        "perlu revisi", "revised" -> StatusType.REVISED
+        else -> StatusType.PENDING
+    }
+}
+
+// Keep existing LaporanKegiatan data class for UI
+data class LaporanKegiatan(
+    val id: String,
+    val tanggal: String,
+    val namaKegiatan: String,
+    val kategori: String,
+    val durasi: String,
+    val status: StatusType,
+    val catatan: String? = null
+)

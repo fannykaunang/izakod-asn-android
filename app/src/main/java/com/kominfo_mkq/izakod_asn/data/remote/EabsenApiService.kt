@@ -4,9 +4,13 @@ import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanResponse
 import com.kominfo_mkq.izakod_asn.data.model.EabsenLoginResponse
 import com.kominfo_mkq.izakod_asn.data.model.KategoriListResponse
+import com.kominfo_mkq.izakod_asn.data.model.LaporanDetailResponse
+import com.kominfo_mkq.izakod_asn.data.model.LaporanListResponse
 import com.kominfo_mkq.izakod_asn.data.model.LoginRequest
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiData
 import com.kominfo_mkq.izakod_asn.data.model.StatistikBulananResponse
+import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanRequest
+import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanResponse
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -80,4 +84,34 @@ interface EabsenApiService {
         @Query("pegawai_id") pegawaiId: Int? = null,
         @Query("pin") pin: String? = null  // ✅ Add PIN parameter
     ): Response<CreateLaporanResponse>
+
+    /**
+     * Get all laporan kegiatan
+     * GET /api/laporan-kegiatan
+     */
+    @GET("api/laporan-kegiatan")
+    suspend fun getLaporanList(
+        @Query("pegawai_id") pegawaiId: Int? = null
+    ): Response<LaporanListResponse>
+
+    /**
+     * Get laporan detail by ID
+     * GET /api/laporan/{id}?pegawai_id={pegawai_id}
+     */
+    @GET("api/laporan-kegiatan/{id}")
+    suspend fun getLaporanDetail(
+        @Path("id") laporanId: Int,
+        @Query("pegawai_id") pegawaiId: Int? = null
+    ): Response<LaporanDetailResponse>
+
+    /**
+     * Update laporan kegiatan
+     * PUT /api/laporan/{id}?pegawai_id={pegawai_id}
+     */
+    @PUT("api/laporan-kegiatan/{id}")
+    suspend fun updateLaporan(
+        @Path("id") laporanId: Int,
+        @Body request: UpdateLaporanRequest,
+        @Query("pegawai_id") pegawaiId: Int? = null
+    ): Response<UpdateLaporanResponse>
 }

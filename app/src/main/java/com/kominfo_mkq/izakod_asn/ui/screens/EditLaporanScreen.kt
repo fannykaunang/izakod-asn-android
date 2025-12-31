@@ -15,62 +15,65 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import com.kominfo_mkq.izakod_asn.ui.viewmodel.CreateLaporanViewModel
 import com.kominfo_mkq.izakod_asn.data.model.KategoriKegiatan
+import com.kominfo_mkq.izakod_asn.ui.viewmodel.EditLaporanViewModel
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+import kotlin.collections.find
+import kotlin.collections.forEach
 
-/**
- * CreateLaporanScreen - Form untuk membuat laporan kegiatan baru
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreateLaporanScreen(
+fun EditLaporanScreen(
+    laporanId: String,
     onNavigateBack: () -> Unit,
-    viewModel: CreateLaporanViewModel = viewModel()
+    viewModel: EditLaporanViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
-    // Date picker state
     var showDatePicker by remember { mutableStateOf(false) }
 
-    // ✅ Show Toast for errors
+    // Load laporan when screen opens
+    LaunchedEffect(laporanId) {
+        viewModel.loadLaporan(laporanId.toInt())
+    }
+
+    // Show toast for errors
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { message ->
-            Toast.makeText(
-                context,
-                message,
-                Toast.LENGTH_LONG  // Use LONG for validation errors
-            ).show()
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         }
     }
 
-    // ✅ Show Toast for success and navigate back
+    // Show toast for success and navigate back
     LaunchedEffect(uiState.isSuccess) {
         if (uiState.isSuccess) {
-            Toast.makeText(context, "Laporan berhasil disimpan!", Toast.LENGTH_SHORT).show()
-            //onNavigateBack()
+            Toast.makeText(context, "Laporan berhasil diperbarui!", Toast.LENGTH_SHORT).show()
+            onNavigateBack()
         }
     }
 
@@ -83,19 +86,12 @@ fun CreateLaporanScreen(
         }
     }
 
-    // Show success dialog
-    LaunchedEffect(uiState.isSuccess) {
-        if (uiState.isSuccess) {
-            onNavigateBack()
-        }
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        "Buat Laporan Kegiatan",
+                        "Edit Laporan",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold
                         )
@@ -103,7 +99,7 @@ fun CreateLaporanScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Kembali")
+                        Icon(Icons.Default.ArrowBack, "Kembali")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -112,127 +108,165 @@ fun CreateLaporanScreen(
             )
         }
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(scrollState)
-                .background(MaterialTheme.colorScheme.background)
         ) {
-            // Info Alert
-            if (!uiState.hasCheckedAttendance) {
-                InfoAlert()
-            }
-
-            // Form Sections
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Basic Information Section
-            BasicInformationSection(
-                tanggalKegiatan = uiState.tanggalKegiatan,
-                kategoriId = uiState.kategoriId,
-                namaKegiatan = uiState.namaKegiatan,
-                deskripsiKegiatan = uiState.deskripsiKegiatan,
-                kategoris = uiState.kategoris,
-                errors = uiState.errors,
-                onTanggalClick = { showDatePicker = true },
-                onKategoriChange = { viewModel.updateKategori(it) },
-                onNamaChange = { viewModel.updateNamaKegiatan(it) },
-                onDeskripsiChange = { viewModel.updateDeskripsi(it) }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Target & Output Section
-            TargetOutputSection(
-                targetOutput = uiState.targetOutput,
-                hasilOutput = uiState.hasilOutput,
-                onTargetChange = { viewModel.updateTargetOutput(it) },
-                onHasilChange = { viewModel.updateHasilOutput(it) }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Time Section
-            TimeSection(
-                waktuMulai = uiState.waktuMulai,
-                waktuSelesai = uiState.waktuSelesai,
-                errors = uiState.errors,
-                onWaktuMulaiChange = { viewModel.updateWaktuMulai(it) },
-                onWaktuSelesaiChange = { viewModel.updateWaktuSelesai(it) }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Location Section
-            LocationSection(
-                lokasiKegiatan = uiState.lokasiKegiatan,
-                latitude = uiState.latitude,
-                longitude = uiState.longitude,
-                gettingLocation = uiState.gettingLocation,
-                onLokasiChange = { viewModel.updateLokasiKegiatan(it) },
-                onGetLocation = {
-                    when (PackageManager.PERMISSION_GRANTED) {
-                        ContextCompat.checkSelfPermission(
-                            context,
-                            Manifest.permission.ACCESS_FINE_LOCATION
-                        ) -> {
-                            viewModel.getCurrentLocation(context)
-                        }
-                        else -> {
-                            locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            when {
+                uiState.isLoadingData -> {
+                    // Loading state
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            CircularProgressIndicator()
+                            Text("Memuat data laporan...")
                         }
                     }
                 }
-            )
+                uiState.loadError -> {
+                    // Error loading
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.padding(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Error,
+                                null,
+                                modifier = Modifier.size(64.dp),
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                            Text("Gagal memuat data")
+                            Button(onClick = { viewModel.loadLaporan(laporanId.toInt()) }) {
+                                Text("Coba Lagi")
+                            }
+                        }
+                    }
+                }
+                else -> {
+                    // Form content
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(scrollState)
+                            .background(MaterialTheme.colorScheme.background)
+                    ) {
+                        // Info Alert
+                        InfoAlert()
 
-            Spacer(modifier = Modifier.height(16.dp))
+                        // Form Sections
+                        Spacer(modifier = Modifier.height(16.dp))
 
-            // Participants Section
-            ParticipantsSection(
-                pesertaKegiatan = uiState.pesertaKegiatan,
-                jumlahPeserta = uiState.jumlahPeserta,
-                onPesertaChange = { viewModel.updatePesertaKegiatan(it) },
-                onJumlahChange = { viewModel.updateJumlahPeserta(it) }
-            )
+                        // Basic Information Section
+                        BasicInformationSection(
+                            tanggalKegiatan = uiState.tanggalKegiatan,
+                            kategoriId = uiState.kategoriId,
+                            namaKegiatan = uiState.namaKegiatan,
+                            deskripsiKegiatan = uiState.deskripsiKegiatan,
+                            kategoris = uiState.kategoris,
+                            errors = uiState.errors,
+                            onTanggalClick = { showDatePicker = true },
+                            onKategoriChange = { viewModel.updateKategori(it) },
+                            onNamaChange = { viewModel.updateNamaKegiatan(it) },
+                            onDeskripsiChange = { viewModel.updateDeskripsi(it) }
+                        )
 
-            Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-            // Problems & Solutions Section
-            ProblemsSection(
-                kendala = uiState.kendala,
-                solusi = uiState.solusi,
-                onKendalaChange = { viewModel.updateKendala(it) },
-                onSolusiChange = { viewModel.updateSolusi(it) }
-            )
+                        // Target & Output Section
+                        TargetOutputSection(
+                            targetOutput = uiState.targetOutput,
+                            hasilOutput = uiState.hasilOutput,
+                            onTargetChange = { viewModel.updateTargetOutput(it) },
+                            onHasilChange = { viewModel.updateHasilOutput(it) }
+                        )
 
-            Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-            ImageUploadSection(
-                selectedImages = uiState.selectedImages,
-                onAddImages = { viewModel.addImages(it) },
-                onRemoveImage = { viewModel.removeImage(it) }
-            )
+                        // Time Section
+                        TimeSection(
+                            waktuMulai = uiState.waktuMulai,
+                            waktuSelesai = uiState.waktuSelesai,
+                            errors = uiState.errors,
+                            onWaktuMulaiChange = { viewModel.updateWaktuMulai(it) },
+                            onWaktuSelesaiChange = { viewModel.updateWaktuSelesai(it) }
+                        )
 
-            Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-            // Link Reference Section
-            LinkSection(
-                linkReferensi = uiState.linkReferensi,
-                onLinkChange = { viewModel.updateLinkReferensi(it) }
-            )
+                        // Location Section
+                        LocationSection(
+                            lokasiKegiatan = uiState.lokasiKegiatan,
+                            latitude = uiState.latitude,
+                            longitude = uiState.longitude,
+                            gettingLocation = uiState.gettingLocation,
+                            onLokasiChange = { viewModel.updateLokasiKegiatan(it) },
+                            onGetLocation = {
+                                when (PackageManager.PERMISSION_GRANTED) {
+                                    ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.ACCESS_FINE_LOCATION
+                                    ) -> {
+                                        viewModel.getCurrentLocation(context)
+                                    }
+                                    else -> {
+                                        locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                    }
+                                }
+                            }
+                        )
 
-            Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-            // Action Buttons
-            ActionButtons(
-                isLoading = uiState.isLoading,
-                onSaveDraft = { viewModel.submitLaporan(context, "Draft") },
-                onSubmit = { viewModel.submitLaporan(context, "Diajukan") },
-                onCancel = onNavigateBack
-            )
+                        // Participants Section
+                        ParticipantsSection(
+                            pesertaKegiatan = uiState.pesertaKegiatan,
+                            jumlahPeserta = uiState.jumlahPeserta,
+                            onPesertaChange = { viewModel.updatePesertaKegiatan(it) },
+                            onJumlahChange = { viewModel.updateJumlahPeserta(it) }
+                        )
 
-            Spacer(modifier = Modifier.height(32.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Problems & Solutions Section
+                        ProblemsSection(
+                            kendala = uiState.kendala,
+                            solusi = uiState.solusi,
+                            onKendalaChange = { viewModel.updateKendala(it) },
+                            onSolusiChange = { viewModel.updateSolusi(it) }
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Link Reference Section
+                        LinkSection(
+                            linkReferensi = uiState.linkReferensi,
+                            onLinkChange = { viewModel.updateLinkReferensi(it) }
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Action Buttons
+                        EditActionButtons(
+                            isLoading = uiState.isUpdating,
+                            onUpdate = { viewModel.updateLaporan(context) },
+                            onCancel = onNavigateBack
+                        )
+
+                        Spacer(modifier = Modifier.height(32.dp))
+                    }
+                }
+            }
         }
     }
 
@@ -247,19 +281,25 @@ fun CreateLaporanScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        datePickerState.selectedDateMillis?.let { millis->
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            android.util.Log.d("DatePicker", "📅 Raw millis: $millis")
+
                             val calendar = Calendar.getInstance()
                             calendar.timeInMillis = millis
 
-                            // Format using local timezone
+                            // ✅ DEBUG: Log calendar date
+                            android.util.Log.d("DatePicker", "📅 Calendar date: ${calendar.time}")
+                            android.util.Log.d("DatePicker", "📅 Year: ${calendar.get(Calendar.YEAR)}")
+                            android.util.Log.d("DatePicker", "📅 Month: ${calendar.get(Calendar.MONTH) + 1}")
+                            android.util.Log.d("DatePicker", "📅 Day: ${calendar.get(Calendar.DAY_OF_MONTH)}")
+
                             val year = calendar.get(Calendar.YEAR)
-                            val month = calendar.get(Calendar.MONTH) + 1 // Month is 0-based
+                            val month = calendar.get(Calendar.MONTH) + 1
                             val day = calendar.get(Calendar.DAY_OF_MONTH)
 
-                            // Format as YYYY-MM-DD
                             val dateString = String.format("%04d-%02d-%02d", year, month, day)
 
-                            android.util.Log.d("DatePicker", "✅ Selected: $dateString")
+                            android.util.Log.d("DatePicker", "📅 Final string: $dateString")
 
                             viewModel.updateTanggalKegiatan(dateString)
                         }
@@ -301,7 +341,7 @@ private fun InfoAlert() {
             )
             Column {
                 Text(
-                    "Informasi Penting:",
+                    "Edit Laporan:",
                     style = MaterialTheme.typography.titleSmall.copy(
                         fontWeight = FontWeight.Bold
                     ),
@@ -309,9 +349,9 @@ private fun InfoAlert() {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "• Pastikan Anda sudah melakukan absensi untuk tanggal kegiatan\n" +
+                    "• Ubah data yang diperlukan\n" +
                             "• Field bertanda * wajib diisi\n" +
-                            "• Anda dapat menyimpan sebagai Draft atau langsung Mengajukan",
+                            "• Tekan 'Simpan Perubahan' untuk menyimpan",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
@@ -319,52 +359,57 @@ private fun InfoAlert() {
         }
     }
 }
-// TODO bikin halaman template
+
 @Composable
-private fun ErrorAlert(
-    message: String,
-    requiresAttendance: Boolean,
-    onDismiss: () -> Unit
+private fun EditActionButtons(
+    isLoading: Boolean,
+    onUpdate: () -> Unit,
+    onCancel: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
-        )
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(
-                Icons.Default.Warning,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.error
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    if (requiresAttendance) "Belum Absen" else "Error",
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = MaterialTheme.colorScheme.onErrorContainer
+            // Update Button
+            Button(
+                onClick = onUpdate,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isLoading,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer
-                )
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Menyimpan...")
+                } else {
+                    Icon(Icons.Default.Save, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Simpan Perubahan")
+                }
             }
-            IconButton(onClick = onDismiss) {
-                Icon(
-                    Icons.Default.Close,
-                    contentDescription = "Tutup",
-                    tint = MaterialTheme.colorScheme.onErrorContainer
-                )
+
+            // Cancel Button
+            TextButton(
+                onClick = onCancel,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isLoading
+            ) {
+                Text("Batal")
             }
         }
     }
@@ -848,73 +893,6 @@ private fun LinkSection(
 }
 
 @Composable
-private fun ActionButtons(
-    isLoading: Boolean,
-    onSaveDraft: () -> Unit,
-    onSubmit: () -> Unit,
-    onCancel: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Submit Button
-            Button(
-                onClick = onSubmit,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isLoading,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Mengirim...")
-                } else {
-                    Icon(Icons.Default.Send, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Ajukan Laporan")
-                }
-            }
-
-            // Save Draft Button
-            OutlinedButton(
-                onClick = onSaveDraft,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isLoading
-            ) {
-                Icon(Icons.Default.Save, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Simpan Draft")
-            }
-
-            // Cancel Button
-            TextButton(
-                onClick = onCancel,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isLoading
-            ) {
-                Text("Batal")
-            }
-        }
-    }
-}
-
-@Composable
 private fun SectionCard(
     title: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -958,7 +936,6 @@ private fun SectionCard(
     }
 }
 
-// Helper function to format date
 private fun formatDate(dateString: String): String {
     return try {
         val inputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -1054,3 +1031,4 @@ private fun ImagePreview(uri: Uri, onRemove: () -> Unit) {
         }
     }
 }
+

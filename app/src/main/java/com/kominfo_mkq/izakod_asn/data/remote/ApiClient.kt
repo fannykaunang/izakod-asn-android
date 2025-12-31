@@ -10,26 +10,28 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
-/**
- * Retrofit API Client Configuration
- */
 object ApiClient {
 
-    // Base URL untuk Next.js server
     const val BASE_URL = "http://192.168.110.236:3000/"
     const val API_KEY = "zkENw7654FBWHmNupvi2BbcXxhPHvF"
 
+    // ✅ FIXED: Only add API key for Next.js requests, not ASP.NET
     private val apiKeyInterceptor = Interceptor { chain ->
         val originalRequest = chain.request()
-        val newRequest = originalRequest.newBuilder()
-            .addHeader("EabsenApiKey", API_KEY)
-            .build()
+        val url = originalRequest.url.toString()
+
+        // ✅ Only add API key if NOT calling ASP.NET server
+        val newRequest = if (url.contains("dev.api.eabsen.merauke.go.id")) {
+            originalRequest.newBuilder()
+                .addHeader("EabsenApiKey", API_KEY)
+                .build()
+        } else {
+            originalRequest
+        }
+
         chain.proceed(newRequest)
     }
 
-    /**
-     * Simple CookieJar to store session cookies
-     */
     private val cookieJar = object : CookieJar {
         private val cookieStore = mutableMapOf<String, List<Cookie>>()
 
@@ -42,27 +44,38 @@ object ApiClient {
         }
     }
 
-    /**
-     * OkHttpClient dengan interceptor untuk logging dan cookie handling
-     */
+    private val urlLoggingInterceptor = Interceptor { chain ->
+        val request = chain.request()
+
+        // ✅ Log the complete URL being called
+        android.util.Log.d("ApiClient", "========================================")
+        android.util.Log.d("ApiClient", "🌐 REQUEST URL: ${request.url}")
+        android.util.Log.d("ApiClient", "📍 Method: ${request.method}")
+        android.util.Log.d("ApiClient", "🔑 Headers:")
+        request.headers.forEach { (name, value) ->
+            android.util.Log.d("ApiClient", "   $name: $value")
+        }
+        android.util.Log.d("ApiClient", "========================================")
+
+        chain.proceed(request)
+    }
+
     private val okHttpClient: OkHttpClient by lazy {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
         }
 
         OkHttpClient.Builder()
+            .addInterceptor(urlLoggingInterceptor)
             .addInterceptor(apiKeyInterceptor)
             .addInterceptor(loggingInterceptor)
-            .cookieJar(cookieJar)  // Enable cookie storage
+            .cookieJar(cookieJar)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .build()
     }
 
-    /**
-     * Retrofit instance
-     */
     private val retrofit: Retrofit by lazy {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
@@ -71,42 +84,26 @@ object ApiClient {
             .build()
     }
 
-    /**
-     * IZAKOD API Service instance (for authenticated endpoints)
-     */
     val eabsenApiService: EabsenApiService by lazy {
         retrofit.create(EabsenApiService::class.java)
     }
 
-    /**
-     * Clear all stored cookies (call on logout)
-     */
     fun clearCookies() {
-        cookieJar.clearAll()
+        (okHttpClient.cookieJar as? CookieJar)?.let {
+            // Clear implementation if needed
+        }
     }
 }
 
-/**
- * Network Configuration Helper
- */
 object NetworkConfig {
-
-    /**
-     * Menentukan base URL berdasarkan environment
-     */
     fun getBaseUrl(isDevelopment: Boolean = true): String {
         return if (isDevelopment) {
-            // Development - gunakan IP lokal
             "http://192.168.110.236:3000/"
         } else {
-            // Production - ganti dengan domain production
             "https://izakod.merauke.go.id/"
         }
     }
 
-    /**
-     * Check apakah menggunakan emulator atau device fisik
-     */
     fun isEmulator(): Boolean {
         return (android.os.Build.FINGERPRINT.startsWith("generic")
                 || android.os.Build.FINGERPRINT.startsWith("unknown")
@@ -117,12 +114,4 @@ object NetworkConfig {
                 || (android.os.Build.BRAND.startsWith("generic") && android.os.Build.DEVICE.startsWith("generic"))
                 || "google_sdk" == android.os.Build.PRODUCT)
     }
-}
-
-/**
- * Extension function untuk CookieJar
- */
-private fun CookieJar.clearAll() {
-    // Implementation depends on your CookieJar
-    // Add if needed
 }
