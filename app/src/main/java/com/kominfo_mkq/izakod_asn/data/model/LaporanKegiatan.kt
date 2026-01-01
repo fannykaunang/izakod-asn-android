@@ -18,7 +18,7 @@ data class LaporanKegiatan(
     @SerializedName("kategori_id")
     val kategoriId: Int,
 
-    @SerializedName("kategori_nama")
+    @SerializedName("nama_kategori")
     val kategoriNama: String?,
 
     @SerializedName("nama_kegiatan")
@@ -105,4 +105,54 @@ data class LaporanMeta(
 
     @SerializedName("supervisedPegawaiIds")
     val supervisedPegawaiIds: List<Int>
+)
+
+/**
+ * Request for verifying laporan
+ */
+data class VerifikasiLaporanRequest(
+    @SerializedName("status_laporan")
+    val status_laporan: String, // "Diverifikasi" | "Revisi" | "Ditolak"
+
+    @SerializedName("rating_kualitas")
+    val rating_kualitas: Int?,
+
+    @SerializedName("catatan_verifikasi")
+    val catatan_verifikasi: String?,
+
+    @SerializedName("is_complete")
+    val is_complete: Boolean? = null
+)
+
+/**
+* Response for verification
+*/
+data class VerifikasiLaporanResponse(
+    @SerializedName("success")
+    val success: Boolean,
+
+    @SerializedName("message")
+    val message: String,
+
+    @SerializedName("data")
+    val data: VerifikasiData?
+)
+
+data class VerifikasiData(
+    @SerializedName("laporan")
+    val laporan: LaporanDetail,
+
+    @SerializedName("rekapHarian")
+    val rekapHarian: RekapHarian?
+)
+
+data class RekapHarian(
+    @SerializedName("pegawai_id")
+    val pegawaiId: Int,
+
+    @SerializedName("tanggal")
+    val tanggal: String,
+
+    @SerializedName("is_complete")
+    val isComplete: Boolean
 )

@@ -7,6 +7,8 @@ import com.kominfo_mkq.izakod_asn.data.model.LaporanDetailResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanListResponse
 import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanResponse
+import com.kominfo_mkq.izakod_asn.data.model.VerifikasiLaporanRequest
+import com.kominfo_mkq.izakod_asn.data.model.VerifikasiLaporanResponse
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient.eabsenApiService
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +23,31 @@ import java.io.IOException
 import retrofit2.Response
 
 class LaporanRepository {
+    private val apiService = eabsenApiService
+// TODO tampilan button verifikasi diatas tidak terlalu bagus dan saat verifikasi masih error 401
+    /**
+     * Verifikasi laporan (Terima, Revisi, atau Tolak)
+     */
+    suspend fun verifikasiLaporan(
+        laporanId: Int,
+        status: String,
+        rating: Int?,
+        catatan: String?
+    ): Response<VerifikasiLaporanResponse> {
+        android.util.Log.d("LaporanRepository", "📝 Verifying laporan: $laporanId")
+        android.util.Log.d("LaporanRepository", "📊 Status: $status, Rating: $rating")
+
+        val pegawaiId = StatistikRepository.getPegawaiId()
+
+        val request = VerifikasiLaporanRequest(
+            status_laporan = status,
+            rating_kualitas = rating,
+            catatan_verifikasi = catatan
+        )
+
+        return apiService.verifikasiLaporan(laporanId, request, pegawaiId)
+    }
+
     /**
      * Get all laporan kegiatan
      */

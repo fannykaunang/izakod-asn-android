@@ -25,6 +25,7 @@ fun ReportDetailScreen(
     laporanId: String,
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (String) -> Unit = {},
+    onNavigateToVerify: ((String) -> Unit)? = null,
     viewModel: LaporanDetailViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -54,6 +55,20 @@ fun ReportDetailScreen(
                     // Refresh button
                     IconButton(onClick = { viewModel.loadLaporan(laporanId.toInt()) }) {
                         Icon(Icons.Default.Refresh, "Refresh")
+                    }
+
+                    if (uiState.canVerify && uiState.laporan?.statusLaporan == "Diajukan") {
+                        Button(
+                            onClick = { onNavigateToVerify?.invoke(laporanId) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF4CAF50)
+                            )
+                        ) {
+                            Icon(Icons.Default.CheckCircle, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Verifikasi Laporan")
+                        }
                     }
 
                     // Edit button (if can edit)

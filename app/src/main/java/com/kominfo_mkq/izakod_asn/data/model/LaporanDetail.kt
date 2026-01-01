@@ -12,13 +12,19 @@ data class LaporanDetail(
     @SerializedName("pegawai_nama")
     val pegawaiNama: String?,
 
+    @SerializedName("pegawai_nip")
+    val pegawaiNip: String?,
+
+    @SerializedName("skpd")
+    val skpd: String?,
+
     @SerializedName("tanggal_kegiatan")
     val tanggalKegiatan: String,
 
     @SerializedName("kategori_id")
     val kategoriId: Int,
 
-    @SerializedName("kategori_nama")
+    @SerializedName("nama_kategori")
     val kategoriNama: String?,
 
     @SerializedName("nama_kegiatan")

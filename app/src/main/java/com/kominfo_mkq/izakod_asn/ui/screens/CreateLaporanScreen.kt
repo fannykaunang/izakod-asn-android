@@ -52,8 +52,25 @@ fun CreateLaporanScreen(
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
+    DisposableEffect(Unit) {
+        onDispose {
+            // Only clear if not submitted successfully
+            if (!uiState.isSuccess) {
+                android.util.Log.d("CreateLaporanScreen", "🗑️ Clearing form on back navigation")
+                viewModel.clearForm()
+            }
+        }
+    }
+
     // Date picker state
     var showDatePicker by remember { mutableStateOf(false) }
+    var hasNavigated by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        android.util.Log.d("CreateLaporanScreen", "🆕 Screen opened, resetting success")
+        viewModel.resetSuccess()
+        hasNavigated = false
+    }
 
     // ✅ Show Toast for errors
     LaunchedEffect(uiState.errorMessage) {
@@ -66,11 +83,13 @@ fun CreateLaporanScreen(
         }
     }
 
-    // ✅ Show Toast for success and navigate back
     LaunchedEffect(uiState.isSuccess) {
-        if (uiState.isSuccess) {
+        if (uiState.isSuccess && !hasNavigated) {
+            android.util.Log.d("CreateLaporanScreen", "✅ Success! Showing toast and navigating...")
             Toast.makeText(context, "Laporan berhasil disimpan!", Toast.LENGTH_SHORT).show()
-            //onNavigateBack()
+
+            kotlinx.coroutines.delay(500)
+            onNavigateBack()
         }
     }
 
@@ -80,13 +99,6 @@ fun CreateLaporanScreen(
     ) { isGranted ->
         if (isGranted) {
             viewModel.getCurrentLocation(context)
-        }
-    }
-
-    // Show success dialog
-    LaunchedEffect(uiState.isSuccess) {
-        if (uiState.isSuccess) {
-            onNavigateBack()
         }
     }
 

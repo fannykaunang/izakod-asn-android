@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.android.gms.location.LocationServices
 import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.KategoriKegiatan
+import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatan
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
 import com.kominfo_mkq.izakod_asn.data.repository.LaporanRepository
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
@@ -81,28 +82,51 @@ class CreateLaporanViewModel : ViewModel() {
     val uiState: StateFlow<CreateLaporanUiState> = _uiState.asStateFlow()
 
     init {
-        loadKategoris()
+        loadKategoriList()
     }
 
     /**
      * Load kategori kegiatan
      */
-    private fun loadKategoris() {
+    private fun loadKategoriList() {
         viewModelScope.launch {
             try {
+                android.util.Log.d("CreateLaporanViewModel", "📋 Loading kategori list...")
+
                 val response = apiService.getKategoriList(isActive = 1)
 
-                if (response.isSuccessful && response.body()?.success == true) {
+                if (response.isSuccessful && response.body() != null) {
                     val kategoris = response.body()!!.data
+
+                    android.util.Log.d("CreateLaporanViewModel", "✅ Loaded ${kategoris.size} kategori")
+
                     _uiState.value = _uiState.value.copy(
                         kategoris = kategoris
                     )
+                } else {
+                    android.util.Log.e("CreateLaporanViewModel", "❌ Failed to load kategori")
                 }
             } catch (e: Exception) {
-                // Silent fail for kategori loading
-                e.printStackTrace()
+                android.util.Log.e("CreateLaporanViewModel", "❌ Error loading kategori: ${e.message}")
             }
         }
+    }
+
+    /**
+     * Start fresh form
+     */
+    fun startFreshForm() {
+        android.util.Log.d("CreateLaporanViewModel", "🆕 Starting fresh form")
+
+        // ✅ Preserve kategoris
+        val currentKategoris = _uiState.value.kategoris
+
+        _uiState.value = CreateLaporanUiState(
+            kategoris = currentKategoris,  // ✅ Keep kategoris!
+            isSuccess = false,
+            isLoading = false,
+            errorMessage = null
+        )
     }
 
     /**
@@ -411,5 +435,55 @@ class CreateLaporanViewModel : ViewModel() {
             errorMessage = null,
             requiresAttendance = false
         )
+    }
+
+    /**
+     * ✅ Load form data from template
+     */
+    fun loadFromTemplate(template: TemplateKegiatan) {
+        _uiState.value = CreateLaporanUiState(
+            kategoriId = template.kategoriId.toString(),
+            namaKegiatan = template.namaTemplate,
+            deskripsiKegiatan = template.deskripsi ?: "",
+            targetOutput = template.targetOutputDefault ?: "",
+            lokasiKegiatan = template.lokasiDefault ?: "",
+            tanggalKegiatan = "",
+            waktuMulai = "",
+            waktuSelesai = "",
+            hasilOutput = "",
+            pesertaKegiatan = "",
+            jumlahPeserta = "",
+            latitude = null,
+            longitude = null,
+            kendala = "",
+            solusi = "",
+            linkReferensi = "",
+            isSuccess = false,
+            isLoading = false,
+            errorMessage = null
+        )
+    }
+
+    /**
+     * Clear form
+     */
+    fun clearForm() {
+        // ✅ Preserve kategoris
+        val currentKategoris = _uiState.value.kategoris
+
+        _uiState.value = CreateLaporanUiState(
+            kategoris = currentKategoris,
+            isSuccess = false,
+            isLoading = false,
+            errorMessage = null
+        )
+    }
+
+    fun resetSuccess() {
+        _uiState.value = _uiState.value.copy(
+            isSuccess = false,
+            errorMessage = null
+        )
+        android.util.Log.d("CreateLaporanViewModel", "✅ Success state reset")
     }
 }

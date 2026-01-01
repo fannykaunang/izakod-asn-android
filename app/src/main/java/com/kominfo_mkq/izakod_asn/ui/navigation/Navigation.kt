@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -26,6 +27,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.kominfo_mkq.izakod_asn.ui.screens.*
+import com.kominfo_mkq.izakod_asn.ui.viewmodel.CreateLaporanViewModel
 
 /**
  * Navigation Routes untuk IZAKOD-ASN App
@@ -49,6 +51,7 @@ sealed class Screen(val route: String) {
     }
     object PrintReport : Screen("print_report")
     object CreateReport : Screen("create_report")
+    object TemplateKegiatan : Screen("template_kegiatan")
 }
 
 @Composable
@@ -56,6 +59,8 @@ fun IZAKODNavigation(
     navController: NavHostController = rememberNavController(),
     startDestination: String = Screen.Login.route
 ) {
+    val createLaporanViewModel: CreateLaporanViewModel = viewModel()
+
     NavHost(
         navController = navController,
         startDestination = startDestination
@@ -71,17 +76,17 @@ fun IZAKODNavigation(
             )
         }
 
-        // Dashboard Screen - UPDATED untuk use ViewModel & API
         composable(Screen.Dashboard.route) {
             DashboardScreen(
                 onNavigateToCreateReport = {
+                    createLaporanViewModel.startFreshForm()
                     navController.navigate(Screen.CreateReport.route)
                 },
                 onNavigateToReports = {
                     navController.navigate(Screen.ReportList.route)
                 },
                 onNavigateToTemplates = {
-                    navController.navigate(Screen.Templates.route)
+                    navController.navigate("templates")
                 },
                 onNavigateToReminder = {
                     navController.navigate(Screen.Reminders.route)
@@ -101,7 +106,10 @@ fun IZAKODNavigation(
                 onReportClick = { laporanId ->
                     navController.navigate("laporan_detail/$laporanId")
                 },
-                onCreateReport = { /* ... */ },
+                onCreateReport = {
+                    createLaporanViewModel.startFreshForm()
+                    navController.navigate(Screen.CreateReport.route)
+                },
                 reports = emptyList() // Not used anymore, kept for compatibility
             )
         }
@@ -120,8 +128,10 @@ fun IZAKODNavigation(
                 laporanId = laporanId,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToEdit = { id ->
-                    // TODO: Navigate to edit screen
                     navController.navigate("laporan_edit/$id")
+                },
+                onNavigateToVerify = { id ->  // ✅ Add this
+                    navController.navigate("laporan_verify/$id")
                 }
             )
         }
@@ -161,10 +171,10 @@ fun IZAKODNavigation(
         composable(Screen.CreateReport.route) {
             CreateLaporanScreen(
                 onNavigateBack = {
-                    android.util.Log.d("Navigation", "🔙 onNavigateBack called")
-                    val popped = navController.popBackStack()
-                    android.util.Log.d("Navigation", "🔙 popBackStack result: $popped")
-                }
+                    createLaporanViewModel.clearForm()
+                    navController.popBackStack()
+                },
+                viewModel = createLaporanViewModel
             )
         }
 
@@ -178,16 +188,6 @@ fun IZAKODNavigation(
             EditLaporanScreen(
                 laporanId = laporanId,
                 onNavigateBack = { navController.popBackStack() }
-            )
-        }
-
-        // Templates Screen - TODO
-        composable(Screen.Templates.route) {
-            // TODO: Implement TemplatesScreen
-            PlaceholderScreen(
-                title = "Template Kegiatan",
-                message = "Screen ini akan menampilkan template kegiatan yang tersimpan.",
-                onBack = { navController.popBackStack() }
             )
         }
 
@@ -245,6 +245,28 @@ fun IZAKODNavigation(
                 title = "Cetak Laporan",
                 message = "Screen ini akan digunakan untuk mencetak laporan kegiatan.",
                 onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Templates.route) {
+            TemplateKegiatanScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onTemplateClick = { template ->
+                    createLaporanViewModel.loadFromTemplate(template)
+                    navController.navigate(Screen.CreateReport.route)
+                }
+            )
+        }
+
+        // Add verifikasi route
+        composable(
+            route = "laporan_verify/{laporanId}",
+            arguments = listOf(navArgument("laporanId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val laporanId = backStackEntry.arguments?.getString("laporanId") ?: ""
+            VerifikasiLaporanScreen(
+                laporanId = laporanId,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
     }

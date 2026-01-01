@@ -9,8 +9,11 @@ import com.kominfo_mkq.izakod_asn.data.model.LaporanListResponse
 import com.kominfo_mkq.izakod_asn.data.model.LoginRequest
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiData
 import com.kominfo_mkq.izakod_asn.data.model.StatistikBulananResponse
+import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanResponse
 import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanResponse
+import com.kominfo_mkq.izakod_asn.data.model.VerifikasiLaporanRequest
+import com.kominfo_mkq.izakod_asn.data.model.VerifikasiLaporanResponse
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -114,4 +117,26 @@ interface EabsenApiService {
         @Body request: UpdateLaporanRequest,
         @Query("pegawai_id") pegawaiId: Int? = null
     ): Response<UpdateLaporanResponse>
+
+    /**
+     * Get template kegiatan list
+     * GET /api/template-kegiatan
+     */
+    @GET("api/template-kegiatan")
+    suspend fun getTemplateKegiatan(
+        @Query("kategori_id") kategoriId: Int? = null,
+        @Query("is_public") isPublic: Int? = null,
+        @Query("unit_kerja") unitKerja: String? = null
+    ): Response<TemplateKegiatanResponse>
+
+    /**
+     * Verify laporan (Terima, Revisi, atau Tolak)
+     * POST /api/laporan-kegiatan/{id}/verifikasi
+     */
+    @POST("api/laporan-kegiatan/{id}/verifikasi")
+    suspend fun verifikasiLaporan(
+        @Path("id") laporanId: Int,
+        @Body request: VerifikasiLaporanRequest,
+        @Query("pegawai_id") pegawaiId: Int?
+    ): Response<VerifikasiLaporanResponse>
 }
