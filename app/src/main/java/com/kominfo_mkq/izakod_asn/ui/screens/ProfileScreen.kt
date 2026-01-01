@@ -179,13 +179,14 @@ private fun ProfileHeader(
             Text(
                 text = nama,
                 style = MaterialTheme.typography.headlineSmall.copy(
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 ),
                 color = Color.White
             )
 
             Spacer(modifier = Modifier.height(4.dp))
-
+// TODO lihat kode update tampilan ini di chatgpt https://chatgpt.com/c/6956b23a-6b2c-8324-b9e5-520764f52e04
             // NIP
             Text(
                 text = "NIP: $nip",

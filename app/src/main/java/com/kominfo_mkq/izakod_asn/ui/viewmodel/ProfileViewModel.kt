@@ -22,6 +22,12 @@ class ProfileViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
+    private val _selectedTabIndex = MutableStateFlow(0)
+    val selectedTabIndex: StateFlow<Int> = _selectedTabIndex.asStateFlow()
+
+    private val _isDarkMode = MutableStateFlow(false)
+    val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
+
     /**
      * Load pegawai profile from ASP.NET Core Eabsen API
      */
