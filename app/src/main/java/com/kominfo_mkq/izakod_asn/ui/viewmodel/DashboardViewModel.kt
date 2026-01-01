@@ -3,7 +3,10 @@ package com.kominfo_mkq.izakod_asn.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kominfo_mkq.izakod_asn.data.model.MetricsData
+import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
 import com.kominfo_mkq.izakod_asn.data.model.TimeSeriesItem
+import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
+import com.kominfo_mkq.izakod_asn.data.remote.EabsenRetrofitClient
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +24,10 @@ data class DashboardUiState(
     val errorMessage: String? = null,
     val metrics: MetricsData? = null,
     val timeSeries: List<TimeSeriesItem> = emptyList(),
-    val isAdmin: Boolean = false
+    val isAdmin: Boolean = false,
+    val pegawaiProfile: PegawaiProfile? = null,
+    val photoUrl: String? = null,
+    val isLoadingProfile: Boolean = false
 )
 
 /**
@@ -35,6 +41,40 @@ class DashboardViewModel : ViewModel() {
     // UI State
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
+
+    /**
+     * Load pegawai profile
+     */
+    fun loadPegawaiProfile(pin: String) {    viewModelScope.launch {
+        try {
+            _uiState.update { it.copy(isLoadingProfile = true) }
+
+            val response = EabsenRetrofitClient.apiService.getPegawaiProfile(pin)
+
+            if (response.isSuccessful && response.body() != null) {
+                val profile = response.body()!!
+
+                // Bersihkan path jika ada double slash
+                val cleanPath = profile.photoPath?.removePrefix("/")
+                val fullPhotoUrl = if (cleanPath != null) {
+                    "https://entago.merauke.go.id/$cleanPath"
+                } else null
+
+                _uiState.update {
+                    it.copy(
+                        pegawaiProfile = profile,
+                        photoUrl = fullPhotoUrl,
+                        isLoadingProfile = false
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            _uiState.update { it.copy(isLoadingProfile = false) }
+        }
+    }
+    }
+
+
 
     init {
         // Load statistik saat ViewModel dibuat
@@ -62,8 +102,7 @@ class DashboardViewModel : ViewModel() {
     ) {
         viewModelScope.launch {
             try {
-                // ✅ Set loading FIRST
-                _uiState.value = DashboardUiState(isLoading = true)
+                _uiState.update { it.copy(isLoading = true) }
 
                 val finalPegawaiId = pegawaiId ?: StatistikRepository.getPegawaiId()
 

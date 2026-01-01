@@ -561,11 +561,14 @@ private fun formatDate(dateString: String): String {
 
 private fun mapStatus(status: String): StatusType {
     return when (status.lowercase()) {
-        "pending", "diajukan" -> StatusType.PENDING
-        "diverifikasi", "approved" -> StatusType.APPROVED
+        "pending", "diajukan", "draft" -> StatusType.PENDING
+        "diverifikasi", "approved", "verified" -> StatusType.APPROVED
         "ditolak", "rejected" -> StatusType.REJECTED
-        "perlu revisi", "revised" -> StatusType.REVISED
-        else -> StatusType.PENDING
+        "revisi", "perlu revisi", "revised", "revision" -> StatusType.REVISED
+        else -> {
+            android.util.Log.w("ReportListScreen", "⚠️ Unknown status: $status, defaulting to PENDING")
+            StatusType.PENDING
+        }
     }
 }
 

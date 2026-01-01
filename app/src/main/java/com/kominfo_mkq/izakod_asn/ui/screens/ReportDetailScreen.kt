@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,6 +17,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.LaporanDetailViewModel
 import com.kominfo_mkq.izakod_asn.data.model.LaporanDetail
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusApproved
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusPending
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusRejected
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusRevised
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -48,40 +53,24 @@ fun ReportDetailScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, "Kembali")
-                    }
-                },
-                actions = {
-                    // Refresh button
-                    IconButton(onClick = { viewModel.loadLaporan(laporanId.toInt()) }) {
-                        Icon(Icons.Default.Refresh, "Refresh")
-                    }
-
-                    if (uiState.canVerify && uiState.laporan?.statusLaporan == "Diajukan") {
-                        Button(
-                            onClick = { onNavigateToVerify?.invoke(laporanId) },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF4CAF50)
-                            )
-                        ) {
-                            Icon(Icons.Default.CheckCircle, null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Verifikasi Laporan")
-                        }
-                    }
-
-                    // Edit button (if can edit)
-                    if (uiState.canEdit) {
-                        IconButton(onClick = { onNavigateToEdit(laporanId) }) {
-                            Icon(Icons.Default.Edit, "Edit")
-                        }
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Kembali")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             )
+        },
+        bottomBar = {
+            if (!uiState.isLoading && !uiState.isError && uiState.laporan != null) {
+                StickyActionButtons(
+                    canEdit = uiState.canEdit,
+                    canVerify = uiState.canVerify,
+                    statusLaporan = uiState.laporan!!.statusLaporan,
+                    onEdit = { onNavigateToEdit(laporanId) },
+                    onVerify = { onNavigateToVerify?.invoke(laporanId) }
+                )
+            }
         }
     ) { paddingValues ->
         Box(
@@ -107,6 +96,78 @@ fun ReportDetailScreen(
                         canVerify = uiState.canVerify
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StickyActionButtons(
+    canEdit: Boolean,
+    canVerify: Boolean,
+    statusLaporan: String,
+    onEdit: () -> Unit,
+    onVerify: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shadowElevation = 8.dp,
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // ✅ Verify Button (Primary - if can verify)
+            if (canVerify && statusLaporan == "Diajukan") {
+                Button(
+                    onClick = onVerify,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF4CAF50)
+                    )
+                ) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Verifikasi Laporan",
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                }
+            }
+
+            // ✅ Edit Button (Secondary - if can edit)
+            if (canEdit) {
+                OutlinedButton(
+                    onClick = onEdit,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Edit Laporan")
+                }
+            }
+
+            // ✅ Info text if no actions available
+            if (!canEdit && !canVerify) {
+                Text(
+                    "Tidak ada aksi yang tersedia",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
             }
         }
     }
@@ -160,6 +221,7 @@ private fun LaporanDetailContent(
         // Links Section
         if (laporan.linkReferensi != null) {
             LinksSection(laporan = laporan)
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
         // Metadata Section
@@ -173,39 +235,46 @@ private fun LaporanDetailContent(
 private fun StatusCard(status: String) {
     val (bgColor, textColor, icon, label) = when (status) {
         "Draft" -> Tuple4(
-            Color(0xFFE0E0E0),
-            Color(0xFF424242),
+            MaterialTheme.colorScheme.surfaceVariant,
+            MaterialTheme.colorScheme.onSurfaceVariant,
             Icons.Default.Edit,
             "Draft"
         )
         "Diajukan", "Pending" -> Tuple4(
-            Color(0xFFFFF3E0),
-            Color(0xFFE65100),
+            StatusPending.copy(alpha = 0.15f),      // ✅ Amber background
+            StatusPending,                           // ✅ Amber text
             Icons.Default.Schedule,
             "Menunggu Verifikasi"
         )
-        "Diverifikasi" -> Tuple4(
-            Color(0xFFE8F5E9),
-            Color(0xFF2E7D32),
+        "Diverifikasi", "Approved" -> Tuple4(
+            StatusApproved.copy(alpha = 0.15f),     // ✅ Green background
+            StatusApproved,                          // ✅ Green text
             Icons.Default.CheckCircle,
             "Diverifikasi"
         )
-        "Ditolak" -> Tuple4(
-            Color(0xFFFFEBEE),
-            Color(0xFFC62828),
+        "Ditolak", "Rejected" -> Tuple4(
+            StatusRejected.copy(alpha = 0.15f),     // ✅ Red background
+            StatusRejected,                          // ✅ Red text
             Icons.Default.Cancel,
             "Ditolak"
         )
+        "Revisi", "Revised" -> Tuple4(              // ✅ Add Revisi status
+            StatusRevised.copy(alpha = 0.15f),      // ✅ Orange background
+            StatusRevised,                           // ✅ Orange text
+            Icons.Default.Edit,
+            "Perlu Revisi"
+        )
         else -> Tuple4(
-            Color(0xFFE0E0E0),
-            Color(0xFF424242),
+            MaterialTheme.colorScheme.surfaceVariant,
+            MaterialTheme.colorScheme.onSurfaceVariant,
             Icons.Default.Info,
             status
         )
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = bgColor
         )

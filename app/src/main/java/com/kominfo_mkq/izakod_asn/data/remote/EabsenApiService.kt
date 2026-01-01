@@ -8,6 +8,7 @@ import com.kominfo_mkq.izakod_asn.data.model.LaporanDetailResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanListResponse
 import com.kominfo_mkq.izakod_asn.data.model.LoginRequest
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiData
+import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
 import com.kominfo_mkq.izakod_asn.data.model.StatistikBulananResponse
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanResponse
 import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanRequest
@@ -139,4 +140,13 @@ interface EabsenApiService {
         @Body request: VerifikasiLaporanRequest,
         @Query("pegawai_id") pegawaiId: Int?
     ): Response<VerifikasiLaporanResponse>
+
+    /**
+     * Get pegawai profile by PIN
+     * GET /api/pegawai/{pin}
+     */
+    @GET("https://dev.api.eabsen.merauke.go.id/api/pegawai/{pin}")
+    suspend fun getPegawaiProfile(
+        @Path("pin") pin: String
+    ): Response<PegawaiProfile>
 }

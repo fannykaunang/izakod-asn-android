@@ -1,8 +1,6 @@
 package com.kominfo_mkq.izakod_asn.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -10,27 +8,30 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
-import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
 import com.kominfo_mkq.izakod_asn.ui.components.*
 import com.kominfo_mkq.izakod_asn.ui.theme.*
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.DashboardViewModel
+import com.kominfo_mkq.izakod_asn.R
+import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,16 +48,31 @@ fun DashboardScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(Unit) {
-        android.util.Log.d("DashboardScreen", "🔄 LaunchedEffect triggered")
-        android.util.Log.d("DashboardScreen", "🔄 Calling viewModel.refresh()")
         viewModel.refresh()
+    }
+
+    val context = LocalContext.current
+    val userPreferences = remember { UserPreferences(context) }
+    val sessionData = remember { userPreferences.getSessionData() }
+
+    LaunchedEffect(Unit) {
+        val pin = sessionData?.pin
+        if (!pin.isNullOrEmpty()) {
+            android.util.Log.d("DashboardScreen", "📱 PIN ditemukan: $pin. Memanggil profile...")
+            viewModel.loadPegawaiProfile(pin)
+        } else {
+            android.util.Log.e("DashboardScreen", "❌ PIN TIDAK DITEMUKAN di UserPreferences")
+        }
     }
 
     Scaffold(
         topBar = {
             DashboardTopBar(
                 scrollBehavior = scrollBehavior,
-                onLogout = onLogout
+                onLogout = onLogout,
+                pegawaiProfile = uiState.pegawaiProfile,
+                photoUrl = uiState.photoUrl,
+                isLoadingProfile = uiState.isLoadingProfile
             )
         }
     ) { paddingValues ->
@@ -124,7 +140,10 @@ fun DashboardScreen(
 @Composable
 fun DashboardTopBar(
     scrollBehavior: TopAppBarScrollBehavior,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    pegawaiProfile: PegawaiProfile?,
+    photoUrl: String?,
+    isLoadingProfile: Boolean
 ) {
     val context = LocalContext.current
     val userPrefs = remember { UserPreferences(context) }
@@ -140,11 +159,18 @@ fun DashboardTopBar(
                         letterSpacing = 0.5.sp
                     )
                 )
-                Text(
-                    text = "Dashboard",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
+//                Text(
+//                    text = "Dashboard",
+//                    style = MaterialTheme.typography.bodySmall,
+//                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+//                )
+                pegawaiProfile?.let { profile ->
+                    Text(
+                        profile.pegawaiNama,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         },
         actions = {
@@ -157,18 +183,17 @@ fun DashboardTopBar(
                     contentDescription = "Notifikasi"
                 )
             }
-            IconButton(onClick = { /* Profile */ }) {
-                Icon(
-                    imageVector = Icons.Default.AccountCircle,
-                    contentDescription = "Profile"
-                )
-            }
-            IconButton(onClick = { showLogoutDialog = true }) {
-                Icon(
-                    imageVector = Icons.Default.ExitToApp,
-                    contentDescription = "Logout"
-                )
-            }
+            ProfilePhotoButton(
+                photoUrl = photoUrl,
+                isLoading = isLoadingProfile,
+                onClick = { /* Navigate to profile */ }
+            )
+//            IconButton(onClick = { showLogoutDialog = true }) {
+//                Icon(
+//                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+//                    contentDescription = "Logout"
+//                )
+//            }
         },
         scrollBehavior = scrollBehavior,
         colors = TopAppBarDefaults.topAppBarColors(
@@ -208,6 +233,50 @@ fun DashboardTopBar(
                 }
             }
         )
+    }
+}
+
+/**
+ * ✅ Profile Photo Button with AsyncImage
+ */
+@Composable
+private fun ProfilePhotoButton(
+    photoUrl: String?,
+    isLoading: Boolean,
+    onClick: () -> Unit
+) {
+    IconButton(onClick = onClick) {
+        if (isLoading) {
+            // ✅ Show loading indicator
+            CircularProgressIndicator(
+                modifier = Modifier.size(32.dp),
+                strokeWidth = 2.dp
+            )
+        } else if (photoUrl != null) {
+            // ✅ Show photo from URL
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(photoUrl)
+                    .crossfade(true)
+                    .placeholder(R.drawable.ic_launcher_foreground)  // Optional placeholder
+                    .error(R.drawable.ic_launcher_foreground)  // Fallback if error
+                    .build(),
+                contentDescription = "Profile Photo",
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            // ✅ Fallback to default icon
+            Icon(
+                imageVector = Icons.Default.AccountCircle,
+                contentDescription = "Profile",
+                modifier = Modifier.size(40.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

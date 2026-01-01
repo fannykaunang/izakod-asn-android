@@ -2,8 +2,10 @@ package com.kominfo_mkq.izakod_asn.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -14,8 +16,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusApproved
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusPending
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusRejected
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusRevised
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.VerifikasiLaporanViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -216,20 +223,30 @@ fun VerifikasiLaporanScreen(
 @Composable
 private fun StatusInfoCard(status: String) {
     val (containerColor, textColor, icon) = when (status) {
+        "Draft" -> Triple(
+            MaterialTheme.colorScheme.surfaceVariant,
+            MaterialTheme.colorScheme.onSurfaceVariant,
+            Icons.Default.Edit
+        )
         "Diajukan" -> Triple(
-            MaterialTheme.colorScheme.primaryContainer,
-            MaterialTheme.colorScheme.onPrimaryContainer,
+            StatusPending.copy(alpha = 0.15f),  // ✅ Amber background
+            StatusPending.copy(alpha = 0.9f),   // ✅ Amber text
             Icons.Default.Schedule
         )
         "Diverifikasi" -> Triple(
-            Color(0xFF4CAF50).copy(alpha = 0.1f),
-            Color(0xFF2E7D32),
+            StatusApproved.copy(alpha = 0.15f), // ✅ Green background
+            StatusApproved.copy(alpha = 0.9f),  // ✅ Green text
             Icons.Default.CheckCircle
         )
         "Ditolak" -> Triple(
-            MaterialTheme.colorScheme.errorContainer,
-            MaterialTheme.colorScheme.error,
+            StatusRejected.copy(alpha = 0.15f), // ✅ Red background
+            StatusRejected.copy(alpha = 0.9f),  // ✅ Red text
             Icons.Default.Cancel
+        )
+        "Revisi" -> Triple(  // ✅ Add Revisi status
+            StatusRevised.copy(alpha = 0.15f),  // ✅ Orange background
+            StatusRevised.copy(alpha = 0.9f),   // ✅ Orange text
+            Icons.Default.Edit
         )
         else -> Triple(
             MaterialTheme.colorScheme.surfaceVariant,
@@ -413,36 +430,91 @@ private fun VerifikasiDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Verifikasi Laporan") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                // Rating
-                Text(
-                    "Rating Kualitas Laporan",
-                    style = MaterialTheme.typography.labelMedium
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // ✅ Rating Section with Google Play style
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    (1..5).forEach { value ->
-                        FilterChip(
-                            selected = rating == value,
-                            onClick = { rating = value },
-                            label = { Text(value.toString()) },
-                            leadingIcon = {
+                    Text(
+                        "Rating Kualitas Laporan",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    // ✅ Star Rating with Numbers
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        (1..5).forEach { value ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .clickable { rating = value }
+                                    .padding(4.dp)
+                            ) {
+                                // ✅ Star Icon (Filled or Outlined)
                                 Icon(
-                                    Icons.Default.Star,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
+                                    imageVector = if (rating >= value) {
+                                        Icons.Default.Star  // Filled star
+                                    } else {
+                                        Icons.Default.StarBorder  // Outlined star
+                                    },
+                                    contentDescription = "Rating $value",
+                                    modifier = Modifier.size(40.dp),
+                                    tint = if (rating >= value) {
+                                        Color(0xFFFFB300)  // ✅ Yellow/Amber
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                                    }
+                                )
+
+                                // ✅ Number below star
+                                Text(
+                                    text = value.toString(),
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontWeight = if (rating == value) FontWeight.Bold else FontWeight.Normal
+                                    ),
+                                    color = if (rating == value) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    modifier = Modifier.padding(top = 4.dp)
                                 )
                             }
-                        )
+                        }
                     }
+
+                    // ✅ Rating description
+                    Text(
+                        text = when (rating) {
+                            1 -> "Sangat Kurang"
+                            2 -> "Kurang"
+                            3 -> "Cukup"
+                            4 -> "Baik"
+                            5 -> "Sangat Baik"
+                            else -> ""
+                        },
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.Medium
+                        ),
+                        color = Color(0xFFFFB300),
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
                 }
 
-                // Catatan
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+                // ✅ Catatan Section
                 OutlinedTextField(
                     value = catatan,
                     onValueChange = { catatan = it },
@@ -450,14 +522,24 @@ private fun VerifikasiDialog(
                     placeholder = { Text("Tambahkan catatan...") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
-                    maxLines = 5
+                    maxLines = 5,
+                    shape = RoundedCornerShape(12.dp)
                 )
             }
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(rating, catatan) }
+                onClick = { onConfirm(rating, catatan) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF4CAF50)
+                )
             ) {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("Verifikasi")
             }
         },
@@ -465,7 +547,8 @@ private fun VerifikasiDialog(
             TextButton(onClick = onDismiss) {
                 Text("Batal")
             }
-        }
+        },
+        shape = RoundedCornerShape(16.dp)
     )
 }
 

@@ -441,6 +441,8 @@ class CreateLaporanViewModel : ViewModel() {
      * ✅ Load form data from template
      */
     fun loadFromTemplate(template: TemplateKegiatan) {
+        val currentKategoris = _uiState.value.kategoris
+
         _uiState.value = CreateLaporanUiState(
             kategoriId = template.kategoriId.toString(),
             namaKegiatan = template.namaTemplate,
@@ -460,7 +462,8 @@ class CreateLaporanViewModel : ViewModel() {
             linkReferensi = "",
             isSuccess = false,
             isLoading = false,
-            errorMessage = null
+            errorMessage = null,
+            kategoris = currentKategoris
         )
     }
 

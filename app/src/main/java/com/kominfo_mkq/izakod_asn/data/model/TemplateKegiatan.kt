@@ -9,7 +9,7 @@ data class TemplateKegiatan(
     @SerializedName("kategori_id")
     val kategoriId: Int,
 
-    @SerializedName("nama_kategori")
+    @SerializedName("kategori_nama")
     val kategoriNama: String?,
 
     @SerializedName("nama_template")
