@@ -41,6 +41,7 @@ fun DashboardScreen(
     onNavigateToReports: () -> Unit,
     onNavigateToTemplates: () -> Unit,
     onNavigateToReminder: () -> Unit,
+    onNavigateToProfile: () -> Unit,
     onLogout: () -> Unit,
     viewModel: DashboardViewModel = viewModel()
 ) {
@@ -70,6 +71,7 @@ fun DashboardScreen(
             DashboardTopBar(
                 scrollBehavior = scrollBehavior,
                 onLogout = onLogout,
+                onNavigateToProfile= onNavigateToProfile,
                 pegawaiProfile = uiState.pegawaiProfile,
                 photoUrl = uiState.photoUrl,
                 isLoadingProfile = uiState.isLoadingProfile
@@ -141,6 +143,7 @@ fun DashboardScreen(
 fun DashboardTopBar(
     scrollBehavior: TopAppBarScrollBehavior,
     onLogout: () -> Unit,
+    onNavigateToProfile: () -> Unit,
     pegawaiProfile: PegawaiProfile?,
     photoUrl: String?,
     isLoadingProfile: Boolean
@@ -186,7 +189,7 @@ fun DashboardTopBar(
             ProfilePhotoButton(
                 photoUrl = photoUrl,
                 isLoading = isLoadingProfile,
-                onClick = { /* Navigate to profile */ }
+                onClick = onNavigateToProfile
             )
 //            IconButton(onClick = { showLogoutDialog = true }) {
 //                Icon(

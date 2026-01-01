@@ -91,6 +91,9 @@ fun IZAKODNavigation(
                 onNavigateToReminder = {
                     navController.navigate(Screen.Reminders.route)
                 },
+                onNavigateToProfile = {  // ✅ Add this
+                    navController.navigate(Screen.Profile.route)
+                },
                 onLogout = {
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
@@ -266,6 +269,12 @@ fun IZAKODNavigation(
             val laporanId = backStackEntry.arguments?.getString("laporanId") ?: ""
             VerifikasiLaporanScreen(
                 laporanId = laporanId,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Profile.route) {
+            ProfileScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
