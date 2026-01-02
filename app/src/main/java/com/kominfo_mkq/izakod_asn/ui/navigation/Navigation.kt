@@ -34,6 +34,7 @@ sealed class Screen(val route: String) {
     object PrintReport : Screen("print_report")
     object CreateReport : Screen("create_report")
     object TemplateKegiatan : Screen("template_kegiatan")
+    object Notifications : Screen("notifications")
 }
 
 fun NavHostController.backToDashboardAlways() {
@@ -78,6 +79,9 @@ fun IZAKODNavigation(
                 onNavigateToTemplates = { navController.navigate(Screen.Templates.route) },
                 onNavigateToReminder = { navController.navigate(Screen.Reminders.route) },
                 onNavigateToProfile = { navController.navigate(Screen.Profile.route) },
+                onNavigateToNotifications = {
+                    navController.navigate(Screen.Notifications.route)
+                }
             )
         }
 
@@ -140,10 +144,8 @@ fun IZAKODNavigation(
         }
 
         composable(Screen.Reminders.route) {
-            PlaceholderScreen(
-                title = "Pengingat",
-                message = "Screen ini akan menampilkan pengaturan pengingat untuk input laporan.",
-                onBack = { navController.popBackStack() }
+            ReminderScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
@@ -192,6 +194,15 @@ fun IZAKODNavigation(
                 isDarkTheme = isDarkTheme,
                 onToggleTheme = onToggleTheme,
                 viewModel = profileViewModel
+            )
+        }
+
+        composable(Screen.Notifications.route) {
+            NotificationScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNotificationClick = { laporanId ->
+                    navController.navigate("laporan_detail/$laporanId")
+                }
             )
         }
     }

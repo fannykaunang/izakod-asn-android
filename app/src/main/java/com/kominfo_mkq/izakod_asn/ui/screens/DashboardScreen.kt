@@ -1,6 +1,5 @@
 package com.kominfo_mkq.izakod_asn.ui.screens
 
-import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -8,7 +7,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,7 +24,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
-import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
 import com.kominfo_mkq.izakod_asn.ui.components.*
 import com.kominfo_mkq.izakod_asn.ui.theme.*
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.DashboardViewModel
@@ -42,6 +39,7 @@ fun DashboardScreen(
     onNavigateToTemplates: () -> Unit,
     onNavigateToReminder: () -> Unit,
     onNavigateToProfile: () -> Unit,
+    onNavigateToNotifications: () -> Unit,
     viewModel: DashboardViewModel = viewModel()
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -69,10 +67,12 @@ fun DashboardScreen(
         topBar = {
             DashboardTopBar(
                 scrollBehavior = scrollBehavior,
-                onNavigateToProfile= onNavigateToProfile,
+                onNavigateToProfile = onNavigateToProfile,
+                onNavigateToNotifications = onNavigateToNotifications,
                 pegawaiProfile = uiState.pegawaiProfile,
                 photoUrl = uiState.photoUrl,
-                isLoadingProfile = uiState.isLoadingProfile
+                isLoadingProfile = uiState.isLoadingProfile,
+                unreadNotificationCount = uiState.unreadNotificationCount
             )
         }
     ) { paddingValues ->
@@ -141,13 +141,12 @@ fun DashboardScreen(
 fun DashboardTopBar(
     scrollBehavior: TopAppBarScrollBehavior,
     onNavigateToProfile: () -> Unit,
+    onNavigateToNotifications: () -> Unit,
     pegawaiProfile: PegawaiProfile?,
     photoUrl: String?,
-    isLoadingProfile: Boolean
+    isLoadingProfile: Boolean,
+    unreadNotificationCount: Int
 ) {
-    val context = LocalContext.current
-    val userPrefs = remember { UserPreferences(context) }
-
     TopAppBar(
         title = {
             Column {
@@ -173,26 +172,36 @@ fun DashboardTopBar(
             }
         },
         actions = {
-            IconButton(onClick = { /* Notifikasi */ }) {
-                Badge(containerColor = StatusRejected) {
-                    Text("3")
+            BadgedBox(
+                modifier = Modifier.padding(end = 10.dp),
+                badge = {
+                    if (unreadNotificationCount > 0) {
+                        Badge(containerColor = StatusRejected,
+                            modifier = Modifier.offset(x = (-6).dp, y = 2.dp)) {
+                            Text(
+                                text = if (unreadNotificationCount > 9) {
+                                    "9+"
+                                } else {
+                                    unreadNotificationCount.toString()
+                                }
+                            )
+                        }
+                    }
                 }
-                Icon(
-                    imageVector = Icons.Default.Notifications,
-                    contentDescription = "Notifikasi"
-                )
+            ) {
+                IconButton(onClick = onNavigateToNotifications) {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = "Notifikasi"
+                    )
+                }
             }
+            Spacer(Modifier.width(4.dp))
             ProfilePhotoButton(
                 photoUrl = photoUrl,
                 isLoading = isLoadingProfile,
                 onClick = onNavigateToProfile
             )
-//            IconButton(onClick = { showLogoutDialog = true }) {
-//                Icon(
-//                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-//                    contentDescription = "Logout"
-//                )
-//            }
         },
         scrollBehavior = scrollBehavior,
         colors = TopAppBarDefaults.topAppBarColors(
@@ -213,13 +222,11 @@ private fun ProfilePhotoButton(
 ) {
     IconButton(onClick = onClick) {
         if (isLoading) {
-            // ✅ Show loading indicator
             CircularProgressIndicator(
                 modifier = Modifier.size(32.dp),
                 strokeWidth = 2.dp
             )
         } else if (photoUrl != null) {
-            // ✅ Show photo from URL
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(photoUrl)
@@ -235,7 +242,6 @@ private fun ProfilePhotoButton(
                 contentScale = ContentScale.Crop
             )
         } else {
-            // ✅ Fallback to default icon
             Icon(
                 imageVector = Icons.Default.AccountCircle,
                 contentDescription = "Profile",

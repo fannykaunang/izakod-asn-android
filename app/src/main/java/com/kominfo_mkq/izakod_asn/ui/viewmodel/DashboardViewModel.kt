@@ -1,7 +1,9 @@
 package com.kominfo_mkq.izakod_asn.ui.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.MetricsData
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
 import com.kominfo_mkq.izakod_asn.data.model.TimeSeriesItem
@@ -27,7 +29,8 @@ data class DashboardUiState(
     val isAdmin: Boolean = false,
     val pegawaiProfile: PegawaiProfile? = null,
     val photoUrl: String? = null,
-    val isLoadingProfile: Boolean = false
+    val isLoadingProfile: Boolean = false,
+    val unreadNotificationCount: Int = 0
 )
 
 /**
@@ -45,40 +48,66 @@ class DashboardViewModel : ViewModel() {
     /**
      * Load pegawai profile
      */
-    fun loadPegawaiProfile(pin: String) {    viewModelScope.launch {
-        try {
-            _uiState.update { it.copy(isLoadingProfile = true) }
+    fun loadPegawaiProfile(pin: String) {
+        viewModelScope.launch {
+            try {
+                _uiState.update { it.copy(isLoadingProfile = true) }
 
-            val response = EabsenRetrofitClient.apiService.getPegawaiProfile(pin)
+                val response = EabsenRetrofitClient.apiService.getPegawaiProfile(pin)
 
-            if (response.isSuccessful && response.body() != null) {
-                val profile = response.body()!!
+                if (response.isSuccessful && response.body() != null) {
+                    val profile = response.body()!!
 
-                // Bersihkan path jika ada double slash
-                val cleanPath = profile.photoPath?.removePrefix("/")
-                val fullPhotoUrl = if (cleanPath != null) {
-                    "https://entago.merauke.go.id/$cleanPath"
-                } else null
+                    // Bersihkan path jika ada double slash
+                    val cleanPath = profile.photoPath?.removePrefix("/")
+                    val fullPhotoUrl = if (cleanPath != null) {
+                        "https://entago.merauke.go.id/$cleanPath"
+                    } else null
 
-                _uiState.update {
-                    it.copy(
-                        pegawaiProfile = profile,
-                        photoUrl = fullPhotoUrl,
-                        isLoadingProfile = false
-                    )
+                    _uiState.update {
+                        it.copy(
+                            pegawaiProfile = profile,
+                            photoUrl = fullPhotoUrl,
+                            isLoadingProfile = false
+                        )
+                    }
                 }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoadingProfile = false) }
             }
-        } catch (e: Exception) {
-            _uiState.update { it.copy(isLoadingProfile = false) }
         }
     }
-    }
-
-
 
     init {
         // Load statistik saat ViewModel dibuat
         loadStatistik()
+    }
+
+    fun loadNotificationCount() {
+        viewModelScope.launch {
+            try {
+                android.util.Log.d("DashboardViewModel", "🔔 Loading notification count...")
+                val apiService = ApiClient.eabsenApiService
+
+                val pegawaiId = StatistikRepository.getPegawaiId()
+                    ?: throw Exception("Session expired")
+                val response = apiService.getNotifications(pegawaiId)
+
+                if (response.isSuccessful && response.body() != null) {
+                    val body = response.body()!!
+
+                    if (body.success) {
+                        android.util.Log.d("DashboardViewModel", "✅ Unread notifications: ${body.unread}")
+
+                        _uiState.value = _uiState.value.copy(
+                            unreadNotificationCount = body.unread
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("DashboardViewModel", "❌ Error loading notification count: ${e.message}")
+            }
+        }
     }
 
     /**
@@ -87,6 +116,7 @@ class DashboardViewModel : ViewModel() {
      */
     fun refresh() {
         loadStatistik()
+        loadNotificationCount()
     }
 
     /**

@@ -52,6 +52,8 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.play.services)
 
+    implementation("androidx.compose.material:material")
+
     // Core Compose
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)

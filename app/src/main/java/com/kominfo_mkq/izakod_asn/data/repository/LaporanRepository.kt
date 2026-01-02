@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
+import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanCetakResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanDetailResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanListResponse
@@ -76,6 +77,9 @@ class LaporanRepository {
         )
     }
 
+    suspend fun getAtasanPegawaiByBawahan(pegawaiId: Int): Response<AtasanPegawaiResponse> {
+        return apiService.getAtasanPegawaiByBawahan(pegawaiId)
+    }
 
     /**
      * Update existing laporan

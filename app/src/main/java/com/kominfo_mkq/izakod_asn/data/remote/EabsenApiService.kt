@@ -1,15 +1,21 @@
 package com.kominfo_mkq.izakod_asn.data.remote
 
+import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiResponse
 import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanResponse
+import com.kominfo_mkq.izakod_asn.data.model.CreateReminderRequest
+import com.kominfo_mkq.izakod_asn.data.model.CreateReminderResponse
+import com.kominfo_mkq.izakod_asn.data.model.DeleteReminderResponse
 import com.kominfo_mkq.izakod_asn.data.model.EabsenLoginResponse
 import com.kominfo_mkq.izakod_asn.data.model.KategoriListResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanCetakResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanDetailResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanListResponse
 import com.kominfo_mkq.izakod_asn.data.model.LoginRequest
+import com.kominfo_mkq.izakod_asn.data.model.NotifikasiResponse
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiData
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
+import com.kominfo_mkq.izakod_asn.data.model.ReminderListResponse
 import com.kominfo_mkq.izakod_asn.data.model.StatistikBulananResponse
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanResponse
 import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanRequest
@@ -140,4 +146,55 @@ interface EabsenApiService {
         @Query("tahun") tahun: Int,
         @Query("bulan") bulan: Int
     ): Response<LaporanCetakResponse>
+
+    /**
+     * Get notifications for logged-in user
+     * GET /api/notifikasi
+     */
+    @GET("api/notifikasi")
+    suspend fun getNotifications(
+        @Query("pegawai_id") pegawai_id: Int?,
+    ): Response<NotifikasiResponse>
+
+    /**
+     * Get reminder list
+     * GET /api/reminder
+     */
+    @GET("api/reminder")
+    suspend fun getReminders(
+        @Query("pegawai_id") pegawai_id: Int?,
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 10,
+        @Query("search") search: String? = null,
+        @Query("tipe") tipe: String? = null
+    ): Response<ReminderListResponse>
+
+    /**
+     * Create reminder
+     * POST /api/reminder
+     */
+    @POST("api/reminder")
+    suspend fun createReminder(
+        @Query("pegawai_id") pegawai_id: Int?,
+        @Body request: CreateReminderRequest
+    ): Response<CreateReminderResponse>
+
+    /**
+     * Delete reminder
+     * DELETE /api/reminder/{id}
+     */
+    @DELETE("api/reminder/{id}")
+    suspend fun deleteReminder(
+        @Path("id") reminderId: Int,
+        @Query("pegawai_id") pegawaiId: Int
+    ): Response<DeleteReminderResponse>
+
+    /**
+     * Get data atasan pegawai by bawahan
+     * GET /api/atasan-pegawai/by-bawahan/{pegawaiId}
+     */
+    @GET("api/atasan-pegawai/by-bawahan/{pegawaiId}")
+    suspend fun getAtasanPegawaiByBawahan(
+        @Path("pegawaiId") pegawaiId: Int
+    ): Response<AtasanPegawaiResponse>
 }
