@@ -1,4 +1,4 @@
-package com.kominfo_mkq.izakod_asn.navigation
+package com.kominfo_mkq.izakod_asn.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -10,6 +10,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.kominfo_mkq.izakod_asn.ui.screens.*
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.CreateLaporanViewModel
+import com.kominfo_mkq.izakod_asn.ui.viewmodel.ProfileViewModel
 
 /**
  * Navigation Routes untuk IZAKOD-ASN App
@@ -18,22 +19,11 @@ sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Dashboard : Screen("dashboard")
     object ReportList : Screen("report_list")
-    object ReportDetail : Screen("report_detail/{reportId}") {
-        fun createRoute(reportId: String) = "report_detail/$reportId"
-    }
-    object EditReport : Screen("edit_report/{reportId}") {
-        fun createRoute(reportId: String) = "edit_report/$reportId"
-    }
     object Templates : Screen("templates")
     object Reminders : Screen("reminders")
     object Profile : Screen("profile")
     object Settings : Screen("settings")
-    object Verification : Screen("verification/{reportId}") {
-        fun createRoute(reportId: String) = "verification/$reportId"
-    }
-    object PrintReport : Screen("print_report")
     object CreateReport : Screen("create_report")
-    object TemplateKegiatan : Screen("template_kegiatan")
     object Notifications : Screen("notifications")
 }
 
@@ -51,9 +41,9 @@ fun IZAKODNavigation(
     isDarkTheme: Boolean,
     onToggleTheme: (Boolean) -> Unit
 ) {
-    val createLaporanViewModel: CreateLaporanViewModel = viewModel()
+    val createlaporanViewModel: CreateLaporanViewModel = viewModel()
 
-    val profileViewModel: com.kominfo_mkq.izakod_asn.ui.viewmodel.ProfileViewModel = viewModel()
+    val profileViewModel: ProfileViewModel = viewModel()
 
     NavHost(
         navController = navController,
@@ -72,7 +62,7 @@ fun IZAKODNavigation(
         composable(Screen.Dashboard.route) {
             DashboardScreen(
                 onNavigateToCreateReport = {
-                    createLaporanViewModel.startFreshForm()
+                    createlaporanViewModel.startFreshForm()
                     navController.navigate(Screen.CreateReport.route)
                 },
                 onNavigateToReports = { navController.navigate(Screen.ReportList.route) },
@@ -88,14 +78,13 @@ fun IZAKODNavigation(
         composable(Screen.ReportList.route) {
             ReportListScreen(
                 onBack = { navController.popBackStack() },
-                onReportClick = { laporanId ->
-                    navController.navigate("laporan_detail/$laporanId")
+                onReportClick = { reportId ->
+                    navController.navigate("laporan_detail/$reportId")
                 },
                 onCreateReport = {
-                    createLaporanViewModel.startFreshForm()
+                    createlaporanViewModel.startFreshForm()
                     navController.navigate(Screen.CreateReport.route)
-                },
-                reports = emptyList()
+                }
             )
         }
 
@@ -115,10 +104,10 @@ fun IZAKODNavigation(
         composable(Screen.CreateReport.route) {
             CreateLaporanScreen(
                 onNavigateBack = {
-                    createLaporanViewModel.clearForm()
+                    createlaporanViewModel.clearForm()
                     navController.popBackStack()
                 },
-                viewModel = createLaporanViewModel
+                viewModel = createlaporanViewModel
             )
         }
 
@@ -137,7 +126,7 @@ fun IZAKODNavigation(
             TemplateKegiatanScreen(
                 onNavigateBack = { navController.popBackStack() },
                 onTemplateClick = { template ->
-                    createLaporanViewModel.loadFromTemplate(template)
+                    createlaporanViewModel.loadFromTemplate(template)
                     navController.navigate(Screen.CreateReport.route)
                 }
             )

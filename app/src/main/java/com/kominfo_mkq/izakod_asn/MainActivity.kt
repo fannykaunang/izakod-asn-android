@@ -11,8 +11,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
-import com.kominfo_mkq.izakod_asn.navigation.IZAKODNavigation
-import com.kominfo_mkq.izakod_asn.navigation.Screen
+import com.kominfo_mkq.izakod_asn.ui.navigation.IZAKODNavigation
+import com.kominfo_mkq.izakod_asn.ui.navigation.Screen
 import com.kominfo_mkq.izakod_asn.ui.theme.IZAKODASNTheme
 
 class MainActivity : ComponentActivity() {

@@ -32,6 +32,7 @@ import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Comment
 import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,8 +45,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
-import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiData
 import com.kominfo_mkq.izakod_asn.data.model.LaporanKegiatan
 import com.kominfo_mkq.izakod_asn.ui.components.StatusBadge
 import com.kominfo_mkq.izakod_asn.ui.components.StatusType
@@ -94,11 +93,9 @@ fun ReportListScreen(
     onBack: () -> Unit,
     onReportClick: (String) -> Unit,
     onCreateReport: () -> Unit,
-    reports: List<LaporanKegiatan>, // backward compatibility (tidak dipakai lagi)
     viewModel: LaporanListViewModel = viewModel()
 ) {
     @Suppress("UNUSED_PARAMETER")
-    val _unused = reports
 
     val uiState by viewModel.uiState.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -612,7 +609,7 @@ private fun ReportCard(
                 !report.catatanAtasan.isNullOrBlank()
             ) {
                 Spacer(modifier = Modifier.height(12.dp))
-                Divider()
+                HorizontalDivider()
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Row(
@@ -627,14 +624,14 @@ private fun ReportCard(
                     verticalAlignment = Alignment.Top
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Comment,
+                        imageVector = Icons.AutoMirrored.Filled.Comment,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                         tint = if (report.status == StatusType.REJECTED) StatusRejected else StatusRevised
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = report.catatanAtasan ?: "",
+                        text = report.catatanAtasan,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                         maxLines = 2,
