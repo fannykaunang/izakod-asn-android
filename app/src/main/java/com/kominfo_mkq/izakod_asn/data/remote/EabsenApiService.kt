@@ -4,6 +4,7 @@ import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanResponse
 import com.kominfo_mkq.izakod_asn.data.model.EabsenLoginResponse
 import com.kominfo_mkq.izakod_asn.data.model.KategoriListResponse
+import com.kominfo_mkq.izakod_asn.data.model.LaporanCetakResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanDetailResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanListResponse
 import com.kominfo_mkq.izakod_asn.data.model.LoginRequest
@@ -59,15 +60,6 @@ interface EabsenApiService {
         @Query("bulan") bulan: Int? = null,
         @Query("tahun") tahun: Int? = null
     ): Response<StatistikBulananResponse>
-
-    /**
-     * Create new laporan kegiatan
-     * POST /api/laporan-kegiatan
-     */
-    @POST("api/laporan-kegiatan")
-    suspend fun createLaporan(
-        @Body request: CreateLaporanRequest
-    ): Response<CreateLaporanResponse>
 
     /**
      * ✅ NEW: Get list kategori kegiatan
@@ -141,12 +133,11 @@ interface EabsenApiService {
         @Query("pegawai_id") pegawaiId: Int?
     ): Response<VerifikasiLaporanResponse>
 
-    /**
-     * Get pegawai profile by PIN
-     * GET /api/pegawai/{pin}
-     */
-    @GET("https://dev.api.eabsen.merauke.go.id/api/pegawai/{pin}")
-    suspend fun getPegawaiProfile(
-        @Path("pin") pin: String
-    ): Response<PegawaiProfile>
+    @GET("api/laporan-kegiatan/cetak")
+    suspend fun getLaporanCetakBulanan(
+        @Query("pegawai_id") pegawai_id: Int?,
+        @Query("pegawaiId") pegawaiId: Int,
+        @Query("tahun") tahun: Int,
+        @Query("bulan") bulan: Int
+    ): Response<LaporanCetakResponse>
 }

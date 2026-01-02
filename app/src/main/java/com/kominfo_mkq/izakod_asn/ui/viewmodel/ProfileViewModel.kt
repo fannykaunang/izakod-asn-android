@@ -14,7 +14,11 @@ data class ProfileUiState(
     val isError: Boolean = false,
     val errorMessage: String? = null,
     val profile: PegawaiProfile? = null,
-    val photoUrl: String? = null
+    val photoUrl: String? = null,
+
+    // ✅ tambahan untuk Settings tab
+    val isDarkTheme: Boolean = false,
+    val notificationsEnabled: Boolean = true
 )
 
 class ProfileViewModel : ViewModel() {
@@ -22,11 +26,15 @@ class ProfileViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
-    private val _selectedTabIndex = MutableStateFlow(0)
-    val selectedTabIndex: StateFlow<Int> = _selectedTabIndex.asStateFlow()
+    fun setDarkTheme(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(isDarkTheme = enabled)
+        // NOTE: supaya theme benar-benar berubah global, kamu perlu mengikat value ini
+        // ke AppTheme di level Activity (aku kasih contoh di bawah).
+    }
 
-    private val _isDarkMode = MutableStateFlow(false)
-    val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
+    fun setNotifications(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(notificationsEnabled = enabled)
+    }
 
     /**
      * Load pegawai profile from ASP.NET Core Eabsen API
@@ -36,9 +44,8 @@ class ProfileViewModel : ViewModel() {
             try {
                 android.util.Log.d("ProfileViewModel", "📋 Loading profile for PIN: $pin")
 
-                _uiState.value = ProfileUiState(isLoading = true)
+                _uiState.value = _uiState.value.copy(isLoading = true, isError = false, errorMessage = null)
 
-                // ✅ Use EabsenRetrofitClient
                 val response = EabsenRetrofitClient.apiService.getPegawaiProfile(pin)
 
                 if (response.isSuccessful && response.body() != null) {
@@ -47,16 +54,13 @@ class ProfileViewModel : ViewModel() {
                     android.util.Log.d("ProfileViewModel", "✅ Profile loaded: ${profile.pegawaiNama}")
                     android.util.Log.d("ProfileViewModel", "📸 Photo path: ${profile.photoPath}")
 
-                    // ✅ Build full photo URL
                     val photoUrl = if (profile.photoPath != null) {
                         "https://entago.merauke.go.id/${profile.photoPath}"
-                    } else {
-                        null
-                    }
+                    } else null
 
                     android.util.Log.d("ProfileViewModel", "🔗 Photo URL: $photoUrl")
 
-                    _uiState.value = ProfileUiState(
+                    _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         profile = profile,
                         photoUrl = photoUrl
@@ -64,7 +68,7 @@ class ProfileViewModel : ViewModel() {
                 } else {
                     android.util.Log.e("ProfileViewModel", "❌ Failed to load profile: ${response.code()}")
 
-                    _uiState.value = ProfileUiState(
+                    _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isError = true,
                         errorMessage = "Gagal memuat profil (${response.code()})"
@@ -73,7 +77,7 @@ class ProfileViewModel : ViewModel() {
             } catch (e: Exception) {
                 android.util.Log.e("ProfileViewModel", "❌ Error loading profile: ${e.message}", e)
 
-                _uiState.value = ProfileUiState(
+                _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isError = true,
                     errorMessage = e.message ?: "Terjadi kesalahan"

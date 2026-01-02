@@ -52,10 +52,11 @@ fun ReportListScreen(
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(FilterType.ALL) }
     var showFilterDialog by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     // Load data when screen opens
     LaunchedEffect(Unit) {
-        viewModel.loadLaporan()
+        viewModel.loadLaporanList(context)
     }
 
     // Convert API model to UI model
@@ -111,28 +112,43 @@ fun ReportListScreen(
                 },
                 actions = {
                     // Refresh button
-                    IconButton(onClick = { viewModel.loadLaporan() }) {
+                    IconButton(
+                        onClick = {
+                            if (uiState.filterBulan != null && uiState.filterTahun != null) {
+                                viewModel.loadLaporanBulanan(
+                                    context,
+                                    uiState.filterBulan!!,
+                                    uiState.filterTahun!!
+                                )
+                            } else {
+                                viewModel.loadLaporanList(context)
+                            }
+                        }
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Refresh"
                         )
                     }
 
+                    val isFilterActive = (uiState.filterBulan != null && uiState.filterTahun != null)
+
                     IconButton(onClick = { showFilterDialog = true }) {
-                        Badge(
-                            containerColor = if (selectedFilter != FilterType.ALL)
-                                PrimaryLight
-                            else
-                                Color.Transparent
-                        ) {
-                            if (selectedFilter != FilterType.ALL) {
-                                Text("")
+                        BadgedBox(
+                            badge = {
+                                if (isFilterActive) {
+                                    Badge(
+                                        containerColor = PrimaryLight,
+                                        modifier = Modifier.size(10.dp)
+                                    )
+                                }
                             }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FilterList,
+                                contentDescription = "Filter"
+                            )
                         }
-                        Icon(
-                            imageVector = Icons.Default.FilterList,
-                            contentDescription = "Filter"
-                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -163,7 +179,6 @@ fun ReportListScreen(
         ) {
             when {
                 uiState.isLoading -> {
-                    // Loading state
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -198,7 +213,13 @@ fun ReportListScreen(
                             style = MaterialTheme.typography.titleMedium
                         )
                         Spacer(Modifier.height(16.dp))
-                        Button(onClick = { viewModel.loadLaporan() }) {
+                        Button(onClick = {
+                            if (uiState.filterBulan != null && uiState.filterTahun != null) {
+                                viewModel.loadLaporanBulanan(context, uiState.filterBulan!!, uiState.filterTahun!!)
+                            } else {
+                                viewModel.loadLaporanList(context)
+                            }
+                        }) {
                             Icon(Icons.Default.Refresh, null)
                             Spacer(Modifier.width(8.dp))
                             Text("Coba Lagi")
@@ -357,9 +378,162 @@ fun ReportListScreen(
             }
         }
     }
+
+    if (showFilterDialog) {
+        MonthYearFilterDialog(
+            initialMonth = uiState.filterBulan,
+            initialYear = uiState.filterTahun,
+            onDismiss = { showFilterDialog = false },
+            onApply = { month, year ->
+                showFilterDialog = false
+                viewModel.loadLaporanBulanan(context, month, year)
+            },
+            onClear = {
+                showFilterDialog = false
+                viewModel.clearFilter(context)
+            }
+        )
+    }
 }
 
-// Keep existing ReportCard composable
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MonthYearFilterDialog(
+    initialMonth: Int?,
+    initialYear: Int?,
+    onDismiss: () -> Unit,
+    onApply: (month: Int, year: Int) -> Unit,
+    onClear: () -> Unit
+) {
+    val now = remember { Calendar.getInstance() }
+    val defaultMonth = initialMonth ?: (now.get(Calendar.MONTH) + 1) // 1..12
+    val defaultYear = initialYear ?: now.get(Calendar.YEAR)
+
+    var month by remember { mutableStateOf(defaultMonth) }
+    var year by remember { mutableStateOf(defaultYear) }
+
+    var monthExpanded by remember { mutableStateOf(false) }
+    var yearExpanded by remember { mutableStateOf(false) }
+
+    val months = remember {
+        listOf(
+            1 to "Januari", 2 to "Februari", 3 to "Maret", 4 to "April",
+            5 to "Mei", 6 to "Juni", 7 to "Juli", 8 to "Agustus",
+            9 to "September", 10 to "Oktober", 11 to "November", 12 to "Desember"
+        )
+    }
+
+    val years = remember {
+        val current = now.get(Calendar.YEAR)
+        (current - 5..current + 1).toList()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Filter Laporan") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+                // Bulan
+                ExposedDropdownMenuBox(
+                    expanded = monthExpanded,
+                    onExpandedChange = { monthExpanded = !monthExpanded }
+                ) {
+                    OutlinedTextField(
+                        value = months.first { it.first == month }.second,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Bulan") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = monthExpanded) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = monthExpanded,
+                        onDismissRequest = { monthExpanded = false }
+                    ) {
+                        months.forEach { (m, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    month = m
+                                    monthExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Tahun
+                ExposedDropdownMenuBox(
+                    expanded = yearExpanded,
+                    onExpandedChange = { yearExpanded = !yearExpanded }
+                ) {
+                    OutlinedTextField(
+                        value = year.toString(),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Tahun") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = yearExpanded) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = yearExpanded,
+                        onDismissRequest = { yearExpanded = false }
+                    ) {
+                        years.forEach { y ->
+                            DropdownMenuItem(
+                                text = { Text(y.toString()) },
+                                onClick = {
+                                    year = y
+                                    yearExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    "Pilih bulan dan tahun untuk menampilkan laporan kegiatan bulanan.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onApply(month, year) }) {
+                Text("Terapkan")
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onClear) { Text("Reset") }
+                TextButton(onClick = onDismiss) { Text("Batal") }
+            }
+        }
+    )
+}
+
+private fun monthNameId(month: Int): String = when (month) {
+    1 -> "Januari"
+    2 -> "Februari"
+    3 -> "Maret"
+    4 -> "April"
+    5 -> "Mei"
+    6 -> "Juni"
+    7 -> "Juli"
+    8 -> "Agustus"
+    9 -> "September"
+    10 -> "Oktober"
+    11 -> "November"
+    12 -> "Desember"
+    else -> "?"
+}
+
+
 @Composable
 fun ReportCard(
     report: LaporanKegiatan,

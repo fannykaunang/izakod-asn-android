@@ -42,7 +42,6 @@ fun DashboardScreen(
     onNavigateToTemplates: () -> Unit,
     onNavigateToReminder: () -> Unit,
     onNavigateToProfile: () -> Unit,
-    onLogout: () -> Unit,
     viewModel: DashboardViewModel = viewModel()
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -70,7 +69,6 @@ fun DashboardScreen(
         topBar = {
             DashboardTopBar(
                 scrollBehavior = scrollBehavior,
-                onLogout = onLogout,
                 onNavigateToProfile= onNavigateToProfile,
                 pegawaiProfile = uiState.pegawaiProfile,
                 photoUrl = uiState.photoUrl,
@@ -142,7 +140,6 @@ fun DashboardScreen(
 @Composable
 fun DashboardTopBar(
     scrollBehavior: TopAppBarScrollBehavior,
-    onLogout: () -> Unit,
     onNavigateToProfile: () -> Unit,
     pegawaiProfile: PegawaiProfile?,
     photoUrl: String?,
@@ -150,7 +147,6 @@ fun DashboardTopBar(
 ) {
     val context = LocalContext.current
     val userPrefs = remember { UserPreferences(context) }
-    var showLogoutDialog by remember { mutableStateOf(false) }
 
     TopAppBar(
         title = {
@@ -204,39 +200,6 @@ fun DashboardTopBar(
             scrolledContainerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     )
-
-    if (showLogoutDialog) {
-        AlertDialog(
-            onDismissRequest = { showLogoutDialog = false },  // ✅ Required!
-            title = {
-                Text("Konfirmasi Logout")
-            },
-            text = {
-                Text("Apakah Anda yakin ingin keluar dari aplikasi?")
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showLogoutDialog = false
-                        // Clear all session data
-                        userPrefs.clearSession()
-                        StatistikRepository.clearData()
-                        // Trigger logout callback
-                        onLogout()
-                    }
-                ) {
-                    Text("Logout", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showLogoutDialog = false }
-                ) {
-                    Text("Batal")
-                }
-            }
-        )
-    }
 }
 
 /**

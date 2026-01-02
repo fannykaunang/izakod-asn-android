@@ -1,5 +1,6 @@
 package com.kominfo_mkq.izakod_asn.ui.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kominfo_mkq.izakod_asn.data.model.LaporanKegiatan
@@ -13,7 +14,10 @@ data class LaporanListUiState(
     val isLoading: Boolean = false,
     val isError: Boolean = false,
     val errorMessage: String? = null,
-    val laporanList: List<LaporanKegiatan> = emptyList()
+    val laporanList: List<LaporanKegiatan> = emptyList(),
+    val filterBulan: Int? = null,
+    val filterTahun: Int? = null,
+    val totalFiltered: Int? = null
 )
 
 class LaporanListViewModel : ViewModel() {
@@ -23,59 +27,69 @@ class LaporanListViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(LaporanListUiState())
     val uiState: StateFlow<LaporanListUiState> = _uiState.asStateFlow()
 
-    /**
-     * Load laporan list from API
-     */
-    fun loadLaporan() {
+    fun loadLaporanList(context: Context) {
         viewModelScope.launch {
             try {
-                android.util.Log.d("LaporanListViewModel", "📋 Loading laporan list...")
+                _uiState.value = _uiState.value.copy(isLoading = true, isError = false, errorMessage = null)
 
-                _uiState.value = LaporanListUiState(isLoading = true)
-
-                val response = repository.getLaporanList()
-
-                android.util.Log.d("LaporanListViewModel", "📡 Response code: ${response.code()}")
+                val response = repository.getLaporanList(context)
 
                 if (response.isSuccessful && response.body() != null) {
                     val body = response.body()!!
+                    if (!body.success) throw Exception("Gagal memuat laporan")
 
-                    if (body.success) {
-                        android.util.Log.d("LaporanListViewModel", "✅ Loaded ${body.data.size} laporan")
-
-                        _uiState.value = LaporanListUiState(
-                            isLoading = false,
-                            laporanList = body.data
-                        )
-                    } else {
-                        android.util.Log.e("LaporanListViewModel", "❌ API returned success=false")
-
-                        _uiState.value = LaporanListUiState(
-                            isLoading = false,
-                            isError = true,
-                            errorMessage = "Gagal memuat data laporan"
-                        )
-                    }
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        laporanList = body.data,
+                        filterBulan = null,
+                        filterTahun = null,
+                        totalFiltered = null
+                    )
                 } else {
-                    val errorBody = response.errorBody()?.string()
-                    android.util.Log.e("LaporanListViewModel", "❌ Error: $errorBody")
-
-                    _uiState.value = LaporanListUiState(
+                    _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isError = true,
                         errorMessage = "Error: ${response.code()}"
                     )
                 }
             } catch (e: Exception) {
-                android.util.Log.e("LaporanListViewModel", "❌ Exception: ${e.message}", e)
-                e.printStackTrace()
-
-                _uiState.value = LaporanListUiState(
-                    isLoading = false,
-                    isError = true,
-                    errorMessage = e.message ?: "Terjadi kesalahan"
-                )
+                _uiState.value = _uiState.value.copy(isLoading = false, isError = true, errorMessage = e.message)
             }
         }
+    }
+
+    fun loadLaporanBulanan(context: Context, bulan: Int, tahun: Int) {
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(isLoading = true, isError = false, errorMessage = null)
+
+                val response = repository.getLaporanBulananCetak(context, bulan, tahun)
+
+                if (response.isSuccessful && response.body() != null) {
+                    val body = response.body()!!
+                    if (!body.success) throw Exception("Gagal memuat laporan bulanan")
+
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        laporanList = body.data?.laporan ?: emptyList(),
+                        filterBulan = body.meta?.bulan,
+                        filterTahun = body.meta?.tahun,
+                        totalFiltered = body.meta?.total
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        isError = true,
+                        errorMessage = "Error: ${response.code()}"
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isLoading = false, isError = true, errorMessage = e.message)
+            }
+        }
+    }
+
+    fun clearFilter(context: Context) {
+        loadLaporanList(context)
     }
 }

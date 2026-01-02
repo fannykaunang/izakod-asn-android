@@ -3,6 +3,8 @@ package com.kominfo_mkq.izakod_asn.data.repository
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
+import com.kominfo_mkq.izakod_asn.data.model.LaporanCetakResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanDetailResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanListResponse
 import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanRequest
@@ -51,11 +53,29 @@ class LaporanRepository {
     /**
      * Get all laporan kegiatan
      */
-    suspend fun getLaporanList(): Response<LaporanListResponse> {
-        val pegawaiId = StatistikRepository.getPegawaiId() ?: throw Exception("Session expired")
+    suspend fun getLaporanList(context: Context): Response<LaporanListResponse> {
+        val pegawaiId = UserPreferences(context).getPegawaiId()
+            ?: throw Exception("Session expired: pegawai_id tidak ditemukan")
 
-        return eabsenApiService.getLaporanList(pegawaiId)
+        return apiService.getLaporanList(pegawaiId)
     }
+
+    suspend fun getLaporanBulananCetak(
+        context: Context,
+        bulan: Int,
+        tahun: Int
+    ): Response<LaporanCetakResponse> {
+        val pegawaiId = UserPreferences(context).getPegawaiId()
+            ?: throw Exception("Session expired: pegawai_id tidak ditemukan")
+
+        return apiService.getLaporanCetakBulanan(
+            pegawai_id = pegawaiId,
+            pegawaiId = pegawaiId,
+            bulan = bulan,
+            tahun = tahun
+        )
+    }
+
 
     /**
      * Update existing laporan

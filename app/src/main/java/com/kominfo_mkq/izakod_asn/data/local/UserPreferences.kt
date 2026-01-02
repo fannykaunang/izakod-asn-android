@@ -11,7 +11,6 @@ import androidx.core.content.edit
  * Menggunakan EncryptedSharedPreferences untuk keamanan
  */
 class UserPreferences(context: Context) {
-
     private val masterKey = MasterKey.Builder(context)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
         .build()
@@ -31,6 +30,14 @@ class UserPreferences(context: Context) {
         private const val KEY_LEVEL = "level"
         private const val KEY_SKPDID = "skpdid"
         private const val KEY_PEGAWAI_ID = "pegawai_id"
+        private const val KEY_DARK_THEME = "dark_theme"
+    }
+
+    fun isDarkTheme(): Boolean =
+        prefs.getBoolean(KEY_DARK_THEME, false)
+
+    fun setDarkTheme(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_DARK_THEME, enabled) }
     }
 
     /**
@@ -86,10 +93,9 @@ class UserPreferences(context: Context) {
      */
     fun getPegawaiId(): Int? {
         return if (prefs.contains(KEY_PEGAWAI_ID)) {
-            prefs.getInt(KEY_PEGAWAI_ID, 0)
-        } else {
-            null
-        }
+            val id = prefs.getInt(KEY_PEGAWAI_ID, 0)
+            if (id > 0) id else null
+        } else null
     }
 
     /**

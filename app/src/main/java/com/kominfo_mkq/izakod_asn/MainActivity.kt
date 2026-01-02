@@ -15,10 +15,6 @@ import com.kominfo_mkq.izakod_asn.navigation.IZAKODNavigation
 import com.kominfo_mkq.izakod_asn.navigation.Screen
 import com.kominfo_mkq.izakod_asn.ui.theme.IZAKODASNTheme
 
-/**
- * MainActivity with Auto-Login Support
- * FIXED: Properly restore session when app is reopened
- */
 class MainActivity : ComponentActivity() {
 
     private lateinit var userPrefs: UserPreferences
@@ -27,57 +23,59 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // ✅ Initialize UserPreferences
         userPrefs = UserPreferences(this)
 
         setContent {
-            IZAKODASNTheme {
+            // ✅ Theme state global (dibaca dari EncryptedSharedPreferences)
+            var isDarkTheme by remember { mutableStateOf(userPrefs.isDarkTheme()) }
+
+            // ✅ startDestination tetap seperti sebelumnya
+            val startDestination = remember { checkAndRestoreSession() }
+
+            IZAKODASNTheme(darkTheme = isDarkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    // ✅ Check login status and restore session
-                    val startDestination = remember {
-                        checkAndRestoreSession()
-                    }
-
                     IZAKODNavigation(
-                        startDestination = startDestination
+                        startDestination = startDestination,
+
+                        // ✅ callback untuk Settings toggle
+                        isDarkTheme = isDarkTheme,
+                        onToggleTheme = { enabled ->
+                            isDarkTheme = enabled
+                            userPrefs.setDarkTheme(enabled) // simpan preferensi
+                        }
                     )
                 }
             }
         }
     }
 
-    /**
-     * Check if user is logged in and restore session data
-     */
     private fun checkAndRestoreSession(): String {
         val isLoggedIn = userPrefs.isLoggedIn()
 
         return if (isLoggedIn) {
-            // ✅ Restore session data to StatistikRepository
             val sessionData = userPrefs.getSessionData()
             sessionData?.let {
                 StatistikRepository.setUserData(
                     pegawaiId = it.pegawaiId,
                     pin = it.pin
                 )
-                android.util.Log.d("MainActivity", "✅ Session restored: pegawai_id=${it.pegawaiId}, pin=${it.pin}")
+                android.util.Log.d(
+                    "MainActivity",
+                    "✅ Session restored: pegawai_id=${it.pegawaiId}, pin=${it.pin}"
+                )
             }
-
-            // Start at Dashboard
             Screen.Dashboard.route
         } else {
             android.util.Log.d("MainActivity", "❌ No session found, showing Login")
-            // Start at Login
             Screen.Login.route
         }
     }
 
     override fun onResume() {
         super.onResume()
-        // ✅ Re-check and restore session when app comes to foreground
         if (userPrefs.isLoggedIn()) {
             val sessionData = userPrefs.getSessionData()
             sessionData?.let {
