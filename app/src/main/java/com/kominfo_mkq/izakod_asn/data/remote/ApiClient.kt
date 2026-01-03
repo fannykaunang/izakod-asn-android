@@ -1,8 +1,10 @@
 package com.kominfo_mkq.izakod_asn.data.remote
 
+import com.kominfo_mkq.izakod_asn.data.local.TokenStore
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -60,12 +62,38 @@ object ApiClient {
         chain.proceed(request)
     }
 
+    private val authInterceptor = Interceptor { chain ->
+        val original = chain.request()
+        val url = original.url
+
+        // hanya untuk Next.js base url
+        val base = BASE_URL.toHttpUrlOrNull()
+        val isNextJs =
+            base != null &&
+                    url.host == base.host &&
+                    url.port == base.port
+
+        if (!isNextJs) return@Interceptor chain.proceed(original)
+
+        val token = TokenStore.getToken()
+        if (token.isNullOrBlank()) return@Interceptor chain.proceed(original)
+
+        val newReq = original.newBuilder()
+            .addHeader("Authorization", "Bearer $token")
+            .build()
+
+        android.util.Log.d("ApiClient", "JWT token (len) = ${token.length} for ${original.url}")
+
+        chain.proceed(newReq)
+    }
+
     private val okHttpClient: OkHttpClient by lazy {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
         }
 
         OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
             .addInterceptor(urlLoggingInterceptor)
             .addInterceptor(apiKeyInterceptor)
             .addInterceptor(loggingInterceptor)
@@ -86,32 +114,5 @@ object ApiClient {
 
     val eabsenApiService: EabsenApiService by lazy {
         retrofit.create(EabsenApiService::class.java)
-    }
-
-    fun clearCookies() {
-        (okHttpClient.cookieJar as? CookieJar)?.let {
-            // Clear implementation if needed
-        }
-    }
-}
-
-object NetworkConfig {
-    fun getBaseUrl(isDevelopment: Boolean = true): String {
-        return if (isDevelopment) {
-            "http://192.168.110.236:3000/"
-        } else {
-            "https://izakod.merauke.go.id/"
-        }
-    }
-
-    fun isEmulator(): Boolean {
-        return (android.os.Build.FINGERPRINT.startsWith("generic")
-                || android.os.Build.FINGERPRINT.startsWith("unknown")
-                || android.os.Build.MODEL.contains("google_sdk")
-                || android.os.Build.MODEL.contains("Emulator")
-                || android.os.Build.MODEL.contains("Android SDK built for x86")
-                || android.os.Build.MANUFACTURER.contains("Genymotion")
-                || (android.os.Build.BRAND.startsWith("generic") && android.os.Build.DEVICE.startsWith("generic"))
-                || "google_sdk" == android.os.Build.PRODUCT)
     }
 }

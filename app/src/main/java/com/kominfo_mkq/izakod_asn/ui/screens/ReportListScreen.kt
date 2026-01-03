@@ -1032,6 +1032,7 @@ private fun generateLaporanPdfTppTemplate(
         }
         // TODO template kegiatan bikin bisa di input sendiri
         // TODO bikin template kegiatan swipe down refresh
+         // TODO ada disini https://chatgpt.com/c/6956b23a-6b2c-8324-b9e5-520764f52e04
         val yText1 = headerTop + 16f
         drawHeaderText("NO", colX[0], colX[1], yText1)
         drawHeaderText("JAM", colX[1], colX[2], yText1)

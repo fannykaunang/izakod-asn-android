@@ -3,10 +3,13 @@ package com.kominfo_mkq.izakod_asn.data.repository
 import com.kominfo_mkq.izakod_asn.data.model.ApiResponse
 import com.kominfo_mkq.izakod_asn.data.model.EabsenLoginResponse
 import com.kominfo_mkq.izakod_asn.data.model.LoginRequest
+import com.kominfo_mkq.izakod_asn.data.model.MobileTokenRequest
+import com.kominfo_mkq.izakod_asn.data.model.MobileTokenResponse
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiData
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import retrofit2.Response
 
 /**
  * Repository untuk handle authentication dan API calls
@@ -95,36 +98,46 @@ class AuthRepository {
      * @param pin PIN pegawai
      * @return ApiResponse dengan PegawaiData
      */
-    suspend fun getPegawaiData(pin: String): ApiResponse<PegawaiData> = withContext(Dispatchers.IO) {
-        try {
-            val response = apiService.getPegawai(pin)
+//    suspend fun getPegawaiData(pin: String): ApiResponse<PegawaiData> = withContext(Dispatchers.IO) {
+//        try {
+//            val response = apiService.getPegawai(pin)
+//
+//            if (response.isSuccessful) {
+//                val body = response.body()
+//
+//                if (body != null) {
+//                    ApiResponse(
+//                        success = true,
+//                        data = body
+//                    )
+//                } else {
+//                    ApiResponse(
+//                        success = false,
+//                        error = "Data pegawai tidak ditemukan"
+//                    )
+//                }
+//            } else {
+//                ApiResponse(
+//                    success = false,
+//                    error = "Gagal mengambil data pegawai: ${response.code()}"
+//                )
+//            }
+//        } catch (e: Exception) {
+//            e.printStackTrace()
+//            ApiResponse(
+//                success = false,
+//                error = e.message ?: "Network error"
+//            )
+//        }
+//    }
 
-            if (response.isSuccessful) {
-                val body = response.body()
-
-                if (body != null) {
-                    ApiResponse(
-                        success = true,
-                        data = body
-                    )
-                } else {
-                    ApiResponse(
-                        success = false,
-                        error = "Data pegawai tidak ditemukan"
-                    )
-                }
-            } else {
-                ApiResponse(
-                    success = false,
-                    error = "Gagal mengambil data pegawai: ${response.code()}"
-                )
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            ApiResponse(
-                success = false,
-                error = e.message ?: "Network error"
-            )
-        }
+    suspend fun fetchNextJsMobileToken(
+        pegawaiId: Int,
+        pin: String
+    ): Response<MobileTokenResponse> {
+        return ApiClient.eabsenApiService.getMobileToken(
+            MobileTokenRequest(pegawai_id = pegawaiId, pin = pin)
+        )
     }
+
 }

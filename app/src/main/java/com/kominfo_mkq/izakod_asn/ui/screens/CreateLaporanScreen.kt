@@ -331,7 +331,7 @@ private fun InfoAlert() {
         }
     }
 }
-// TODO bikin halaman template
+
 @Composable
 private fun ErrorAlert(
     message: String,

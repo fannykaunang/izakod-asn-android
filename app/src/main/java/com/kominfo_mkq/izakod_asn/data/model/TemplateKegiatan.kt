@@ -15,13 +15,13 @@ data class TemplateKegiatan(
     @SerializedName("nama_template")
     val namaTemplate: String,
 
-    @SerializedName("deskripsi")
+    @SerializedName("deskripsi_template")
     val deskripsi: String?,
 
     @SerializedName("target_output_default")
     val targetOutputDefault: String?,
 
-    @SerializedName("estimasi_durasi")
+    @SerializedName("durasi_estimasi_menit")
     val estimasiDurasi: Int?,
 
     @SerializedName("lokasi_default")
@@ -29,6 +29,9 @@ data class TemplateKegiatan(
 
     @SerializedName("is_public")
     val isPublic: Int, // 0 = private, 1 = public
+
+    @SerializedName("jumlah_penggunaan")
+    val jumlah_penggunaan: Int?,
 
     @SerializedName("unit_kerja")
     val unitKerja: String?,

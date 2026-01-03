@@ -31,6 +31,9 @@ class UserPreferences(context: Context) {
         private const val KEY_SKPDID = "skpdid"
         private const val KEY_PEGAWAI_ID = "pegawai_id"
         private const val KEY_DARK_THEME = "dark_theme"
+        private const val KEY_MOBILE_JWT_TOKEN = "mobile_jwt_token"
+        private const val KEY_MOBILE_FCM_TOKEN = "mobile_fcm_token"
+        private const val KEY_NOTIF_PERMISSION_ASKED = "notif_permission_asked"
     }
 
     fun isDarkTheme(): Boolean =
@@ -40,6 +43,20 @@ class UserPreferences(context: Context) {
         prefs.edit { putBoolean(KEY_DARK_THEME, enabled) }
     }
 
+    fun setMobileFcmToken(token: String?) {
+        prefs.edit {
+            if (token.isNullOrBlank()) remove(KEY_MOBILE_FCM_TOKEN)
+            else putString(KEY_MOBILE_FCM_TOKEN, token)
+        }
+    }
+
+    // tambahkan fungsi
+    fun hasAskedNotificationPermission(): Boolean =
+        prefs.getBoolean(KEY_NOTIF_PERMISSION_ASKED, false)
+
+    fun setAskedNotificationPermission(asked: Boolean) {
+        prefs.edit { putBoolean(KEY_NOTIF_PERMISSION_ASKED, asked) }
+    }
     /**
      * Save user session after successful login
      */
@@ -114,6 +131,18 @@ class UserPreferences(context: Context) {
             null
         }
     }
+
+    fun setMobileJwtToken(token: String?) {
+        prefs.edit {
+            if (token.isNullOrBlank()) remove(KEY_MOBILE_JWT_TOKEN)
+            else putString(KEY_MOBILE_JWT_TOKEN, token)
+        }
+    }
+
+    fun getMobileJwtToken(): String? {
+        return prefs.getString(KEY_MOBILE_JWT_TOKEN, null)
+    }
+
 
     /**
      * Clear session (logout)

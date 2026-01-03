@@ -10,6 +10,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -46,6 +47,13 @@ fun LoginScreen(
 
     // Collect UI state
     val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(Unit) {
+        val loggedIn = viewModel.checkLoginStatus()
+        if (loggedIn) {
+            onLoginSuccess()
+        }
+    }
 
     // Handle login success
     LaunchedEffect(uiState.isSuccess) {
@@ -319,7 +327,7 @@ fun LoginScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Login,
+                                    imageVector = Icons.AutoMirrored.Filled.Login,
                                     contentDescription = null,
                                     tint = Color.White  // ✅ Explicit white
                                 )
@@ -339,7 +347,7 @@ fun LoginScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Forgot Password Link
-                    TextButton(onClick = { /* TODO */ }) {
+                    TextButton(onClick = {}) {
                         Text(
                             text = "Lupa Password?",
                             style = MaterialTheme.typography.bodyMedium.copy(

@@ -10,7 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
@@ -63,15 +63,17 @@ fun ProfileScreen(
 
     // prefs
     val userPrefs = remember { UserPreferences(context) }
-    val pin = remember { userPrefs.getPin() }
+    val pin = userPrefs.getPin()
 
     // dialog state (HANYA di Profile)
     var showLogoutDialog by remember { mutableStateOf(false) }
 
     // load profile hanya sekali (tidak reload saat balik tab)
-    LaunchedEffect(pin, uiState.profile, uiState.isLoading) {
-        if (pin != null && uiState.profile == null && !uiState.isLoading) {
-            viewModel.loadProfile(pin)
+    LaunchedEffect(pin) {
+        if (!pin.isNullOrBlank()) {
+            viewModel.loadProfile(pin) // jangan reset dulu
+        } else {
+            viewModel.clearProfile()   // jika benar2 logout / pin kosong
         }
     }
 
@@ -81,6 +83,7 @@ fun ProfileScreen(
     // fungsi logout dipusatkan biar tidak error scope
     val doLogout = remember {
         {
+            viewModel.resetProfile()
             userPrefs.clearSession()
             StatistikRepository.clearData()
             onLogout()
@@ -128,13 +131,10 @@ fun ProfileScreen(
             )
 
             when {
-                uiState.isLoading -> ProfileLoadingContent()
-
-                uiState.isError -> {
-                    ProfileErrorContent(
-                        message = uiState.errorMessage ?: "Terjadi kesalahan",
-                        onRetry = { pin?.let { viewModel.loadProfile(it) } }
-                    )
+                pin.isNullOrBlank() -> {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Silakan login.")
+                    }
                 }
 
                 uiState.profile != null -> {
@@ -172,6 +172,14 @@ fun ProfileScreen(
                     }
                 }
 
+                uiState.isLoading -> ProfileLoadingContent()
+                uiState.isError -> {
+                    ProfileErrorContent(
+                        message = uiState.errorMessage ?: "Terjadi kesalahan",
+                        onRetry = { pin.let { viewModel.loadProfile(it) } }
+                    )
+                }
+
                 else -> {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text("Tidak ada data profil.")
@@ -184,13 +192,12 @@ fun ProfileScreen(
     // ✅ Dialog logout HANYA di ProfileScreen
     if (showLogoutDialog) {
         AlertDialog(
-            onDismissRequest = { showLogoutDialog = false },
+            onDismissRequest = { },
             title = { Text("Konfirmasi Logout") },
             text = { Text("Apakah Anda yakin ingin keluar dari aplikasi?") },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        showLogoutDialog = false
                         doLogout()
                     }
                 ) {
@@ -198,7 +205,7 @@ fun ProfileScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showLogoutDialog = false }) {
+                TextButton(onClick = { }) {
                     Text("Batal")
                 }
             }
@@ -373,7 +380,7 @@ private fun AccountTopBar(
         title = { Text(title, fontWeight = FontWeight.Bold) },
         navigationIcon = {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Kembali")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
             }
         }
     )

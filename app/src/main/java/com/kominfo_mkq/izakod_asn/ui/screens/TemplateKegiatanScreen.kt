@@ -1,5 +1,3 @@
-// TemplateKegiatanScreen.kt - Template Kegiatan List
-
 package com.kominfo_mkq.izakod_asn.ui.screens
 
 import androidx.compose.foundation.background
@@ -11,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.TemplateKegiatanViewModel
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatan
+import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanCreateRequest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,20 +35,53 @@ fun TemplateKegiatanScreen(
     var filterPublic by remember { mutableStateOf(false) }
     var showFilterDialog by remember { mutableStateOf(false) }
 
+    // dialog states
+    var showFormDialog by remember { mutableStateOf(false) }
+    var editingTemplate by remember { mutableStateOf<TemplateKegiatan?>(null) }
+
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var deletingTemplate by remember { mutableStateOf<TemplateKegiatan?>(null) }
+
+    // snackbar
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(uiState.actionMessage) {
+        val msg = uiState.actionMessage
+        if (!msg.isNullOrBlank()) {
+            snackbarHostState.showSnackbar(msg)
+            viewModel.consumeActionMessage()
+        }
+    }
+
     // Load templates on screen open
     LaunchedEffect(Unit) {
         viewModel.loadTemplates()
     }
 
+    val filteredTemplates = remember(uiState.templates, searchQuery, filterPublic) {
+        uiState.templates.filter { template ->
+            val matchesSearch =
+                template.deskripsi?.contains(searchQuery, ignoreCase = true) == true
+            val matchesFilter = !filterPublic || template.isPublic == 1
+            matchesSearch && matchesFilter
+        }
+    }
+
+// kategori list from existing templates (buat dropdown add/edit)
+    val kategoriOptions = remember(uiState.templates) {
+        uiState.templates
+            .map { it.kategoriId to (it.kategoriNama ?: "Kategori ${it.kategoriId}") }
+            .distinctBy { it.first }
+            .sortedBy { it.second }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
                     Text(
                         "Template Kegiatan",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold
-                        )
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                     )
                 },
                 navigationIcon = {
@@ -57,7 +90,6 @@ fun TemplateKegiatanScreen(
                     }
                 },
                 actions = {
-                    // Filter button
                     IconButton(onClick = { showFilterDialog = true }) {
                         Icon(
                             Icons.Default.FilterList,
@@ -66,16 +98,30 @@ fun TemplateKegiatanScreen(
                             else MaterialTheme.colorScheme.onSurface
                         )
                     }
-
-                    // Refresh button
                     IconButton(onClick = { viewModel.loadTemplates() }) {
                         Icon(Icons.Default.Refresh, "Refresh")
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                }
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = {
+                    editingTemplate = null
+                    showFormDialog = true
+                },
+                containerColor = MaterialTheme.colorScheme.primary
+            ) {
+                if (uiState.isMutating) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Icon(Icons.Default.Add, contentDescription = "Tambah Template", tint = MaterialTheme.colorScheme.onPrimary)
+                }
+            }
         }
     ) { paddingValues ->
         Column(
@@ -84,46 +130,37 @@ fun TemplateKegiatanScreen(
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            // Search Bar
             SearchBar(
                 query = searchQuery,
                 onQueryChange = { searchQuery = it },
                 modifier = Modifier.padding(16.dp)
             )
 
-            // Content
             when {
-                uiState.isLoading -> {
-                    TemplateKegiatanLoadingContent()
-                }
-                uiState.isError -> {
-                    TemplateKegiatanErrorContent(
-                        message = uiState.errorMessage ?: "Terjadi kesalahan",
-                        onRetry = { viewModel.loadTemplates() }
-                    )
-                }
+                uiState.isLoading -> TemplateKegiatanLoadingContent()
+                uiState.isError -> TemplateKegiatanErrorContent(
+                    message = uiState.errorMessage ?: "Terjadi kesalahan",
+                    onRetry = { viewModel.loadTemplates() }
+                )
+                filteredTemplates.isEmpty() -> EmptyContent(
+                    message = if (searchQuery.isNotEmpty())
+                        "Tidak ada template yang cocok dengan pencarian"
+                    else
+                        "Belum ada template kegiatan"
+                )
                 else -> {
-                    val filteredTemplates = uiState.templates.filter { template ->
-                        val matchesSearch = template.namaTemplate.contains(searchQuery, ignoreCase = true) ||
-                                template.deskripsi?.contains(searchQuery, ignoreCase = true) == true
-                        val matchesFilter = !filterPublic || template.isPublic == 1
-
-                        matchesSearch && matchesFilter
-                    }
-
-                    if (filteredTemplates.isEmpty()) {
-                        EmptyContent(
-                            message = if (searchQuery.isNotEmpty())
-                                "Tidak ada template yang cocok dengan pencarian"
-                            else
-                                "Belum ada template kegiatan"
-                        )
-                    } else {
-                        TemplateList(
-                            templates = filteredTemplates,
-                            onTemplateClick = onTemplateClick
-                        )
-                    }
+                    TemplateList(
+                        templates = filteredTemplates,
+                        onUse = onTemplateClick,
+                        onEdit = { t ->
+                            editingTemplate = t
+                            showFormDialog = true
+                        },
+                        onDelete = { t ->
+                            deletingTemplate = t
+                            showDeleteConfirm = true
+                        }
+                    )
                 }
             }
         }
@@ -135,6 +172,43 @@ fun TemplateKegiatanScreen(
             filterPublic = filterPublic,
             onFilterChange = { filterPublic = it },
             onDismiss = { showFilterDialog = false }
+        )
+    }
+
+    // ✅ Add/Edit dialog
+    if (showFormDialog) {
+        TemplateFormDialog(
+            kategoriOptions = kategoriOptions,
+            initial = editingTemplate,
+            onDismiss = { showFormDialog = false },
+            onSubmit = { req ->
+                showFormDialog = false
+                val edited = editingTemplate
+                if (edited == null) viewModel.createTemplate(req)
+                else viewModel.updateTemplate(edited.templateId, req)
+            }
+        )
+    }
+
+    // ✅ Delete confirm
+    if (showDeleteConfirm) {
+        val t = deletingTemplate
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Hapus Template?") },
+            text = { Text("Template \"${t?.namaTemplate ?: "-"}\" akan dihapus permanen.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirm = false
+                        t?.let { viewModel.deleteTemplate(it.templateId) }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Hapus") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Batal") }
+            }
         )
     }
 }
@@ -168,31 +242,32 @@ private fun SearchBar(
 @Composable
 private fun TemplateList(
     templates: List<TemplateKegiatan>,
-    onTemplateClick: (TemplateKegiatan) -> Unit
+    onUse: (TemplateKegiatan) -> Unit,
+    onEdit: (TemplateKegiatan) -> Unit,
+    onDelete: (TemplateKegiatan) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Group by kategori
         val groupedTemplates = templates.groupBy { it.kategoriNama ?: "Lainnya" }
 
         groupedTemplates.forEach { (kategori, templateList) ->
             item {
                 Text(
                     text = kategori,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold
-                    ),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
             }
 
-            items(templateList) { template ->
+            items(templateList, key = { it.templateId }) { template ->
                 TemplateCard(
                     template = template,
-                    onClick = { onTemplateClick(template) }
+                    onUse = { onUse(template) },
+                    onEdit = { onEdit(template) },
+                    onDelete = { onDelete(template) }
                 )
             }
         }
@@ -202,64 +277,84 @@ private fun TemplateList(
 @Composable
 private fun TemplateCard(
     template: TemplateKegiatan,
-    onClick: () -> Unit
+    onUse: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .clickable(onClick = onUse),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
-                Text(
-                    text = template.namaTemplate,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold
-                    ),
-                    modifier = Modifier.weight(1f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = template.namaTemplate,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
-                if (template.isPublic == 1) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (template.isPublic == 1) {
+                        AssistChip(
+                            onClick = {},
+                            label = { Text("Public") },
+                            leadingIcon = { Icon(Icons.Default.Public, null, modifier = Modifier.size(16.dp)) }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Opsi")
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false }
                         ) {
-                            Icon(
-                                Icons.Default.Public,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                            DropdownMenuItem(
+                                text = { Text("Gunakan template") },
+                                leadingIcon = { Icon(Icons.Default.PlayArrow, null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onUse()
+                                }
                             )
-                            Text(
-                                "Public",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary
+                            DropdownMenuItem(
+                                text = { Text("Edit") },
+                                leadingIcon = { Icon(Icons.Default.Edit, null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onEdit()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Hapus") },
+                                leadingIcon = { Icon(Icons.Default.Delete, null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onDelete()
+                                }
                             )
                         }
                     }
                 }
             }
 
-            // Deskripsi
             if (!template.deskripsi.isNullOrBlank()) {
                 Text(
                     text = template.deskripsi,
@@ -270,37 +365,168 @@ private fun TemplateCard(
                 )
             }
 
-            Divider(modifier = Modifier.padding(vertical = 4.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-            // Details
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Kategori
-                DetailChip(
-                    icon = Icons.Default.Category,
-                    text = template.kategoriNama ?: "-"
-                )
-
-                // Durasi
-                if (template.estimasiDurasi != null) {
-                    DetailChip(
-                        icon = Icons.Default.Timer,
-                        text = "${template.estimasiDurasi} menit"
-                    )
+                DetailChip(icon = Icons.Default.Category, text = template.kategoriNama ?: "-")
+                template.estimasiDurasi?.let {
+                    DetailChip(icon = Icons.Default.Timer, text = "$it menit")
                 }
+                DetailChip(icon = Icons.Default.Repeat, text = "${template.jumlah_penggunaan ?: 0} kali")
             }
 
-            // Unit Kerja (if not public)
             if (template.isPublic == 0 && !template.unitKerja.isNullOrBlank()) {
-                DetailChip(
-                    icon = Icons.Default.Business,
-                    text = template.unitKerja
-                )
+                DetailChip(icon = Icons.Default.Business, text = template.unitKerja)
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TemplateFormDialog(
+    kategoriOptions: List<Pair<Int, String>>,
+    initial: TemplateKegiatan?,
+    onDismiss: () -> Unit,
+    onSubmit: (TemplateKegiatanCreateRequest) -> Unit
+) {
+    val isEdit = initial != null
+
+    var nama by remember { mutableStateOf(initial?.namaTemplate.orEmpty()) }
+    var deskripsi by remember { mutableStateOf(initial?.deskripsi.orEmpty()) }
+    var targetOutput by remember { mutableStateOf(initial?.targetOutputDefault.orEmpty()) }
+    var lokasi by remember { mutableStateOf(initial?.lokasiDefault.orEmpty()) }
+    var durasiText by remember { mutableStateOf((initial?.estimasiDurasi ?: 60).toString()) }
+    var isPublic by remember { mutableStateOf(initial?.isPublic == 1) }
+
+    var kategoriId by remember { mutableIntStateOf(initial?.kategoriId ?: (kategoriOptions.firstOrNull()?.first ?: 0)) }
+    var kategoriExpanded by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (isEdit) "Edit Template" else "Tambah Template") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = nama,
+                    onValueChange = { nama = it },
+                    label = { Text("Nama template*") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                // Kategori: dropdown jika ada opsi, kalau tidak ada, input manual
+                if (kategoriOptions.isNotEmpty()) {
+                    ExposedDropdownMenuBox(
+                        expanded = kategoriExpanded,
+                        onExpandedChange = { kategoriExpanded = !kategoriExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = kategoriOptions.firstOrNull { it.first == kategoriId }?.second ?: "Kategori $kategoriId",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Kategori*") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = kategoriExpanded) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = kategoriExpanded,
+                            onDismissRequest = { kategoriExpanded = false }
+                        ) {
+                            kategoriOptions.forEach { (id, name) ->
+                                DropdownMenuItem(
+                                    text = { Text(name) },
+                                    onClick = {
+                                        kategoriId = id
+                                        kategoriExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = kategoriId.toString(),
+                        onValueChange = { kategoriId = it.toIntOrNull() ?: 0 },
+                        label = { Text("Kategori ID*") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+
+                OutlinedTextField(
+                    value = deskripsi,
+                    onValueChange = { deskripsi = it },
+                    label = { Text("Deskripsi") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = targetOutput,
+                    onValueChange = { targetOutput = it },
+                    label = { Text("Target output default") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = lokasi,
+                    onValueChange = { lokasi = it },
+                    label = { Text("Lokasi default") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = durasiText,
+                    onValueChange = { durasiText = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("Durasi estimasi (menit)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Public")
+                    Switch(checked = isPublic, onCheckedChange = { isPublic = it })
+                }
+
+                Text(
+                    text = "* wajib diisi",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (nama.isBlank() || kategoriId <= 0) return@Button
+
+                    onSubmit(
+                        TemplateKegiatanCreateRequest(
+                            namaTemplate = nama.trim(),
+                            kategoriId = kategoriId,
+                            deskripsiTemplate = deskripsi.trim().ifBlank { null },
+                            targetOutputDefault = targetOutput.trim().ifBlank { null },
+                            lokasiDefault = lokasi.trim().ifBlank { null },
+                            durasiEstimasiMenit = durasiText.toIntOrNull() ?: 60,
+                            isPublic = if (isPublic) 1 else 0,
+                            unitKerjaAkses = null,
+                            isActive = 1
+                        )
+                    )
+                }
+            ) { Text(if (isEdit) "Simpan" else "Tambah") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Batal") }
+        }
+    )
 }
 
 @Composable

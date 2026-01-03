@@ -3,6 +3,7 @@ package com.kominfo_mkq.izakod_asn.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatan
+import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanCreateRequest
 import com.kominfo_mkq.izakod_asn.data.repository.TemplateRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,7 +14,9 @@ data class TemplateKegiatanUiState(
     val isLoading: Boolean = false,
     val isError: Boolean = false,
     val errorMessage: String? = null,
-    val templates: List<TemplateKegiatan> = emptyList()
+    val templates: List<TemplateKegiatan> = emptyList(),
+    val isMutating: Boolean = false, // ✅ create/edit/delete loading
+    val actionMessage: String? = null
 )
 
 class TemplateKegiatanViewModel : ViewModel() {
@@ -34,11 +37,13 @@ class TemplateKegiatanViewModel : ViewModel() {
                 _uiState.value = TemplateKegiatanUiState(isLoading = true)
 
                 val response = repository.getAllTemplates()
+                android.util.Log.d("TemplateVM", "HTTP: ${response.code()}")
 
                 android.util.Log.d("TemplateKegiatanViewModel", "📡 Response code: ${response.code()}")
 
                 if (response.isSuccessful && response.body() != null) {
                     val body = response.body()!!
+                    android.util.Log.d("TemplateVM", "BODY: $body")
 
                     if (body.success) {
                         android.util.Log.d("TemplateKegiatanViewModel", "✅ Loaded ${body.data.size} templates")
@@ -58,7 +63,7 @@ class TemplateKegiatanViewModel : ViewModel() {
                     }
                 } else {
                     val errorBody = response.errorBody()?.string()
-                    android.util.Log.e("TemplateKegiatanViewModel", "❌ Error: $errorBody")
+                    android.util.Log.e("TemplateVM", "ERROR_BODY: $errorBody")
 
                     _uiState.value = TemplateKegiatanUiState(
                         isLoading = false,
@@ -110,4 +115,83 @@ class TemplateKegiatanViewModel : ViewModel() {
             }
         }
     }
+
+    private fun setActionMessage(msg: String?) {
+        _uiState.value = _uiState.value.copy(actionMessage = msg)
+    }
+
+    fun consumeActionMessage() {
+        setActionMessage(null)
+    }
+
+    fun createTemplate(request: TemplateKegiatanCreateRequest) {
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(isMutating = true, actionMessage = null)
+
+                val res = repository.createTemplate(request)
+                val body = res.body()
+
+                if (res.isSuccessful && body != null && body.success) {
+                    _uiState.value = _uiState.value.copy(isMutating = false, actionMessage = body.message)
+                    loadTemplates()
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isMutating = false,
+                        actionMessage = body?.message ?: "Gagal menambah template (HTTP ${res.code()})"
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isMutating = false, actionMessage = e.message ?: "Error")
+            }
+        }
+    }
+
+    fun updateTemplate(templateId: Int, request: TemplateKegiatanCreateRequest) {
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(isMutating = true, actionMessage = null)
+
+                val res = repository.updateTemplate(templateId, request)
+                val body = res.body()
+
+                if (res.isSuccessful && body != null && body.success) {
+                    _uiState.value = _uiState.value.copy(isMutating = false, actionMessage = body.message)
+                    loadTemplates()
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isMutating = false,
+                        actionMessage = body?.message ?: "Gagal mengubah template (HTTP ${res.code()})"
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isMutating = false, actionMessage = e.message ?: "Error")
+            }
+        }
+    }
+
+    fun deleteTemplate(templateId: Int) {
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(isMutating = true, actionMessage = null)
+
+                val res = repository.deleteTemplate(templateId)
+                val body = res.body()
+
+                if (res.isSuccessful && body != null && body.success) {
+                    _uiState.value = _uiState.value.copy(isMutating = false, actionMessage = body.message)
+                    loadTemplates()
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isMutating = false,
+                        actionMessage = body?.message ?: "Gagal menghapus template (HTTP ${res.code()})"
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isMutating = false, actionMessage = e.message ?: "Error")
+            }
+        }
+    }
+
+
 }

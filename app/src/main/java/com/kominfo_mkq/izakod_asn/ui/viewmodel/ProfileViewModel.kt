@@ -26,14 +26,12 @@ class ProfileViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
-    fun setDarkTheme(enabled: Boolean) {
-        _uiState.value = _uiState.value.copy(isDarkTheme = enabled)
-        // NOTE: supaya theme benar-benar berubah global, kamu perlu mengikat value ini
-        // ke AppTheme di level Activity (aku kasih contoh di bawah).
-    }
-
     fun setNotifications(enabled: Boolean) {
         _uiState.value = _uiState.value.copy(notificationsEnabled = enabled)
+    }
+
+    fun clearProfile() {
+        _uiState.value = ProfileUiState() // reset full
     }
 
     /**
@@ -44,7 +42,12 @@ class ProfileViewModel : ViewModel() {
             try {
                 android.util.Log.d("ProfileViewModel", "📋 Loading profile for PIN: $pin")
 
-                _uiState.value = _uiState.value.copy(isLoading = true, isError = false, errorMessage = null)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = true,
+                    isError = false,
+                    errorMessage = null
+                    // BIARKAN profile lama tetap ada sementara loading (no flicker)
+                )
 
                 val response = EabsenRetrofitClient.apiService.getPegawaiProfile(pin)
 
@@ -84,5 +87,15 @@ class ProfileViewModel : ViewModel() {
                 )
             }
         }
+    }
+
+    fun resetProfile() {
+        _uiState.value = _uiState.value.copy(
+            isLoading = false,
+            isError = false,
+            errorMessage = null,
+            profile = null,
+            photoUrl = null
+        )
     }
 }

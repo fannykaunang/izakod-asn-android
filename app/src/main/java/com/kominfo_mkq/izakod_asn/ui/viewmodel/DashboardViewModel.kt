@@ -1,9 +1,7 @@
 package com.kominfo_mkq.izakod_asn.ui.viewmodel
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.MetricsData
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
 import com.kominfo_mkq.izakod_asn.data.model.TimeSeriesItem
@@ -72,7 +70,7 @@ class DashboardViewModel : ViewModel() {
                         )
                     }
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 _uiState.update { it.copy(isLoadingProfile = false) }
             }
         }

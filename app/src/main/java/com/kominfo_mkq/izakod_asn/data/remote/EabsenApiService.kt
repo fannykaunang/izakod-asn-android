@@ -1,22 +1,27 @@
 package com.kominfo_mkq.izakod_asn.data.remote
 
 import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiResponse
+import com.kominfo_mkq.izakod_asn.data.model.BasicActionResponse
 import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanResponse
 import com.kominfo_mkq.izakod_asn.data.model.CreateReminderRequest
 import com.kominfo_mkq.izakod_asn.data.model.CreateReminderResponse
 import com.kominfo_mkq.izakod_asn.data.model.DeleteReminderResponse
 import com.kominfo_mkq.izakod_asn.data.model.EabsenLoginResponse
+import com.kominfo_mkq.izakod_asn.data.model.FcmRegisterRequest
 import com.kominfo_mkq.izakod_asn.data.model.KategoriListResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanCetakResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanDetailResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanListResponse
 import com.kominfo_mkq.izakod_asn.data.model.LoginRequest
+import com.kominfo_mkq.izakod_asn.data.model.MobileTokenRequest
+import com.kominfo_mkq.izakod_asn.data.model.MobileTokenResponse
 import com.kominfo_mkq.izakod_asn.data.model.NotifikasiResponse
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiData
-import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
 import com.kominfo_mkq.izakod_asn.data.model.ReminderListResponse
 import com.kominfo_mkq.izakod_asn.data.model.StatistikBulananResponse
+import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanCreateRequest
+import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanCreateResponse
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanResponse
 import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanResponse
@@ -123,6 +128,7 @@ interface EabsenApiService {
      */
     @GET("api/template-kegiatan")
     suspend fun getTemplateKegiatan(
+        @Query("pegawai_id") pegawaiId: Int? = null,
         @Query("kategori_id") kategoriId: Int? = null,
         @Query("is_public") isPublic: Int? = null,
         @Query("unit_kerja") unitKerja: String? = null
@@ -197,4 +203,33 @@ interface EabsenApiService {
     suspend fun getAtasanPegawaiByBawahan(
         @Path("pegawaiId") pegawaiId: Int
     ): Response<AtasanPegawaiResponse>
+
+    // CREATE
+    @POST("api/template-kegiatan")
+    suspend fun createTemplateKegiatan(
+        @Body request: TemplateKegiatanCreateRequest
+    ): Response<TemplateKegiatanCreateResponse>
+
+    // UPDATE
+    @PUT("api/template-kegiatan/{id}")
+    suspend fun updateTemplateKegiatan(
+        @Path("id") templateId: Int,
+        @Body request: TemplateKegiatanCreateRequest
+    ): Response<BasicActionResponse>
+
+    // DELETE
+    @DELETE("api/template-kegiatan/{id}")
+    suspend fun deleteTemplateKegiatan(
+        @Path("id") templateId: Int
+    ): Response<BasicActionResponse>
+
+    @POST("api/mobile/token")
+    suspend fun getMobileToken(
+        @Body request: MobileTokenRequest
+    ): Response<MobileTokenResponse>
+
+    @POST("api/mobile/fcm/register")
+    suspend fun registerFcmToken(
+        @Body request: FcmRegisterRequest
+    ): Response<BasicActionResponse>
 }
