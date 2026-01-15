@@ -8,7 +8,6 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
-import com.kominfo_mkq.izakod_asn.BuildConfig
 import com.kominfo_mkq.izakod_asn.MainActivity
 import com.kominfo_mkq.izakod_asn.R
 import com.kominfo_mkq.izakod_asn.data.local.TokenStore
@@ -42,11 +41,13 @@ class IzakodFirebaseMessagingService : FirebaseMessagingService() {
             // penting: isi TokenStore supaya interceptor menambahkan Bearer
             TokenStore.setToken(jwt)
 
+            val appVersion = DeviceInfo.appVersion(applicationContext)
+
             val req = FcmRegisterRequest(
                 fcm_token = token,
                 device_id = DeviceInfo.androidId(applicationContext),
                 device_model = DeviceInfo.model(),
-                app_version = BuildConfig.VERSION_NAME
+                app_version = appVersion
             )
 
             try {

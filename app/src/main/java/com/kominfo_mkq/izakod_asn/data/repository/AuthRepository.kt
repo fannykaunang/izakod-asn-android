@@ -5,7 +5,6 @@ import com.kominfo_mkq.izakod_asn.data.model.EabsenLoginResponse
 import com.kominfo_mkq.izakod_asn.data.model.LoginRequest
 import com.kominfo_mkq.izakod_asn.data.model.MobileTokenRequest
 import com.kominfo_mkq.izakod_asn.data.model.MobileTokenResponse
-import com.kominfo_mkq.izakod_asn.data.model.PegawaiData
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -60,7 +59,7 @@ class AuthRepository {
                             // Pegawai not found, return without pegawai_id
                             return@withContext ApiResponse(
                                 success = true,
-                                data = body.copy(pegawaiId = null)
+                                data = body.copy(pegawaiId = 0)
                             )
                         }
                     } catch (e: Exception) {
@@ -68,7 +67,7 @@ class AuthRepository {
                         e.printStackTrace()
                         return@withContext ApiResponse(
                             success = true,
-                            data = body.copy(pegawaiId = null)
+                            data = body.copy(pegawaiId = 0)
                         )
                     }
                 } else {

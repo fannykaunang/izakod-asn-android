@@ -17,12 +17,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import com.kominfo_mkq.izakod_asn.data.local.TokenStore
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
 import com.kominfo_mkq.izakod_asn.ui.navigation.IZAKODNavigation
 import com.kominfo_mkq.izakod_asn.ui.navigation.Screen
 import com.kominfo_mkq.izakod_asn.ui.theme.IZAKODASNTheme
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 
 @Composable
@@ -58,13 +62,21 @@ fun RequestNotificationPermissionOnce(userPrefs: UserPreferences) {
     }
 }
 
-
 class MainActivity : ComponentActivity() {
-
     private lateinit var userPrefs: UserPreferences
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+// TODO ubah warna hitam pada splashscreen
+        var keepSplashScreen = true
+        splashScreen.setKeepOnScreenCondition { keepSplashScreen }
+
+        // Matikan setelah 2 detik
+        lifecycleScope.launch {
+            delay(2000)
+            keepSplashScreen = false
+        }
 
         val token = UserPreferences(this).getMobileJwtToken()
         TokenStore.setToken(token) // boleh null
@@ -74,10 +86,7 @@ class MainActivity : ComponentActivity() {
         userPrefs = UserPreferences(this)
 
         setContent {
-            // ✅ Theme state global (dibaca dari EncryptedSharedPreferences)
             var isDarkTheme by remember { mutableStateOf(userPrefs.isDarkTheme()) }
-
-            // ✅ startDestination tetap seperti sebelumnya
             val startDestination = remember { checkAndRestoreSession() }
 
             IZAKODASNTheme(darkTheme = isDarkTheme) {

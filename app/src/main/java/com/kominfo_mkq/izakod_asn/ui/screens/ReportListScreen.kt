@@ -53,6 +53,7 @@ import com.kominfo_mkq.izakod_asn.ui.viewmodel.LaporanListViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -310,13 +311,18 @@ fun ReportListScreen(
         val bulan = uiState.filterBulan ?: (Calendar.getInstance().get(Calendar.MONTH) + 1)
         val tahun = uiState.filterTahun ?: Calendar.getInstance().get(Calendar.YEAR)
 
+        val atasanReady = uiState.atasanPegawai != null
+        val atasanError = uiState.errorAtasan
+        val atasanLoading = uiState.isLoadingAtasan
+
         PrintPreviewDialog(
             title = "Preview Cetak",
             month = bulan,
             year = tahun,
             total = filteredReports.size,
             isLoading = isGeneratingPdf,
-            errorText = pdfError,
+            //errorText = pdfError,
+            errorText = pdfError ?: uiState.errorAtasan,
             pdfFile = pdfFile,
             onDismiss = {
                 showPrintPreview = false
@@ -324,35 +330,115 @@ fun ReportListScreen(
                 pdfError = null
                 isGeneratingPdf = false
             },
+            autoGenerate = (uiState.atasanPegawai != null && uiState.errorAtasan.isNullOrBlank()),
+//            onGenerate = {
+//                scope.launch {
+//                    isGeneratingPdf = true
+//                    pdfError = null
+//
+//                    try {
+//                        // 1) Pastikan data atasan sudah diload
+//                        if (viewModel.uiState.value.atasanPegawai == null) {
+//                            viewModel.loadAtasanPegawai(context)
+//                        }
+//
+//                        // 2) Tunggu sampai state terisi (maks 10 detik biar tidak nge-hang)
+////                        val data = withTimeout(10_000) {
+////                            snapshotFlow { viewModel.uiState.value.atasanPegawai }
+////                                .filterNotNull()
+////                                .first()
+////                        }
+//
+//                        val data = withTimeout(10_000) {
+//                            snapshotFlow { viewModel.uiState.value }
+//                                .first { it.atasanPegawai != null || it.errorAtasan != null }
+//                                .let { state ->
+//                                    if (state.errorAtasan != null) throw Exception(state.errorAtasan)
+//                                    state.atasanPegawai!!
+//                                }
+//                        }
+//
+//                        val asn = PersonBlock(
+//                            nama = data.pegawaiNama.orEmpty(),
+//                            nip = data.pegawaiNip.orEmpty(),
+//                            jabatan = data.pegawaiJabatan.orEmpty(),
+////                            jabatan = listOfNotNull(data.pegawaiJabatan)
+////                                .joinToString(" - ")
+////                                .ifEmpty { "-" }
+//                        )
+//
+//                        val atasan = PersonBlock(
+//                            nama = data.atasanPegawaiNama.orEmpty(),      // sesuaikan nama field modelmu
+//                            nip = data.atasanPegawaiNip.orEmpty(),
+//                            jabatan = data.atasanPegawaiJabatan.orEmpty().ifEmpty { "-" }
+//                        )
+//
+//                        val skpdTitle = data.pegawaiSkpd?.trim().orEmpty()
+//                            .ifEmpty { "DINAS / UNIT KERJA" }
+//                            .uppercase()
+//
+//                        // 3) Generate PDF (jangan di Main thread)
+//                        val file = withContext(Dispatchers.Default) {
+//                            generateLaporanPdfTppTemplate(
+//                                context = context,
+//                                bulan = bulan,
+//                                tahun = tahun,
+//                                laporan = filteredReports,
+//                                asn = asn,
+//                                atasan = atasan,
+//                                skpdTitle = skpdTitle,
+//                                kota = "Merauke",
+//                                ttdResId = null,
+//                                stempelResId = null
+//                            )
+//                        }
+//
+//                        pdfFile = file
+//                    } catch (e: Exception) {
+//                        e.printStackTrace()
+//                        pdfError = e.message ?: "Gagal membuat PDF"
+//                        pdfFile = null
+//                    } finally {
+//                        isGeneratingPdf = false
+//                    }
+//                }
+//            },
             onGenerate = {
                 scope.launch {
-                    isGeneratingPdf = true
                     pdfError = null
 
-                    try {
-                        // 1) Pastikan data atasan sudah diload
-                        if (viewModel.uiState.value.atasanPegawai == null) {
-                            viewModel.loadAtasanPegawai(context)
-                        }
+                    // 0) Kalau masih loading atasan, jangan mulai generate PDF
+                    if (atasanLoading) {
+                        pdfError = "Sedang memuat data atasan... coba lagi sebentar."
+                        return@launch
+                    }
 
-                        // 2) Tunggu sampai state terisi (maks 10 detik biar tidak nge-hang)
-                        val data = withTimeout(10_000) {
-                            snapshotFlow { viewModel.uiState.value.atasanPegawai }
-                                .filterNotNull()
-                                .first()
-                        }
+                    // 1) Jika ada error / data atasan kosong, stop tanpa loading PDF
+                    if (!atasanError.isNullOrBlank()) {
+                        pdfError = atasanError
+                        return@launch
+                    }
+
+                    if (!atasanReady) {
+                        // Optional: panggil loadAtasanPegawai lagi (kalau belum pernah)
+                        viewModel.loadAtasanPegawai(context)
+                        pdfError = "Data atasan belum tersedia. Silakan coba lagi."
+                        return@launch
+                    }
+
+                    // ✅ Baru mulai loading PDF kalau syarat sudah terpenuhi
+                    isGeneratingPdf = true
+                    try {
+                        val data = uiState.atasanPegawai!!  // sudah pasti ada
 
                         val asn = PersonBlock(
                             nama = data.pegawaiNama.orEmpty(),
                             nip = data.pegawaiNip.orEmpty(),
-                            jabatan = data.pegawaiJabatan.orEmpty(),
-//                            jabatan = listOfNotNull(data.pegawaiJabatan)
-//                                .joinToString(" - ")
-//                                .ifEmpty { "-" }
+                            jabatan = data.pegawaiJabatan.orEmpty()
                         )
 
                         val atasan = PersonBlock(
-                            nama = data.atasanPegawaiNama.orEmpty(),      // sesuaikan nama field modelmu
+                            nama = data.atasanPegawaiNama.orEmpty(),
                             nip = data.atasanPegawaiNip.orEmpty(),
                             jabatan = data.atasanPegawaiJabatan.orEmpty().ifEmpty { "-" }
                         )
@@ -361,7 +447,6 @@ fun ReportListScreen(
                             .ifEmpty { "DINAS / UNIT KERJA" }
                             .uppercase()
 
-                        // 3) Generate PDF (jangan di Main thread)
                         val file = withContext(Dispatchers.Default) {
                             generateLaporanPdfTppTemplate(
                                 context = context,
@@ -379,7 +464,6 @@ fun ReportListScreen(
 
                         pdfFile = file
                     } catch (e: Exception) {
-                        e.printStackTrace()
                         pdfError = e.message ?: "Gagal membuat PDF"
                         pdfFile = null
                     } finally {
@@ -387,7 +471,7 @@ fun ReportListScreen(
                     }
                 }
             },
-                    onPrint = { file ->
+            onPrint = { file ->
                 printPdf(context, file, jobName = "Laporan Kegiatan $bulan-$tahun")
             }
         )
@@ -655,10 +739,13 @@ private fun PrintPreviewDialog(
     pdfFile: File?,
     onDismiss: () -> Unit,
     onGenerate: () -> Unit,
-    onPrint: (File) -> Unit
+    onPrint: (File) -> Unit,
+    autoGenerate: Boolean,
 ) {
     // generate PDF first time dialog opened (kalau belum ada)
-    LaunchedEffect(Unit) { onGenerate() }
+    LaunchedEffect(autoGenerate) {
+        if (autoGenerate) onGenerate()
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -858,7 +945,6 @@ private fun generateLaporanPdfTppTemplate(
     @DrawableRes ttdResId: Int? = null,
     @DrawableRes stempelResId: Int? = null
 ): File {
-    // A4 Landscape @ ~72dpi
     val pageWidth = 842
     val pageHeight = 595
     val margin = 24f
@@ -866,11 +952,7 @@ private fun generateLaporanPdfTppTemplate(
     val doc = PdfDocument()
     val pager = PdfPager(doc, pageWidth, pageHeight)
 
-    val paintTitle = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = 14f
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        color = GColor.BLACK
-    }
+    // Paints
     val paintBold = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textSize = 11f
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -892,8 +974,8 @@ private fun generateLaporanPdfTppTemplate(
         color = GColor.BLACK
     }
 
+    // Helpers
     fun measure(p: Paint, s: String) = p.measureText(s)
-
     fun wrapText(p: Paint, text: String, maxWidth: Float): List<String> {
         if (text.isBlank()) return listOf("")
         val words = text.trim().split(Regex("\\s+"))
@@ -908,18 +990,10 @@ private fun generateLaporanPdfTppTemplate(
             }
         }
         if (current.isNotEmpty()) lines.add(current)
-        return lines.ifEmpty { listOf("") }
+        return lines
     }
 
-    fun drawTextBlock(
-        canvas: Canvas,
-        x: Float,
-        y: Float,
-        p: Paint,
-        text: String,
-        maxWidth: Float,
-        lineHeight: Float
-    ): Float {
+    fun drawTextBlock(canvas: Canvas, x: Float, y: Float, p: Paint, text: String, maxWidth: Float, lineHeight: Float): Float {
         val lines = wrapText(p, text, maxWidth)
         var yy = y
         for (ln in lines) {
@@ -929,263 +1003,142 @@ private fun generateLaporanPdfTppTemplate(
         return yy
     }
 
-    fun nowId(): String {
-        val fmt = SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID"))
-        return fmt.format(Calendar.getInstance().time)
-    }
-
-    // ----- layout constants -----
+    // Layout Constants
     val lineHeight = 12f
     val cellPadY = 6f
     val footerReserve = 150f
-
-    // table columns (total harus pas)
-    val tableLeft = margin
-    val tableRight = pageWidth - margin
-    val tableWidth = tableRight - tableLeft
-    val colW = floatArrayOf(
-        28f,   // NO
-        86f,   // JAM
-        160f,  // AKTIVITAS
-        220f,  // KETERANGAN
-        60f,   // SATUAN
-        85f,   // LAMA
-        95f,   // CATATAN
-        60f    // TTD
-    )
-    // validasi cepat (optional)
-    // require(colW.sum() <= tableWidth + 0.5f) { "Lebar kolom melebihi tableWidth" }
-
-    val colX = FloatArray(colW.size + 1)
-    colX[0] = tableLeft
-    for (i in colW.indices) colX[i + 1] = colX[i] + colW[i]
-
-    val periodText = "Total Aktivitas Kerja pada bulan ${monthNameId(bulan)} $tahun"
-
-    fun drawMiniHeader(canvas: Canvas, yStart: Float): Float {
-        var y = yStart
-        canvas.drawText("VERIFIKASI AKTIVITAS BAWAHAN", margin, y, paintBold)
-        val periodX = (pageWidth / 2f) - (measure(paintText, periodText) / 2f)
-        canvas.drawText(periodText, periodX, y, paintText)
-        return y + 16f
+    val colW = floatArrayOf(28f, 86f, 160f, 220f, 60f, 85f, 95f, 60f)
+    val colX = FloatArray(colW.size + 1).apply {
+        this[0] = margin
+        for (i in colW.indices) this[i + 1] = this[i] + colW[i]
     }
 
-    fun drawFullHeader(canvas: Canvas): Float {
-        var y = margin + 12f
+    var tableTopYInPage = 0f // Untuk melacak awal merge TTD di tiap halaman
 
-        // kiri
-        canvas.drawText("TAHUN ANGGARAN $tahun", margin, y, paintBold)
-        canvas.drawText(skpdTitle, margin, y + 14f, paintBold)
-        canvas.drawText("KABUPATEN MERAUKE", margin, y + 28f, paintBold)
-
-        // tengah
-        val centerTitle = "FORMULIR LAPORAN AKTIVITAS KERJA TPP"
-        val centerX = (pageWidth / 2f) - (measure(paintBold, centerTitle) / 2f)
-        canvas.drawText(centerTitle, centerX, y, paintBold)
-
-        y += 46f
-
-        // blok 2 kolom (ASN & Atasan)
-        val blockLeftX = margin + 300f
-        val blockRightX = margin + 560f
-
-        canvas.drawText("ASN", blockLeftX, y, paintBold)
-        canvas.drawText("Atasan Langsung", blockRightX, y, paintBold)
-        y += 14f
-
-        fun drawKV(x: Float, y0: Float, key: String, value: String): Float {
-            canvas.drawText(key, x, y0, paintText)
-            canvas.drawText(": $value", x + 60f, y0, paintText)
-            return y0 + 12f
-        }
-
-        var yL = y
-        var yR = y
-        yL = drawKV(blockLeftX, yL, "Nama", asn.nama)
-        yL = drawKV(blockLeftX, yL, "NIP", asn.nip)
-        yL = drawKV(blockLeftX, yL, "Jabatan", asn.jabatan)
-
-        yR = drawKV(blockRightX, yR, "Nama", atasan.nama)
-        yR = drawKV(blockRightX, yR, "NIP", atasan.nip)
-        yR = drawKV(blockRightX, yR, "Jabatan", atasan.jabatan)
-
-        y = maxOf(yL, yR) + 10f
-
-        y = drawMiniHeader(canvas, y)
-        return y
+    fun drawMiniHeader(canvas: Canvas, yStart: Float): Float {
+        canvas.drawText("VERIFIKASI AKTIVITAS BAWAHAN", margin, yStart, paintBold)
+        val periodText = "Total Aktivitas Kerja pada bulan ${monthNameId(bulan)} $tahun"
+        val periodX = (pageWidth / 2f) - (measure(paintText, periodText) / 2f)
+        canvas.drawText(periodText, periodX, yStart, paintText)
+        return yStart + 16f
     }
 
     fun drawTableHeader(canvas: Canvas, yStart: Float): Float {
-        var y = yStart
-        val headerTop = y
         val headerH = 26f
-
-        canvas.drawRect(tableLeft, headerTop, tableRight, headerTop + headerH, paintLine)
+        canvas.drawRect(colX[0], yStart, colX[8], yStart + headerH, paintLine)
         for (i in 1 until colX.size) {
-            canvas.drawLine(colX[i], headerTop, colX[i], headerTop + headerH, paintLine)
+            canvas.drawLine(colX[i], yStart, colX[i], yStart + headerH, paintLine)
         }
+        val yt = yStart + 13f
+        val yt2 = yStart + 23f
 
-        fun drawHeaderText(text: String, x0: Float, x1: Float, yText: Float) {
-            val tw = measure(paintBold, text)
-            val xx = x0 + ((x1 - x0) - tw) / 2f
-            canvas.drawText(text, xx, yText, paintBold)
+        // Header Text Alignment
+        fun drawH(txt: String, x0: Float, x1: Float, y: Float) {
+            canvas.drawText(txt, x0 + (x1 - x0 - measure(paintBold, txt)) / 2, y, paintBold)
         }
-        // TODO template kegiatan bikin bisa di input sendiri
-        // TODO bikin template kegiatan swipe down refresh
-         // TODO ada disini https://chatgpt.com/c/6956b23a-6b2c-8324-b9e5-520764f52e04
-        val yText1 = headerTop + 16f
-        drawHeaderText("NO", colX[0], colX[1], yText1)
-        drawHeaderText("JAM", colX[1], colX[2], yText1)
-        drawHeaderText("AKTIVITAS", colX[2], colX[3], yText1)
-        drawHeaderText("KETERANGAN AKTIVITAS", colX[3], colX[4], yText1)
-        drawHeaderText("SATUAN", colX[4], colX[5], yText1)
-        drawHeaderText("LAMA WAKTU", colX[5], colX[6], headerTop + 13f)
-        drawHeaderText("(MENIT)", colX[5], colX[6], headerTop + 23f)
-        drawHeaderText("CATATAN ATASAN", colX[6], colX[7], yText1)
-        drawHeaderText("TTD", colX[7], colX[8], headerTop + 13f)
-        drawHeaderText("VALIDATOR", colX[7], colX[8], headerTop + 23f)
+        drawH("NO", colX[0], colX[1], yStart + 16f)
+        drawH("JAM", colX[1], colX[2], yStart + 16f)
+        drawH("AKTIVITAS", colX[2], colX[3], yStart + 16f)
+        drawH("KETERANGAN", colX[3], colX[4], yStart + 16f)
+        drawH("SATUAN", colX[4], colX[5], yStart + 16f)
+        drawH("LAMA", colX[5], colX[6], yt); drawH("(MENIT)", colX[5], colX[6], yt2)
+        drawH("CATATAN", colX[6], colX[7], yStart + 16f)
+        drawH("TTD", colX[7], colX[8], yt); drawH("VALIDATOR", colX[7], colX[8], yt2)
 
-        return headerTop + headerH
+        return yStart + headerH
     }
 
-    fun needNewPage(currentY: Float, required: Float): Boolean {
-        return currentY + required > (pageHeight - margin - footerReserve)
-    }
-
-    // ----- start first page -----
+    // Initial Page
     pager.startPage()
     var canvas = pager.canvas!!
-    var y = drawFullHeader(canvas)
+
+    // --- DRAW FULL HEADER (Logo & ASN Data) ---
+    var y = margin + 12f
+    canvas.drawText("TAHUN ANGGARAN $tahun", margin, y, paintBold)
+    canvas.drawText(skpdTitle, margin, y + 14f, paintBold)
+    canvas.drawText("KABUPATEN MERAUKE", margin, y + 28f, paintBold)
+    val centerX = (pageWidth / 2f) - (measure(paintBold, "FORMULIR LAPORAN AKTIVITAS KERJA TPP") / 2f)
+    canvas.drawText("FORMULIR LAPORAN AKTIVITAS KERJA TPP", centerX, y, paintBold)
+
+    y += 46f
+    val bLX = margin + 300f; val bRX = margin + 560f
+    canvas.drawText("ASN", bLX, y, paintBold); canvas.drawText("Atasan Langsung", bRX, y, paintBold)
+    y += 14f
+    fun dKV(x: Float, y0: Float, k: String, v: String) = canvas.drawText("$k : $v", x, y0, paintText).run { y0 + 12f }
+    val yL = dKV(bLX, dKV(bLX, dKV(bLX, y, "Nama", asn.nama), "NIP", asn.nip), "Jabatan", asn.jabatan)
+    val yR = dKV(bRX, dKV(bRX, dKV(bRX, y, "Nama", atasan.nama), "NIP", atasan.nip), "Jabatan", atasan.jabatan)
+    y = maxOf(yL, yR) + 10f
+
+    y = drawMiniHeader(canvas, y)
     y = drawTableHeader(canvas, y)
+    tableTopYInPage = y
 
-    fun startNextTablePage() {
-        pager.startPage()
-        canvas = pager.canvas!!
-        y = margin + 16f
-        y = drawMiniHeader(canvas, y)
-        y = drawTableHeader(canvas, y)
-    }
+    // --- DRAW ROWS ---
+    laporan.forEachIndexed { idx, item ->
+        val aL = wrapText(paintText, item.namaKegiatan, colW[2] - 12f)
+        val kL = wrapText(paintText, item.deskripsi, colW[3] - 12f)
+        val cL = wrapText(paintText, item.catatanAtasan ?: "", colW[6] - 12f)
+        val rowH = (maxOf(aL.size, kL.size, cL.size, 1) * lineHeight) + (cellPadY * 2)
 
-    fun drawRow(index: Int, item: ReportUi) {
-        val aktivitasLines = wrapText(paintText, item.namaKegiatan, colW[2] - 12f)
-        val ketLines = wrapText(paintText, item.deskripsi, colW[3] - 12f)
-        val catLines = wrapText(paintText, item.catatanAtasan ?: "", colW[6] - 12f)
+        if (y + rowH > (pageHeight - margin - footerReserve)) {
+            // Close TTD Merge for current page before switching
+            canvas.drawRect(colX[7], tableTopYInPage, colX[8], y, paintLine)
 
-        val maxLines = maxOf(aktivitasLines.size, ketLines.size, catLines.size, 1)
-        val rowH = (maxLines * lineHeight) + (cellPadY * 2)
-
-        if (needNewPage(y, rowH + 2f)) startNextTablePage()
+            pager.startPage()
+            canvas = pager.canvas!!
+            y = drawMiniHeader(canvas, margin + 16f)
+            y = drawTableHeader(canvas, y)
+            tableTopYInPage = y
+        }
 
         val top = y
         val bottom = y + rowH
 
-        // row border
-        canvas.drawRect(tableLeft, top, tableRight, bottom, paintLine)
-        for (i in 1 until colX.size) {
+        // Draw Cell Borders (Except Horizontal lines for TTD column)
+        canvas.drawLine(colX[0], bottom, colX[7], bottom, paintLine) // Horizontal line up to col 7
+        for (i in 0..7) { // Vertical lines for cols 0 to 7
             canvas.drawLine(colX[i], top, colX[i], bottom, paintLine)
         }
+        // Vertical line for the very end of table
+        canvas.drawLine(colX[8], top, colX[8], bottom, paintLine)
 
-        val textY0 = top + cellPadY + 10f
-        fun drawLines(lines: List<String>, x: Float) {
-            var yy = textY0
-            for (ln in lines) {
-                canvas.drawText(ln, x, yy, paintText)
-                yy += lineHeight
-            }
-        }
-
-        canvas.drawText((index + 1).toString(), colX[0] + 8f, textY0, paintText)
-        canvas.drawText(item.jamLabel, colX[1] + 8f, textY0, paintText)
-        drawLines(aktivitasLines, colX[2] + 6f)
-        drawLines(ketLines, colX[3] + 6f)
-        canvas.drawText("1 Keg", colX[4] + 8f, textY0, paintText)
-        canvas.drawText(item.durasiMenit.toString(), colX[5] + 8f, textY0, paintText)
-        drawLines(catLines, colX[6] + 6f)
-        // kolom TTD per baris dibiarkan kosong
+        // Draw Content
+        val ty = top + cellPadY + 10f
+        canvas.drawText((idx + 1).toString(), colX[0] + 8f, ty, paintText)
+        canvas.drawText(item.jamLabel, colX[1] + 8f, ty, paintText)
+        var ay = ty; aL.forEach { canvas.drawText(it, colX[2] + 6f, ay, paintText); ay += lineHeight }
+        var ky = ty; kL.forEach { canvas.drawText(it, colX[3] + 6f, ky, paintText); ky += lineHeight }
+        canvas.drawText("1 Keg", colX[4] + 8f, ty, paintText)
+        canvas.drawText(item.durasiMenit.toString(), colX[5] + 8f, ty, paintText)
+        var cy = ty; cL.forEach { canvas.drawText(it, colX[6] + 6f, cy, paintText); cy += lineHeight }
 
         y = bottom
     }
 
-    laporan.forEachIndexed { idx, item -> drawRow(idx, item) }
+    // Finalize TTD Merge for the last page
+    canvas.drawRect(colX[7], tableTopYInPage, colX[8], y, paintLine)
 
-    // footer (keterangan + tanda tangan)
-    fun ensureFooterSpace(required: Float) {
-        if (y + required > pageHeight - margin) {
-            pager.startPage()
-            canvas = pager.canvas!!
-            y = margin + 16f
-        }
-    }
-
-    ensureFooterSpace(140f)
+    // --- FOOTER ---
     y += 18f
-
-    // Keterangan (kiri bawah)
     canvas.drawText("Keterangan", margin, y, paintBold)
-    val bullets = listOf(
-        "1. Kolom aktivitas diisi dengan aktivitas pokok (misal: Apel Pagi, Mengkonsep, Merencanakan, Melaksanakan tugas tambahan, dll)",
-        "2. Kolom keterangan aktivitas diisi dengan penjelasan atas aktivitas pokok yang dikerjakan (misal: Mengkonsep apa, Merencanakan apa, Melakukan tugas tambahan apa, dst)",
-        "3. Kolom satuan diisi dengan (1 dokumen atau 1 aktivitas / kegiatan)",
-        "4. Kolom waktu diisi dengan satuan waktu menit untuk masing2 aktivitas",
-        "5. Kolom catatan diisi oleh atasan langsung",
-        "6. Kolom validator diisi oleh atasan"
-    )
-
     var ky = y + 14f
-    val ketMaxWidth = 420f
-    bullets.forEach { b ->
-        ky = drawTextBlock(canvas, margin, ky, paintSmall, b, ketMaxWidth, 12f) + 2f
+    listOf("1. Kolom aktivitas...", "2. Kolom keterangan...", "3. Kolom satuan...", "4. Kolom waktu...", "5. Kolom catatan...", "6. Kolom validator...").forEach {
+        ky = drawTextBlock(canvas, margin, ky, paintSmall, it, 420f, 12f) + 2f
     }
 
-    // Tanda tangan (kanan bawah)
-    val signBlockW = 320f
-    val signX = pageWidth - margin - signBlockW
-    var sy = y
+    val signX = pageWidth - margin - 320f
+    canvas.drawText("$kota, ${SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID")).format(Calendar.getInstance().time)}", signX, y, paintText)
+    canvas.drawText("Atasan Langsung", signX, y + 14f, paintText)
 
-    canvas.drawText("$kota, ${nowId()}", signX, sy, paintText)
-    sy += 14f
-    canvas.drawText("Atasan Langsung", signX, sy, paintText)
-    sy += 8f
-
-    val ttdBitmap = ttdResId?.let { BitmapFactory.decodeResource(context.resources, it) }
-    val stempelBitmap = stempelResId?.let { BitmapFactory.decodeResource(context.resources, it) }
-
-    val signAreaTop = sy + 6f
-
-    if (ttdBitmap != null) {
-        val maxW = 160f
-        val maxH = 60f
-        val scale = min(maxW / ttdBitmap.width, maxH / ttdBitmap.height)
-        val w = ttdBitmap.width * scale
-        val h = ttdBitmap.height * scale
-        val dst = RectF(signX, signAreaTop, signX + w, signAreaTop + h)
-        canvas.drawBitmap(ttdBitmap, null, dst, null)
-    } else {
-        // fallback garis tanda tangan
-        canvas.drawLine(signX, signAreaTop + 50f, signX + 180f, signAreaTop + 50f, paintLine)
-    }
-
-    if (stempelBitmap != null) {
-        val maxW = 90f
-        val maxH = 90f
-        val scale = min(maxW / stempelBitmap.width, maxH / stempelBitmap.height)
-        val w = stempelBitmap.width * scale
-        val h = stempelBitmap.height * scale
-        val dst = RectF(signX + 120f, signAreaTop + 5f, signX + 120f + w, signAreaTop + 5f + h)
-        val alphaPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { alpha = 180 }
-        canvas.drawBitmap(stempelBitmap, null, dst, alphaPaint)
-    }
-
-    val nameY = signAreaTop + 80f
+    // TTD / Nama Atasan
+    val nameY = y + 94f
     canvas.drawText(atasan.nama, signX, nameY, paintBold)
     canvas.drawText("NIP. ${atasan.nip}", signX, nameY + 14f, paintText)
 
-    // Finish & save
     pager.finishPageIfAny()
-    val outFile = File(context.cacheDir, "laporan_tpp_${tahun}_${bulan}.pdf")
-    FileOutputStream(outFile).use { fos -> doc.writeTo(fos) }
+    val outFile = File(context.cacheDir, "laporan_tpp_${bulan}_${tahun}.pdf")
+    FileOutputStream(outFile).use { doc.writeTo(it) }
     doc.close()
-
     return outFile
 }
 

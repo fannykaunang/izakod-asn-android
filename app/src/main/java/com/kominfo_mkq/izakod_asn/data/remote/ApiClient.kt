@@ -14,7 +14,9 @@ import java.util.concurrent.TimeUnit
 
 object ApiClient {
 
-    const val BASE_URL = "http://192.168.110.236:3000/"
+    // base URL localhost
+    // const val BASE_URL = "http://192.168.1.46:3000/"
+    const val BASE_URL = "https://izakod-asn.merauke.go.id/"
     const val API_KEY = "zkENw7654FBWHmNupvi2BbcXxhPHvF"
 
     // ✅ FIXED: Only add API key for Next.js requests, not ASP.NET

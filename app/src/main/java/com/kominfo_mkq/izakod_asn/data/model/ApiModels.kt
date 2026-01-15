@@ -24,8 +24,14 @@ data class EabsenLoginResponse(
     @SerializedName("skpdid")
     val skpdid: Int,
 
+    @SerializedName("deviceid")
+    val deviceid: String,
+
     @SerializedName("pegawai_id")
-    val pegawaiId: Int? = null
+    val pegawaiId: Int,
+
+    @SerializedName("pembagian2_id")
+    val pembagian2_id: Int
 )
 
 /**

@@ -49,7 +49,7 @@ class UserPreferences(context: Context) {
             else putString(KEY_MOBILE_FCM_TOKEN, token)
         }
     }
-
+// TODO lanjut publish ke playstore di https://play.google.com/console/u/0/developers/7901927936154564272/app/4974458399961873016/app-content/testing-credentials?source=dashboard
     // tambahkan fungsi
     fun hasAskedNotificationPermission(): Boolean =
         prefs.getBoolean(KEY_NOTIF_PERMISSION_ASKED, false)
@@ -65,7 +65,7 @@ class UserPreferences(context: Context) {
         pin: String,
         level: Int,
         skpdid: Int,
-        pegawaiId: Int?
+        pegawaiId: Int
     ) {
         prefs.edit().apply {
             putBoolean(KEY_IS_LOGGED_IN, true)
@@ -73,7 +73,7 @@ class UserPreferences(context: Context) {
             putString(KEY_PIN, pin)
             putInt(KEY_LEVEL, level)
             putInt(KEY_SKPDID, skpdid)
-            pegawaiId?.let { putInt(KEY_PEGAWAI_ID, it) }
+            putInt(KEY_PEGAWAI_ID, pegawaiId)
             apply()
         }
     }

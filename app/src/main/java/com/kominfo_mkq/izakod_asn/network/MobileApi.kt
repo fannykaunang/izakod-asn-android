@@ -11,7 +11,7 @@ object MobileApi {
     private val JSON = "application/json; charset=utf-8".toMediaType()
 
     // ganti base url kamu
-    private const val BASE_URL = "https://your-domain.com"
+    private const val BASE_URL = "https://izakod-asn.merauke.go.id"
 
     fun registerFcmToken(jwt: String, bodyJson: String): Boolean {
         val req = Request.Builder()

@@ -1,6 +1,8 @@
 package com.kominfo_mkq.izakod_asn.ui.viewmodel
 
+import android.content.ContentValues.TAG
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
@@ -34,11 +36,48 @@ class LaporanListViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(LaporanListUiState())
     val uiState: StateFlow<LaporanListUiState> = _uiState.asStateFlow()
 
+//    fun loadAtasanPegawai(context: Context) {
+//        viewModelScope.launch {
+//            _uiState.value = _uiState.value.copy(
+//                isLoadingAtasan = true,
+//                errorAtasan = null
+//            )
+//
+//            try {
+//                val pegawaiId = UserPreferences(context).getPegawaiId()
+//                    ?: throw Exception("Session expired: pegawai_id tidak ditemukan")
+//
+//                val response = withContext(Dispatchers.IO) {
+//                    repository.getAtasanPegawaiByBawahan(pegawaiId)
+//                }
+//
+//                if (response.isSuccessful && response.body()?.success == true) {
+//                    val data = response.body()?.data
+//                    _uiState.value = _uiState.value.copy(
+//                        atasanPegawai = data,
+//                        isLoadingAtasan = false
+//                    )
+//                } else {
+//                    _uiState.value = _uiState.value.copy(
+//                        isLoadingAtasan = false,
+//                        errorAtasan = response.body()?.message ?: "Gagal memuat data atasan"
+//                    )
+//                }
+//            } catch (e: Exception) {
+//                _uiState.value = _uiState.value.copy(
+//                    isLoadingAtasan = false,
+//                    errorAtasan = e.message
+//                )
+//            }
+//        }
+//    }
+
     fun loadAtasanPegawai(context: Context) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isLoadingAtasan = true,
-                errorAtasan = null
+                errorAtasan = null,
+                atasanPegawai = null
             )
 
             try {
@@ -49,22 +88,46 @@ class LaporanListViewModel : ViewModel() {
                     repository.getAtasanPegawaiByBawahan(pegawaiId)
                 }
 
-                if (response.isSuccessful && response.body()?.success == true) {
-                    val data = response.body()?.data
-                    _uiState.value = _uiState.value.copy(
-                        atasanPegawai = data,
-                        isLoadingAtasan = false
-                    )
-                } else {
+                val body = response.body()
+                if (!response.isSuccessful || body == null) {
+                    val err = response.errorBody()?.string()
+                    Log.e(TAG, "loadAtasanPegawai failed: code=${response.code()} err=$err")
                     _uiState.value = _uiState.value.copy(
                         isLoadingAtasan = false,
-                        errorAtasan = response.body()?.message ?: "Gagal memuat data atasan"
+                        errorAtasan = "Gagal memuat atasan (code=${response.code()})"
                     )
+                    return@launch
                 }
+
+                // ✅ success=true tapi data=null
+                if (body.success == true && body.data == null) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingAtasan = false,
+                        atasanPegawai = null,
+                        errorAtasan = "Data atasan belum tersedia (data kosong)."
+                    )
+                    return@launch
+                }
+
+                // ✅ success & data ada
+                if (body.success == true && body.data != null) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingAtasan = false,
+                        atasanPegawai = body.data,
+                        errorAtasan = null
+                    )
+                    return@launch
+                }
+
+                // ✅ success=false
+                _uiState.value = _uiState.value.copy(
+                    isLoadingAtasan = false,
+                    errorAtasan = body.message ?: "Gagal memuat data atasan"
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoadingAtasan = false,
-                    errorAtasan = e.message
+                    errorAtasan = e.message ?: "Terjadi kesalahan"
                 )
             }
         }

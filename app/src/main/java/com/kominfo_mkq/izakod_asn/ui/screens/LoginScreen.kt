@@ -107,7 +107,7 @@ fun LoginScreen(
                 modifier = Modifier.size(80.dp)
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            //Spacer(modifier = Modifier.height(24.dp))
 
             Text(
                 text = "IZAKOD-ASN",
@@ -126,7 +126,7 @@ fun LoginScreen(
                 modifier = Modifier.padding(horizontal = 32.dp)
             )
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             // ✅ Login Card - Fixed for dark mode
             Card(
@@ -387,7 +387,7 @@ fun LoginScreen(
                         textAlign = TextAlign.Center
                     )
                     Text(
-                        text = "Hubungi operator eAbsen di SKPD Anda untuk mendapatkan username dan password",
+                        text = "Hubungi operator E-NTAGO di SKPD Anda untuk mendapatkan username dan password",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.White.copy(alpha = 0.8f),
                         textAlign = TextAlign.Center

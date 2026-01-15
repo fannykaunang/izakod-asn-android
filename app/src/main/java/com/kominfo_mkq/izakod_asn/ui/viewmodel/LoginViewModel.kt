@@ -3,7 +3,6 @@ package com.kominfo_mkq.izakod_asn.ui.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.kominfo_mkq.izakod_asn.BuildConfig
 import com.google.firebase.messaging.FirebaseMessaging
 import com.kominfo_mkq.izakod_asn.data.local.TokenStore
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
@@ -74,12 +73,14 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                 val deviceId = DeviceInfo.androidId(ctx)
                 val deviceModel = DeviceInfo.model()
 
+                val appVersion = DeviceInfo.appVersion(ctx)
+
                 val regResp = ApiClient.eabsenApiService.registerFcmToken(
                     FcmRegisterRequest(
                         fcm_token = fcmToken,
                         device_id = deviceId,
                         device_model = deviceModel,
-                        app_version = BuildConfig.VERSION_NAME
+                        app_version = appVersion
                     )
                 )
 
@@ -136,10 +137,11 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                         pin = userData.pin
                     )
 
-                    val pegawaiId = userData.pegawaiId
-                    if (pegawaiId == null || pegawaiId <= 0) {
+                    val pegawaiId = userData.pegawaiId // TODO tambah field pegawai_id di response login entago api
+                    if (pegawaiId <= 0) {
                         // tampilkan error atau paksa fetch pegawaiId dulu
-                        _uiState.value = LoginUiState(errorMessage = "pegawai_id tidak ditemukan, tidak bisa buat token mobile")
+                        //_uiState.value = LoginUiState(errorMessage = "pegawai_id tidak ditemukan, tidak bisa buat token mobile")
+                        _uiState.value = LoginUiState(errorMessage = "Untuk keperluan autentikasi, Anda harus login ke web terlebih dahulu!")
                         return@launch
                     }
 
@@ -167,13 +169,16 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                             val deviceModel = DeviceInfo.model()
 
 // ✅ register ke Next.js (Authorization otomatis dari authInterceptor)
+
+                            val appVersion = DeviceInfo.appVersion(ctx)
+
                             try {
                                 val regResp = ApiClient.eabsenApiService.registerFcmToken(
                                     FcmRegisterRequest(
                                         fcm_token = fcmToken,
                                         device_id = deviceId,
                                         device_model = deviceModel,
-                                        app_version = BuildConfig.VERSION_NAME
+                                        app_version = appVersion
                                     )
                                 )
 
