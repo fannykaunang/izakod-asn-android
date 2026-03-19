@@ -15,8 +15,8 @@ android {
         applicationId = "com.kominfo_mkq.izakod_asn"
         minSdk = 24
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.0.4"
+        versionCode = 7
+        versionName = "1.0.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -68,8 +68,6 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
-    implementation("androidx.core:core-splashscreen:1.0.1")
-
     implementation("androidx.core:core-splashscreen:1.0.1")
 
     // Navigation & Data

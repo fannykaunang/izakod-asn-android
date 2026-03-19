@@ -68,7 +68,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
-// TODO ubah warna hitam pada splashscreen
+
         var keepSplashScreen = true
         splashScreen.setKeepOnScreenCondition { keepSplashScreen }
 
