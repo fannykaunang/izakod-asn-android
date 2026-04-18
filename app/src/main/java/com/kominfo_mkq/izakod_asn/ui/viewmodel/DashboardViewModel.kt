@@ -53,8 +53,8 @@ class DashboardViewModel : ViewModel() {
 
                 val response = EabsenRetrofitClient.apiService.getPegawaiProfile(pin)
 
-                if (response.isSuccessful && response.body() != null) {
-                    val profile = response.body()!!
+                if (response.isSuccessful && response.body()?.success == true && response.body()?.data != null) {
+                    val profile = response.body()!!.data!!
 
                     // Bersihkan path jika ada double slash
                     val cleanPath = profile.photoPath?.removePrefix("/")

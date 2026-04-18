@@ -1,34 +1,126 @@
 package com.kominfo_mkq.izakod_asn.data.remote
 
+import com.kominfo_mkq.izakod_asn.data.local.AppContextHolder
+import com.kominfo_mkq.izakod_asn.data.local.TokenStore
+import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
+import com.kominfo_mkq.izakod_asn.data.model.RefreshTokenRequest
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Response
 import okhttp3.logging.HttpLoggingInterceptor
+import kotlinx.coroutines.runBlocking
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object EabsenRetrofitClient {
 
-    private const val EABSEN_BASE_URL = "https://dev.api.eabsen.merauke.go.id/"
-    private const val API_KEY = "zkENw7654FBWHmNupvi2BbcXxhPHvF" // Ganti dengan API Key yang sebenarnya
+    private const val EABSEN_BASE_URL = "https://entago.merauke.go.id/"
+    private const val API_KEY = "f26d27b0b8a01f0390767155e17745e2"
+    private val refreshLock = Any()
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
     }
 
-    // 1. Buat Header Interceptor
     private val headerInterceptor = Interceptor { chain ->
         val originalRequest = chain.request()
-        val requestWithHeader = originalRequest.newBuilder()
-            .header("EabsenApiKey", API_KEY) // Menambahkan header ke setiap request
+        val builder = originalRequest.newBuilder()
+            .header("X-Api-Key", API_KEY)
+            .header("EabsenApiKey", API_KEY)
             .method(originalRequest.method, originalRequest.body)
-            .build()
-        chain.proceed(requestWithHeader)
+
+        val token = TokenStore.getToken()
+        if (!token.isNullOrBlank()) {
+            builder.header("Authorization", "Bearer $token")
+        }
+
+        chain.proceed(builder.build())
     }
 
     private val okHttpClient = OkHttpClient.Builder()
         .addInterceptor(loggingInterceptor)
-        .addInterceptor(headerInterceptor) // 2. Daftarkan Interceptor di sini
+        .addInterceptor(headerInterceptor)
+        .authenticator { _, response ->
+            if (responseCount(response) >= 2) return@authenticator null
+            if (response.request.url.encodedPath.endsWith("/api/auth/refresh")) return@authenticator null
+
+            val failedToken = response.request.header("Authorization")
+                ?.removePrefix("Bearer ")
+                ?.trim()
+
+            val refreshToken = TokenStore.getRefreshToken()
+            if (refreshToken.isNullOrBlank()) return@authenticator null
+
+            val refreshClient = OkHttpClient.Builder()
+                .addInterceptor { chain ->
+                    val request = chain.request().newBuilder()
+                        .header("X-Api-Key", API_KEY)
+                        .header("EabsenApiKey", API_KEY)
+                        .header("Content-Type", "application/json")
+                        .build()
+                    chain.proceed(request)
+                }
+                .build()
+
+            val refreshApi = Retrofit.Builder()
+                .baseUrl(EABSEN_BASE_URL)
+                .client(refreshClient)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+                .create(EabsenCoreApiService::class.java)
+
+            return@authenticator synchronized(refreshLock) {
+                val latestToken = TokenStore.getToken()?.trim()
+                if (!latestToken.isNullOrBlank() && latestToken != failedToken) {
+                    return@synchronized response.request.newBuilder()
+                        .header("Authorization", "Bearer $latestToken")
+                        .build()
+                }
+
+                try {
+                    val refreshResponse = runBlocking {
+                        refreshApi.refreshToken(RefreshTokenRequest(refreshToken))
+                    }
+
+                    if (!refreshResponse.isSuccessful || refreshResponse.body()?.success != true) {
+                        android.util.Log.e(
+                            "EabsenRetrofitClient",
+                            "Refresh token gagal: ${refreshResponse.code()}"
+                        )
+                        TokenStore.setToken(null)
+                        TokenStore.setRefreshToken(null)
+                        return@synchronized null
+                    }
+
+                    val newData = refreshResponse.body()?.data
+                    val newToken = newData?.token?.trim().orEmpty()
+                    val newRefreshToken = newData?.refreshToken?.trim().orEmpty()
+
+                    if (newToken.isEmpty() || newRefreshToken.isEmpty()) {
+                        android.util.Log.e("EabsenRetrofitClient", "Refresh response tidak lengkap")
+                        TokenStore.setToken(null)
+                        TokenStore.setRefreshToken(null)
+                        return@synchronized null
+                    }
+
+                    TokenStore.setToken(newToken)
+                    TokenStore.setRefreshToken(newRefreshToken)
+                    AppContextHolder.get()?.let { context ->
+                        val prefs = UserPreferences(context)
+                        prefs.setMobileJwtToken(newToken)
+                        prefs.setRefreshToken(newRefreshToken)
+                    }
+
+                    response.request.newBuilder()
+                        .header("Authorization", "Bearer $newToken")
+                        .build()
+                } catch (e: Exception) {
+                    android.util.Log.e("EabsenRetrofitClient", "Refresh fatal: ${e.message}", e)
+                    null
+                }
+            }
+        }
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
@@ -44,5 +136,15 @@ object EabsenRetrofitClient {
 
     val apiService: EabsenCoreApiService by lazy {
         retrofit.create(EabsenCoreApiService::class.java)
+    }
+
+    private fun responseCount(response: Response): Int {
+        var result = 1
+        var priorResponse = response.priorResponse
+        while (priorResponse != null) {
+            result++
+            priorResponse = priorResponse.priorResponse
+        }
+        return result
     }
 }

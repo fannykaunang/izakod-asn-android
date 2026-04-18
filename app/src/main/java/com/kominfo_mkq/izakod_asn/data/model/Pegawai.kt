@@ -6,51 +6,62 @@ import com.google.gson.annotations.SerializedName
  * Pegawai Profile from ASP.NET Core Eabsen API
  */
 data class PegawaiProfile(
-    @SerializedName("pegawai_id")
+    @SerializedName(value = "pegawai_id", alternate = ["pegawai_Id", "Pegawai_Id"])
     val pegawaiId: Int,
 
-    @SerializedName("pegawai_pin")
-    val pegawaiPin: String,
+    @SerializedName(value = "pegawai_pin", alternate = ["pegawai_Pin", "Pegawai_Pin", "pin"])
+    val pegawaiPin: String?,
 
-    @SerializedName("pegawai_nip")
-    val pegawaiNip: String,
+    @SerializedName(value = "pegawai_nip", alternate = ["pegawai_Nip", "Pegawai_Nip"])
+    val pegawaiNip: String?,
 
-    @SerializedName("pegawai_nama")
-    val pegawaiNama: String,
+    @SerializedName(value = "pegawai_nama", alternate = ["pegawai_Nama", "Pegawai_Nama"])
+    val pegawaiNama: String?,
 
-    @SerializedName("tempat_lahir")
+    @SerializedName(value = "tempat_lahir", alternate = ["tempat_Lahir", "Tempat_Lahir"])
     val tempatLahir: String?,
 
-    @SerializedName("pegawai_privilege")
+    @SerializedName(value = "pegawai_privilege", alternate = ["pegawai_Privilege", "Pegawai_Privilege"])
     val pegawaiPrivilege: String?,
 
-    @SerializedName("pegawai_telp")
+    @SerializedName(value = "pegawai_telp", alternate = ["pegawai_Telp", "Pegawai_Telp"])
     val pegawaiTelp: String?,
 
-    @SerializedName("pegawai_status")
+    @SerializedName(value = "pegawai_status", alternate = ["pegawai_Status", "Pegawai_Status"])
     val pegawaiStatus: Int?,
 
-    @SerializedName("tgl_lahir")
+    @SerializedName(value = "tgl_lahir", alternate = ["tgl_Lahir", "Tgl_Lahir"])
     val tglLahir: String?,
 
-    @SerializedName("jabatan")
+    @SerializedName(value = "jabatan", alternate = ["Jabatan"])
     val jabatan: String?,
 
-    @SerializedName("skpd")
+    @SerializedName(value = "skpd", alternate = ["Skpd"])
     val skpd: String?,
 
-    @SerializedName("sotk")
+    @SerializedName(value = "sotk", alternate = ["Sotk"])
     val sotk: String?,
 
-    @SerializedName("tgl_mulai_kerja")
+    @SerializedName(value = "tgl_mulai_kerja", alternate = ["tgl_Mulai_Kerja", "Tgl_Mulai_Kerja"])
     val tglMulaiKerja: String?,
 
-    @SerializedName("gender")
+    @SerializedName(value = "gender", alternate = ["Gender"])
     val gender: Int,
 
-    @SerializedName("photo_path")
+    @SerializedName(value = "photo_path", alternate = ["photo_Path", "Photo_Path"])
     val photoPath: String?,
 
-    @SerializedName("deviceid")
+    @SerializedName(value = "deviceid", alternate = ["deviceId", "DeviceId"])
     val deviceId: String?
+)
+
+data class PegawaiProfileResponse(
+    @SerializedName("success")
+    val success: Boolean,
+
+    @SerializedName("message")
+    val message: String? = null,
+
+    @SerializedName("data")
+    val data: PegawaiProfile? = null
 )

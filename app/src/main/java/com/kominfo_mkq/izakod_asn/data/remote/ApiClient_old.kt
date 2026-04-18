@@ -15,8 +15,8 @@ object ApiClient_old {
     // Untuk device fisik, gunakan IP komputer (contoh: 192.168.1.100)
 
     // Base URL untuk API Dev Laptop
-    //private const val BASE_URL = "http://192.168.110.236:3000/api/"  // Localhost untuk emulator
-    private const val BASE_URL = "https://dev.api.eabsen.merauke.go.id/api/"  // Localhost untuk emulator
+    private const val BASE_URL = "http://192.168.110.236:3000/api/"  // Localhost untuk emulator
+    //private const val BASE_URL = "https://dev.api.eabsen.merauke.go.id/api/"  // Localhost untuk emulator
 
 
     // private const val BASE_URL = "http://192.168.1.100/api/"  // Untuk device fisik

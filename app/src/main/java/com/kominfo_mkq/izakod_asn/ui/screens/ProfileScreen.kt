@@ -41,9 +41,12 @@ import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
 import com.kominfo_mkq.izakod_asn.ui.theme.PrimaryLight
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.ProfileViewModel
 import com.kominfo_mkq.izakod_asn.BuildConfig
+import com.kominfo_mkq.izakod_asn.data.local.TokenStore
 import androidx.core.net.toUri
 
 enum class ProfileTab(val title: String) { PROFILE("Profil"), SETTINGS("Settings") }
+
+private fun String?.displayOrDash(): String = this?.takeIf { it.isNotBlank() } ?: "-"
 
 /* =========================
    PROFILE SCREEN
@@ -85,6 +88,8 @@ fun ProfileScreen(
         {
             viewModel.resetProfile()
             userPrefs.clearSession()
+            TokenStore.setToken(null)
+            TokenStore.setRefreshToken(null)
             StatistikRepository.clearData()
             onLogout()
         }
@@ -150,9 +155,9 @@ fun ProfileScreen(
                     ) {
                         ProfileHeader(
                             photoUrl = uiState.photoUrl,
-                            nama = profile.pegawaiNama,
-                            nip = profile.pegawaiNip,
-                            jabatan = profile.jabatan ?: "-"
+                            nama = profile.pegawaiNama.displayOrDash(),
+                            nip = profile.pegawaiNip.displayOrDash(),
+                            jabatan = profile.jabatan.displayOrDash()
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
@@ -501,9 +506,9 @@ private fun ProfileHeader(
 @Composable
 private fun PersonalInfoSection(profile: PegawaiProfile) {
     InfoCard(title = "Informasi Pribadi", icon = Icons.Default.Person) {
-        InfoRow(label = "Nama Lengkap", value = profile.pegawaiNama)
-        InfoRow(label = "NIP", value = profile.pegawaiNip)
-        InfoRow(label = "PIN", value = profile.pegawaiPin)
+        InfoRow(label = "Nama Lengkap", value = profile.pegawaiNama.displayOrDash())
+        InfoRow(label = "NIP", value = profile.pegawaiNip.displayOrDash())
+        InfoRow(label = "PIN", value = profile.pegawaiPin.displayOrDash())
 
         if (!profile.tempatLahir.isNullOrEmpty()) InfoRow(label = "Tempat Lahir", value = profile.tempatLahir)
         if (profile.tglLahir != null && profile.tglLahir != "0") InfoRow(label = "Tanggal Lahir", value = profile.tglLahir)
@@ -516,10 +521,10 @@ private fun PersonalInfoSection(profile: PegawaiProfile) {
 @Composable
 private fun WorkInfoSection(profile: PegawaiProfile) {
     InfoCard(title = "Informasi Kepegawaian", icon = Icons.Default.Work) {
-        if (profile.jabatan != null) InfoRow(label = "Jabatan", value = profile.jabatan)
-        if (profile.skpd != null) InfoRow(label = "SKPD", value = profile.skpd)
-        if (profile.sotk != null) InfoRow(label = "SOTK", value = profile.sotk)
-        if (profile.tglMulaiKerja != null) InfoRow(label = "Tanggal Mulai Kerja", value = profile.tglMulaiKerja)
+        if (profile.jabatan != null) InfoRow(label = "Jabatan", value = profile.jabatan.displayOrDash())
+        if (profile.skpd != null) InfoRow(label = "SKPD", value = profile.skpd.displayOrDash())
+        if (profile.sotk != null) InfoRow(label = "SOTK", value = profile.sotk.displayOrDash())
+        if (profile.tglMulaiKerja != null) InfoRow(label = "Tanggal Mulai Kerja", value = profile.tglMulaiKerja.displayOrDash())
 
         if (profile.pegawaiPrivilege != null) {
             InfoRow(
@@ -539,7 +544,7 @@ private fun WorkInfoSection(profile: PegawaiProfile) {
 private fun ContactInfoSection(profile: PegawaiProfile) {
     InfoCard(title = "Kontak", icon = Icons.Default.Phone) {
         if (!profile.pegawaiTelp.isNullOrEmpty()) {
-            InfoRow(label = "No. Telepon", value = profile.pegawaiTelp)
+            InfoRow(label = "No. Telepon", value = profile.pegawaiTelp.displayOrDash())
         } else {
             Text(
                 text = "Tidak ada informasi kontak",

@@ -32,6 +32,7 @@ class UserPreferences(context: Context) {
         private const val KEY_PEGAWAI_ID = "pegawai_id"
         private const val KEY_DARK_THEME = "dark_theme"
         private const val KEY_MOBILE_JWT_TOKEN = "mobile_jwt_token"
+        private const val KEY_MOBILE_REFRESH_TOKEN = "mobile_refresh_token"
         private const val KEY_MOBILE_FCM_TOKEN = "mobile_fcm_token"
         private const val KEY_NOTIF_PERMISSION_ASKED = "notif_permission_asked"
     }
@@ -141,6 +142,17 @@ class UserPreferences(context: Context) {
 
     fun getMobileJwtToken(): String? {
         return prefs.getString(KEY_MOBILE_JWT_TOKEN, null)
+    }
+
+    fun setRefreshToken(token: String?) {
+        prefs.edit {
+            if (token.isNullOrBlank()) remove(KEY_MOBILE_REFRESH_TOKEN)
+            else putString(KEY_MOBILE_REFRESH_TOKEN, token)
+        }
+    }
+
+    fun getRefreshToken(): String? {
+        return prefs.getString(KEY_MOBILE_REFRESH_TOKEN, null)
     }
 
 

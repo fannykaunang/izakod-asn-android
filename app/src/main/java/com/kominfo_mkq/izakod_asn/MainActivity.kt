@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
+import com.kominfo_mkq.izakod_asn.data.local.AppContextHolder
 import com.kominfo_mkq.izakod_asn.data.local.TokenStore
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
@@ -68,6 +69,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        AppContextHolder.init(this)
 
         var keepSplashScreen = true
         splashScreen.setKeepOnScreenCondition { keepSplashScreen }
@@ -78,12 +80,13 @@ class MainActivity : ComponentActivity() {
             keepSplashScreen = false
         }
 
-        val token = UserPreferences(this).getMobileJwtToken()
-        TokenStore.setToken(token) // boleh null
+        val prefs = UserPreferences(this)
+        TokenStore.setToken(prefs.getMobileJwtToken())
+        TokenStore.setRefreshToken(prefs.getRefreshToken())
 
         enableEdgeToEdge()
 
-        userPrefs = UserPreferences(this)
+        userPrefs = prefs
 
         setContent {
             var isDarkTheme by remember { mutableStateOf(userPrefs.isDarkTheme()) }

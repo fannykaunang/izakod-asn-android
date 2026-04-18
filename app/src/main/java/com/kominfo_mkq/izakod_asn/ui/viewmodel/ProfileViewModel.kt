@@ -51,8 +51,8 @@ class ProfileViewModel : ViewModel() {
 
                 val response = EabsenRetrofitClient.apiService.getPegawaiProfile(pin)
 
-                if (response.isSuccessful && response.body() != null) {
-                    val profile = response.body()!!
+                if (response.isSuccessful && response.body()?.success == true && response.body()?.data != null) {
+                    val profile = response.body()!!.data!!
 
                     android.util.Log.d("ProfileViewModel", "✅ Profile loaded: ${profile.pegawaiNama}")
                     android.util.Log.d("ProfileViewModel", "📸 Photo path: ${profile.photoPath}")
@@ -70,6 +70,10 @@ class ProfileViewModel : ViewModel() {
                     )
                 } else {
                     android.util.Log.e("ProfileViewModel", "❌ Failed to load profile: ${response.code()}")
+                    android.util.Log.e(
+                        "ProfileViewModel",
+                        "❌ Profile response body: success=${response.body()?.success}, message=${response.body()?.message}"
+                    )
 
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,

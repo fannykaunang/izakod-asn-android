@@ -7,13 +7,13 @@ import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanResponse
 import com.kominfo_mkq.izakod_asn.data.model.CreateReminderRequest
 import com.kominfo_mkq.izakod_asn.data.model.CreateReminderResponse
 import com.kominfo_mkq.izakod_asn.data.model.DeleteReminderResponse
-import com.kominfo_mkq.izakod_asn.data.model.EabsenLoginResponse
+import com.kominfo_mkq.izakod_asn.data.model.EntagoLoginRequest
+import com.kominfo_mkq.izakod_asn.data.model.EntagoLoginResponse
 import com.kominfo_mkq.izakod_asn.data.model.FcmRegisterRequest
 import com.kominfo_mkq.izakod_asn.data.model.KategoriListResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanCetakResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanDetailResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanListResponse
-import com.kominfo_mkq.izakod_asn.data.model.LoginRequest
 import com.kominfo_mkq.izakod_asn.data.model.MobileTokenRequest
 import com.kominfo_mkq.izakod_asn.data.model.MobileTokenResponse
 import com.kominfo_mkq.izakod_asn.data.model.NotifikasiResponse
@@ -39,11 +39,10 @@ interface EabsenApiService {
      * Login ke eAbsen API
      * POST /api/login
      */
-    //@POST("/api/login") ke server izakod-asn dulu
-    @POST("https://dev.api.eabsen.merauke.go.id/api/user/login")
+    @POST("api/login")
     suspend fun login(
-        @Body request: LoginRequest
-    ): Response<EabsenLoginResponse>
+        @Body request: EntagoLoginRequest
+    ): Response<EntagoLoginResponse>
 
     /**
      * Fetch pegawai data by PIN

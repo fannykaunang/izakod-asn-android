@@ -2,15 +2,39 @@ package com.kominfo_mkq.izakod_asn.data.model
 
 import com.google.gson.annotations.SerializedName
 
-/**
- * Response model untuk login API eAbsen
- */
-data class EabsenLoginResponse(
-    @SerializedName("result")
-    val result: Int,
+data class EntagoLoginRequest(
+    @SerializedName("email")
+    val email: String,
 
-    @SerializedName("response")
-    val response: String,
+    @SerializedName("password")
+    val password: String
+)
+
+data class EntagoLoginResponse(
+    @SerializedName("success")
+    val success: Boolean,
+
+    @SerializedName("message")
+    val message: String,
+
+    @SerializedName("data")
+    val data: EntagoLoginData? = null
+)
+
+data class EntagoLoginData(
+    @SerializedName("token")
+    val token: String? = null,
+
+    @SerializedName("refresh_token")
+    val refreshToken: String? = null,
+
+    @SerializedName("user")
+    val user: EntagoLoginUser? = null
+)
+
+data class EntagoLoginUser(
+    @SerializedName("userid")
+    val userId: Int,
 
     @SerializedName("email")
     val email: String,
@@ -18,31 +42,47 @@ data class EabsenLoginResponse(
     @SerializedName("pin")
     val pin: String,
 
-    @SerializedName("level")
-    val level: Int,
-
     @SerializedName("skpdid")
     val skpdid: Int,
 
+    @SerializedName("level")
+    val level: Int,
+
     @SerializedName("deviceid")
-    val deviceid: String,
+    val deviceId: String = "",
 
     @SerializedName("pegawai_id")
-    val pegawaiId: Int,
-
-    @SerializedName("pembagian2_id")
-    val pembagian2_id: Int
+    val pegawaiId: Int = 0
 )
 
-/**
- * Request body untuk login
- */
-data class LoginRequest(
-    @SerializedName("email")
-    val email: String,
+data class AuthenticatedSession(
+    val token: String,
+    val refreshToken: String?,
+    val user: EntagoLoginUser
+)
 
-    @SerializedName("pwd")
-    val pwd: String
+data class RefreshTokenRequest(
+    @SerializedName("refresh_token")
+    val refreshToken: String
+)
+
+data class RefreshTokenResponse(
+    @SerializedName("success")
+    val success: Boolean,
+
+    @SerializedName("message")
+    val message: String,
+
+    @SerializedName("data")
+    val data: RefreshTokenData? = null
+)
+
+data class RefreshTokenData(
+    @SerializedName("token")
+    val token: String? = null,
+
+    @SerializedName("refresh_token")
+    val refreshToken: String? = null
 )
 
 /**

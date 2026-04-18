@@ -1,12 +1,18 @@
 package com.kominfo_mkq.izakod_asn.data.remote
 
+import com.kominfo_mkq.izakod_asn.data.local.AppContextHolder
 import com.kominfo_mkq.izakod_asn.data.local.TokenStore
+import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
+import com.kominfo_mkq.izakod_asn.data.model.RefreshTokenRequest
+import kotlinx.coroutines.runBlocking
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -14,19 +20,19 @@ import java.util.concurrent.TimeUnit
 
 object ApiClient {
 
-    // base URL localhost
-    // const val BASE_URL = "http://192.168.1.46:3000/"
-    const val BASE_URL = "https://izakod-asn.merauke.go.id/"
-    const val API_KEY = "zkENw7654FBWHmNupvi2BbcXxhPHvF"
+    const val BASE_URL = "http://192.168.110.236:3000/"
+    const val API_KEY = "f26d27b0b8a01f0390767155e17745e2"
 
-    // ✅ FIXED: Only add API key for Next.js requests, not ASP.NET
+    private const val ENTAGO_BASE_URL = "https://entago.merauke.go.id/"
+    private val refreshLock = Any()
+
     private val apiKeyInterceptor = Interceptor { chain ->
         val originalRequest = chain.request()
         val url = originalRequest.url.toString()
 
-        // ✅ Only add API key if NOT calling ASP.NET server
-        val newRequest = if (url.contains("dev.api.eabsen.merauke.go.id")) {
+        val newRequest = if (url.contains("entago.merauke.go.id")) {
             originalRequest.newBuilder()
+                .addHeader("X-Api-Key", API_KEY)
                 .addHeader("EabsenApiKey", API_KEY)
                 .build()
         } else {
@@ -51,11 +57,10 @@ object ApiClient {
     private val urlLoggingInterceptor = Interceptor { chain ->
         val request = chain.request()
 
-        // ✅ Log the complete URL being called
         android.util.Log.d("ApiClient", "========================================")
-        android.util.Log.d("ApiClient", "🌐 REQUEST URL: ${request.url}")
-        android.util.Log.d("ApiClient", "📍 Method: ${request.method}")
-        android.util.Log.d("ApiClient", "🔑 Headers:")
+        android.util.Log.d("ApiClient", "REQUEST URL: ${request.url}")
+        android.util.Log.d("ApiClient", "Method: ${request.method}")
+        android.util.Log.d("ApiClient", "Headers:")
         request.headers.forEach { (name, value) ->
             android.util.Log.d("ApiClient", "   $name: $value")
         }
@@ -68,14 +73,11 @@ object ApiClient {
         val original = chain.request()
         val url = original.url
 
-        // hanya untuk Next.js base url
         val base = BASE_URL.toHttpUrlOrNull()
-        val isNextJs =
-            base != null &&
-                    url.host == base.host &&
-                    url.port == base.port
+        val isNextJs = base != null && url.host == base.host && url.port == base.port
+        val isLoginRequest = url.encodedPath.endsWith("/api/login")
 
-        if (!isNextJs) return@Interceptor chain.proceed(original)
+        if (!isNextJs || isLoginRequest) return@Interceptor chain.proceed(original)
 
         val token = TokenStore.getToken()
         if (token.isNullOrBlank()) return@Interceptor chain.proceed(original)
@@ -89,6 +91,17 @@ object ApiClient {
         chain.proceed(newReq)
     }
 
+    private fun persistTokens(accessToken: String, refreshToken: String) {
+        TokenStore.setToken(accessToken)
+        TokenStore.setRefreshToken(refreshToken)
+
+        AppContextHolder.get()?.let { context ->
+            val prefs = UserPreferences(context)
+            prefs.setMobileJwtToken(accessToken)
+            prefs.setRefreshToken(refreshToken)
+        }
+    }
+
     private val okHttpClient: OkHttpClient by lazy {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
@@ -98,6 +111,77 @@ object ApiClient {
             .addInterceptor(authInterceptor)
             .addInterceptor(urlLoggingInterceptor)
             .addInterceptor(apiKeyInterceptor)
+            .authenticator { _, response ->
+                if (responseCount(response) >= 2) return@authenticator null
+                if (response.request.url.encodedPath.endsWith("/api/login")) return@authenticator null
+
+                val failedToken = response.request.header("Authorization")
+                    ?.removePrefix("Bearer ")
+                    ?.trim()
+
+                val refreshToken = TokenStore.getRefreshToken()?.trim()
+                if (refreshToken.isNullOrEmpty()) return@authenticator null
+
+                val refreshClient = OkHttpClient.Builder()
+                    .addInterceptor { refreshChain ->
+                        val refreshRequest = refreshChain.request().newBuilder()
+                            .header("X-Api-Key", API_KEY)
+                            .header("EabsenApiKey", API_KEY)
+                            .header("Content-Type", "application/json")
+                            .build()
+                        refreshChain.proceed(refreshRequest)
+                    }
+                    .build()
+
+                val refreshApi = Retrofit.Builder()
+                    .baseUrl(ENTAGO_BASE_URL)
+                    .client(refreshClient)
+                    .addConverterFactory(GsonConverterFactory.create())
+                    .build()
+                    .create(EabsenCoreApiService::class.java)
+
+                return@authenticator synchronized(refreshLock) {
+                    val latestToken = TokenStore.getToken()?.trim()
+                    if (!latestToken.isNullOrEmpty() && latestToken != failedToken) {
+                        return@synchronized response.request.newBuilder()
+                            .header("Authorization", "Bearer $latestToken")
+                            .build()
+                    }
+
+                    try {
+                        val refreshResponse = runBlocking {
+                            refreshApi.refreshToken(RefreshTokenRequest(refreshToken))
+                        }
+
+                        if (!refreshResponse.isSuccessful || refreshResponse.body()?.success != true) {
+                            android.util.Log.e("ApiClient", "Refresh token gagal: ${refreshResponse.code()}")
+                            TokenStore.setToken(null)
+                            TokenStore.setRefreshToken(null)
+                            return@synchronized null
+                        }
+
+                        val newData = refreshResponse.body()?.data
+                        val newToken = newData?.token?.trim().orEmpty()
+                        val newRefreshToken = newData?.refreshToken?.trim().orEmpty()
+
+                        if (newToken.isEmpty() || newRefreshToken.isEmpty()) {
+                            android.util.Log.e("ApiClient", "Refresh response tidak lengkap")
+                            TokenStore.setToken(null)
+                            TokenStore.setRefreshToken(null)
+                            return@synchronized null
+                        }
+
+                        persistTokens(newToken, newRefreshToken)
+
+                        response.request.newBuilder()
+                            .header("Authorization", "Bearer $newToken")
+                            .build()
+                    } catch (e: Exception) {
+                        android.util.Log.e("ApiClient", "Refresh fatal: ${e.message}", e)
+                        null
+                    }
+                }
+            }
             .addInterceptor(loggingInterceptor)
             .cookieJar(cookieJar)
             .connectTimeout(30, TimeUnit.SECONDS)
@@ -116,5 +200,19 @@ object ApiClient {
 
     val eabsenApiService: EabsenApiService by lazy {
         retrofit.create(EabsenApiService::class.java)
+    }
+
+    fun executeAuthorized(request: Request): Response {
+        return okHttpClient.newCall(request).execute()
+    }
+
+    private fun responseCount(response: Response): Int {
+        var result = 1
+        var priorResponse = response.priorResponse
+        while (priorResponse != null) {
+            result++
+            priorResponse = priorResponse.priorResponse
+        }
+        return result
     }
 }

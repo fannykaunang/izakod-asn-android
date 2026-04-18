@@ -15,8 +15,8 @@ interface IzakodApiService {
      */
     @POST("api/login")
     suspend fun login(
-        @Body request: LoginRequest
-    ): Response<EabsenLoginResponse>
+        @Body request: EntagoLoginRequest
+    ): Response<EntagoLoginResponse>
 
     /**
      * Get statistik bulanan
