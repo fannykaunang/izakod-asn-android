@@ -7,9 +7,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,19 +20,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AlarmOn
 import androidx.compose.material.icons.filled.AssignmentTurnedIn
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -63,7 +64,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.kominfo_mkq.izakod_asn.R
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.MetricsData
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
@@ -80,7 +80,9 @@ import com.kominfo_mkq.izakod_asn.ui.theme.StatusRejected
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusRevised
 import com.kominfo_mkq.izakod_asn.ui.theme.TertiaryLight
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.DashboardViewModel
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
 
 private fun String?.displayOrDash(): String = this?.takeIf { it.isNotBlank() } ?: "-"
 private fun String?.toIntSafe(): Int = this?.toIntOrNull() ?: 0
@@ -97,6 +99,11 @@ private fun currentGreeting(): String {
     }
 }
 
+private fun currentDateLabel(): String {
+    val formatter = SimpleDateFormat("EEEE, dd MMMM yyyy", Locale("id", "ID"))
+    return formatter.format(Calendar.getInstance().time)
+}
+
 private fun formatDuration(totalMinutes: Int): String {
     if (totalMinutes <= 0) return "0j 0m"
     val hour = totalMinutes / 60
@@ -107,12 +114,12 @@ private fun formatDuration(totalMinutes: Int): String {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
-    onNavigateToCreateReport: () -> Unit,
     onNavigateToReports: () -> Unit,
     onNavigateToTemplates: () -> Unit,
     onNavigateToReminder: () -> Unit,
-    onNavigateToProfile: () -> Unit,
     onNavigateToNotifications: () -> Unit,
+    isDarkTheme: Boolean,
+    onToggleTheme: (Boolean) -> Unit,
     viewModel: DashboardViewModel = viewModel()
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -137,12 +144,11 @@ fun DashboardScreen(
         topBar = {
             DashboardTopBar(
                 scrollBehavior = scrollBehavior,
-                onNavigateToProfile = onNavigateToProfile,
                 onNavigateToNotifications = onNavigateToNotifications,
                 pegawaiProfile = uiState.pegawaiProfile,
-                photoUrl = uiState.photoUrl,
-                isLoadingProfile = uiState.isLoadingProfile,
-                unreadNotificationCount = uiState.unreadNotificationCount
+                unreadNotificationCount = uiState.unreadNotificationCount,
+                isDarkTheme = isDarkTheme,
+                onToggleTheme = onToggleTheme
             )
         }
     ) { paddingValues ->
@@ -174,11 +180,9 @@ fun DashboardScreen(
                         pegawaiProfile = uiState.pegawaiProfile,
                         photoUrl = uiState.photoUrl,
                         unreadNotificationCount = uiState.unreadNotificationCount,
-                        onCreateReport = onNavigateToCreateReport,
                         onViewReports = onNavigateToReports,
                         onTemplates = onNavigateToTemplates,
-                        onReminder = onNavigateToReminder,
-                        onNavigateToNotifications = onNavigateToNotifications
+                        onReminder = onNavigateToReminder
                     )
                 }
             }
@@ -193,14 +197,12 @@ private fun DashboardContent(
     pegawaiProfile: PegawaiProfile?,
     photoUrl: String?,
     unreadNotificationCount: Int,
-    onCreateReport: () -> Unit,
     onViewReports: () -> Unit,
     onTemplates: () -> Unit,
-    onReminder: () -> Unit,
-    onNavigateToNotifications: () -> Unit
+    onReminder: () -> Unit
 ) {
     LazyColumn(
-        contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 28.dp),
+        contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 112.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         item {
@@ -214,7 +216,6 @@ private fun DashboardContent(
 
         item {
             QuickActionsSection(
-                onCreateReport = onCreateReport,
                 onViewReports = onViewReports,
                 onTemplates = onTemplates,
                 onReminder = onReminder
@@ -237,12 +238,11 @@ private fun DashboardContent(
 @Composable
 fun DashboardTopBar(
     scrollBehavior: TopAppBarScrollBehavior,
-    onNavigateToProfile: () -> Unit,
     onNavigateToNotifications: () -> Unit,
     pegawaiProfile: PegawaiProfile?,
-    photoUrl: String?,
-    isLoadingProfile: Boolean,
-    unreadNotificationCount: Int
+    unreadNotificationCount: Int,
+    isDarkTheme: Boolean,
+    onToggleTheme: (Boolean) -> Unit
 ) {
     TopAppBar(
         title = {
@@ -255,7 +255,7 @@ fun DashboardTopBar(
                     )
                 )
                 Text(
-                    text = pegawaiProfile?.jabatan.displayOrDash(),
+                    text = currentDateLabel(),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -264,86 +264,50 @@ fun DashboardTopBar(
             }
         },
         actions = {
-            BadgedBox(
-                modifier = Modifier.padding(end = 10.dp),
-                badge = {
-                    if (unreadNotificationCount > 0) {
-                        Badge(
-                            containerColor = StatusRejected,
-                            modifier = Modifier.padding(top = 2.dp)
-                        ) {
-                            Text(
-                                text = if (unreadNotificationCount > 9) "9+" else unreadNotificationCount.toString(),
-                                color = Color.White
-                            )
-                        }
-                    }
-                }
+            IconButton(onClick = { onToggleTheme(!isDarkTheme) }) {
+                Icon(
+                    imageVector = if (isDarkTheme) Icons.Filled.LightMode else Icons.Outlined.DarkMode,
+                    contentDescription = if (isDarkTheme) "Ubah ke mode terang" else "Ubah ke mode gelap"
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .padding(end = 2.dp)
+                    .size(36.dp)
             ) {
-                IconButton(onClick = onNavigateToNotifications) {
+                IconButton(
+                    onClick = onNavigateToNotifications,
+                    modifier = Modifier.align(Alignment.Center)
+                ) {
                     Icon(
                         imageVector = Icons.Default.Notifications,
                         contentDescription = "Notifikasi"
                     )
                 }
-            }
 
-            ProfilePhotoButton(
-                photoUrl = photoUrl,
-                isLoading = isLoadingProfile,
-                onClick = onNavigateToProfile
-            )
+                if (unreadNotificationCount > 0) {
+                    Badge(
+                        containerColor = StatusRejected,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = (-1).dp, y = 5.dp)
+                    ) {
+                        Text(
+                            text = if (unreadNotificationCount > 9) "9+" else unreadNotificationCount.toString(),
+                            color = Color.White
+                        )
+                    }
+                }
+            }
         },
         scrollBehavior = scrollBehavior,
+        windowInsets = WindowInsets(0, 0, 0, 0),
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             scrolledContainerColor = MaterialTheme.colorScheme.surface
         )
     )
-}
-
-@Composable
-private fun ProfilePhotoButton(
-    photoUrl: String?,
-    isLoading: Boolean,
-    onClick: () -> Unit
-) {
-    IconButton(onClick = onClick) {
-        when {
-            isLoading -> {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(30.dp),
-                    strokeWidth = 2.dp
-                )
-            }
-
-            photoUrl != null -> {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(photoUrl)
-                        .crossfade(true)
-                        .placeholder(R.drawable.ic_launcher_foreground)
-                        .error(R.drawable.ic_launcher_foreground)
-                        .build(),
-                    contentDescription = "Foto profil",
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentScale = ContentScale.Crop
-                )
-            }
-
-            else -> {
-                Icon(
-                    imageVector = Icons.Default.AccountCircle,
-                    contentDescription = "Profil",
-                    modifier = Modifier.size(40.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
 }
 
 @Composable
@@ -492,14 +456,11 @@ fun HeroSection(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(photoUrl)
                         .crossfade(true)
-                        .placeholder(R.drawable.ic_launcher_foreground)
-                        .error(R.drawable.ic_launcher_foreground)
                         .build(),
                     contentDescription = "Foto pegawai",
                     modifier = Modifier
                         .size(72.dp)
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(Color.White.copy(alpha = 0.14f)),
+                        .clip(CircleShape),
                     contentScale = ContentScale.Crop
                 )
             }
@@ -564,7 +525,6 @@ private fun HeroStatPill(
 
 @Composable
 fun QuickActionsSection(
-    onCreateReport: () -> Unit,
     onViewReports: () -> Unit,
     onTemplates: () -> Unit,
     onReminder: () -> Unit
@@ -574,48 +534,6 @@ fun QuickActionsSection(
             text = "Aksi Cepat",
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
         )
-
-        ElevatedCard(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = onCreateReport,
-            elevation = 3.dp,
-            cornerRadius = 24.dp
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        text = "Mulai laporan hari ini",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold)
-                    )
-                    Text(
-                        text = "Buka form utama untuk menuliskan kegiatan secara cepat dan rapi.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(PrimaryLight.copy(alpha = 0.14f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Buat laporan",
-                        tint = PrimaryLight,
-                        modifier = Modifier.size(30.dp)
-                    )
-                }
-            }
-        }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -739,7 +657,7 @@ fun PerformanceSection(metrics: MetricsData?) {
                 title = "Produktivitas",
                 value = String.format("%.1f", rataRata),
                 subtitle = "Rata-rata kegiatan per hari",
-                icon = Icons.Default.TrendingUp,
+                icon = Icons.AutoMirrored.Filled.TrendingUp,
                 accent = PrimaryLight,
                 modifier = Modifier.weight(1f)
             )

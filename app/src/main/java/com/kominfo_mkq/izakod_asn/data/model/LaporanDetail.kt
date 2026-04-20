@@ -75,17 +75,29 @@ data class LaporanDetail(
     @SerializedName("status_laporan")
     val statusLaporan: String,
 
-    @SerializedName("catatan_verifikator")
+    @SerializedName("verifikasi_oleh")
+    val verifikasiOleh: Int?,
+
+    @SerializedName("tanggal_verifikasi")
+    val tanggalVerifikasi: String?,
+
+    @SerializedName("verifikator_nama")
+    val verifikatorNama: String?,
+
+    @SerializedName("catatan_verifikasi")
     val catatanVerifikator: String?,
 
-    @SerializedName("rating")
-    val rating: Int?,
+    @SerializedName("rating_kualitas")
+    val rating: Double?,
 
     @SerializedName("created_at")
     val createdAt: String,
 
     @SerializedName("updated_at")
-    val updatedAt: String?
+    val updatedAt: String?,
+
+    @SerializedName("lampiran")
+    val lampiran: List<LampiranKegiatan> = emptyList()
 )
 
 data class LaporanDetailResponse(

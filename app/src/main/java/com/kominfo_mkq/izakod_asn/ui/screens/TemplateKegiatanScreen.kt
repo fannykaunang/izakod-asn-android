@@ -21,6 +21,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.TemplateKegiatanViewModel
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatan
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanCreateRequest
+import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,18 +78,9 @@ fun TemplateKegiatanScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "Template Kegiatan",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, "Kembali")
-                    }
-                },
+            IZAKODHeaderBar(
+                title = "Template Kegiatan",
+                onBack = onNavigateBack,
                 actions = {
                     IconButton(onClick = { showFilterDialog = true }) {
                         Icon(

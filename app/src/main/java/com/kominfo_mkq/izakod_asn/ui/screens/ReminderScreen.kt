@@ -23,6 +23,7 @@ import com.kominfo_mkq.izakod_asn.ui.theme.*
 import com.kominfo_mkq.izakod_asn.data.model.CreateReminderRequest
 import com.kominfo_mkq.izakod_asn.data.model.Reminder
 import com.kominfo_mkq.izakod_asn.data.model.ReminderStats
+import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.ReminderViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -56,23 +57,9 @@ fun ReminderScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "Pengingat",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, "Kembali")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+            IZAKODHeaderBar(
+                title = "Pengingat",
+                onBack = onNavigateBack
             )
         },
         floatingActionButton = {

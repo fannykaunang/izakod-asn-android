@@ -2,28 +2,63 @@ package com.kominfo_mkq.izakod_asn.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsNone
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kominfo_mkq.izakod_asn.data.model.Notifikasi
-import com.kominfo_mkq.izakod_asn.ui.theme.*
+import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
+import com.kominfo_mkq.izakod_asn.ui.theme.PrimaryLight
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusApproved
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusRejected
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusRevised
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.NotificationViewModel
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Locale
+import java.util.TimeZone
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,39 +76,17 @@ fun NotificationScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            "Notifikasi",
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                        if (uiState.unreadCount > 0) {
-                            Text(
-                                "${uiState.unreadCount} belum dibaca",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, "Kembali")
-                    }
-                },
+            IZAKODHeaderBar(
+                title = "Notifikasi",
+                subtitle = if (uiState.unreadCount > 0) "${uiState.unreadCount} belum dibaca" else null,
+                onBack = onNavigateBack,
                 actions = {
                     if (uiState.notifications.isNotEmpty()) {
                         IconButton(onClick = { viewModel.loadNotifications() }) {
                             Icon(Icons.Default.Refresh, "Refresh")
                         }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                }
             )
         }
     ) { paddingValues ->
@@ -366,7 +379,7 @@ private fun formatRelativeTime(dateString: String): String {
                 outputFormat.format(date)
             }
         }
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         dateString
     }
 }

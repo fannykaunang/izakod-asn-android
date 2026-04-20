@@ -2,28 +2,76 @@ package com.kominfo_mkq.izakod_asn.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.TaskAlt
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
@@ -33,16 +81,12 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
 import com.kominfo_mkq.izakod_asn.data.model.KategoriKegiatan
+import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.EditLaporanViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
-import java.util.TimeZone
-import kotlin.collections.find
-import kotlin.collections.forEach
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +100,8 @@ fun EditLaporanScreen(
     val scrollState = rememberScrollState()
 
     var showDatePicker by remember { mutableStateOf(false) }
+    var showAdditionalDetails by rememberSaveable { mutableStateOf(false) }
+    var showSupportingDetails by rememberSaveable { mutableStateOf(false) }
 
     // Load laporan when screen opens
     LaunchedEffect(laporanId) {
@@ -88,23 +134,9 @@ fun EditLaporanScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "Edit Laporan",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, "Kembali")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+            IZAKODHeaderBar(
+                title = "Edit Laporan",
+                onBack = onNavigateBack
             )
         }
     ) { paddingValues ->
@@ -161,8 +193,9 @@ fun EditLaporanScreen(
                             .verticalScroll(scrollState)
                             .background(MaterialTheme.colorScheme.background)
                     ) {
-                        // Info Alert
-                        InfoAlert()
+                        EditFormHeroCard(
+                            statusLaporan = uiState.statusLaporan
+                        )
 
                         // Form Sections
                         Spacer(modifier = Modifier.height(16.dp))
@@ -183,16 +216,6 @@ fun EditLaporanScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Target & Output Section
-                        TargetOutputSection(
-                            targetOutput = uiState.targetOutput,
-                            hasilOutput = uiState.hasilOutput,
-                            onTargetChange = { viewModel.updateTargetOutput(it) },
-                            onHasilChange = { viewModel.updateHasilOutput(it) }
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
                         // Time Section
                         TimeSection(
                             waktuMulai = uiState.waktuMulai,
@@ -204,55 +227,74 @@ fun EditLaporanScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Location Section
-                        LocationSection(
-                            lokasiKegiatan = uiState.lokasiKegiatan,
-                            latitude = uiState.latitude,
-                            longitude = uiState.longitude,
-                            gettingLocation = uiState.gettingLocation,
-                            onLokasiChange = { viewModel.updateLokasiKegiatan(it) },
-                            onGetLocation = {
-                                when (PackageManager.PERMISSION_GRANTED) {
-                                    ContextCompat.checkSelfPermission(
-                                        context,
-                                        Manifest.permission.ACCESS_FINE_LOCATION
-                                    ) -> {
-                                        viewModel.getCurrentLocation(context)
-                                    }
-                                    else -> {
-                                        locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                        ExpandableSectionCard(
+                            title = "Tambah detail laporan",
+                            subtitle = "Lokasi, target hasil, dan peserta bisa diperbarui bila memang diperlukan.",
+                            isExpanded = showAdditionalDetails,
+                            onToggle = { showAdditionalDetails = !showAdditionalDetails }
+                        ) {
+                            LocationSection(
+                                lokasiKegiatan = uiState.lokasiKegiatan,
+                                latitude = uiState.latitude,
+                                longitude = uiState.longitude,
+                                gettingLocation = uiState.gettingLocation,
+                                onLokasiChange = { viewModel.updateLokasiKegiatan(it) },
+                                onGetLocation = {
+                                    when (PackageManager.PERMISSION_GRANTED) {
+                                        ContextCompat.checkSelfPermission(
+                                            context,
+                                            Manifest.permission.ACCESS_FINE_LOCATION
+                                        ) -> {
+                                            viewModel.getCurrentLocation(context)
+                                        }
+                                        else -> {
+                                            locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                        }
                                     }
                                 }
-                            }
-                        )
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            TargetOutputSection(
+                                targetOutput = uiState.targetOutput,
+                                hasilOutput = uiState.hasilOutput,
+                                onTargetChange = { viewModel.updateTargetOutput(it) },
+                                onHasilChange = { viewModel.updateHasilOutput(it) }
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            ParticipantsSection(
+                                pesertaKegiatan = uiState.pesertaKegiatan,
+                                jumlahPeserta = uiState.jumlahPeserta,
+                                onPesertaChange = { viewModel.updatePesertaKegiatan(it) },
+                                onJumlahChange = { viewModel.updateJumlahPeserta(it) }
+                            )
+                        }
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Participants Section
-                        ParticipantsSection(
-                            pesertaKegiatan = uiState.pesertaKegiatan,
-                            jumlahPeserta = uiState.jumlahPeserta,
-                            onPesertaChange = { viewModel.updatePesertaKegiatan(it) },
-                            onJumlahChange = { viewModel.updateJumlahPeserta(it) }
-                        )
+                        ExpandableSectionCard(
+                            title = "Dokumentasi & pendukung",
+                            subtitle = "Tambahkan kendala, solusi, atau link pendukung jika laporan perlu dilengkapi.",
+                            isExpanded = showSupportingDetails,
+                            onToggle = { showSupportingDetails = !showSupportingDetails }
+                        ) {
+                            ProblemsSection(
+                                kendala = uiState.kendala,
+                                solusi = uiState.solusi,
+                                onKendalaChange = { viewModel.updateKendala(it) },
+                                onSolusiChange = { viewModel.updateSolusi(it) }
+                            )
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
 
-                        // Problems & Solutions Section
-                        ProblemsSection(
-                            kendala = uiState.kendala,
-                            solusi = uiState.solusi,
-                            onKendalaChange = { viewModel.updateKendala(it) },
-                            onSolusiChange = { viewModel.updateSolusi(it) }
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Link Reference Section
-                        LinkSection(
-                            linkReferensi = uiState.linkReferensi,
-                            onLinkChange = { viewModel.updateLinkReferensi(it) }
-                        )
+                            LinkSection(
+                                linkReferensi = uiState.linkReferensi,
+                                onLinkChange = { viewModel.updateLinkReferensi(it) }
+                            )
+                        }
 
                         Spacer(modifier = Modifier.height(16.dp))
 
@@ -321,6 +363,218 @@ fun EditLaporanScreen(
 }
 
 @Composable
+private fun EditFormHeroCard(
+    statusLaporan: String
+) {
+    val normalizedStatus = statusLaporan.lowercase(Locale.getDefault())
+    val statusLabel = when (normalizedStatus) {
+        "revisi", "direvisi" -> "Perlu revisi"
+        "ditolak", "rejected" -> "Ditolak"
+        "diajukan", "submitted" -> "Menunggu review"
+        "disetujui", "approved" -> "Sudah disetujui"
+        else -> if (statusLaporan.isNotBlank()) statusLaporan else "Masih bisa diperbarui"
+    }
+    val statusMessage = when (normalizedStatus) {
+        "revisi", "direvisi" -> "Perbarui bagian yang perlu disesuaikan sebelum laporan diajukan kembali."
+        "ditolak", "rejected" -> "Cek kembali isi laporan dan sesuaikan data sebelum mencoba mengirim ulang."
+        "diajukan", "submitted" -> "Laporan masih bisa diperbarui selama belum masuk proses review akhir."
+        "disetujui", "approved" -> "Perubahan sebaiknya dilakukan hanya jika memang masih diperbolehkan oleh alur kerja."
+        else -> "Perbarui data yang diperlukan, lalu simpan perubahan saat semua isi laporan sudah tepat."
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        "Perbarui laporan dengan lebih cepat",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Text(
+                        "Fokus pada informasi utama dan waktu pelaksanaan terlebih dahulu, lalu lengkapi detail pendukung setelahnya.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FormHintChip(
+                    text = statusLabel,
+                    icon = when (normalizedStatus) {
+                        "revisi", "direvisi", "ditolak", "rejected" -> Icons.Default.Warning
+                        "disetujui", "approved" -> Icons.Default.CheckCircle
+                        else -> Icons.Default.Schedule
+                    }
+                )
+                FormHintChip(
+                    text = "Field wajib bertanda *",
+                    icon = Icons.Default.TaskAlt
+                )
+            }
+
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        "Status laporan saat ini",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    )
+                    Text(
+                        statusMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FormHintChip(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExpandableSectionCard(
+    title: String,
+    subtitle: String,
+    isExpanded: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggle),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            AnimatedVisibility(visible = isExpanded) {
+                Column(
+                    modifier = Modifier.padding(top = 16.dp)
+                ) {
+                    content()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionCaption(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 14.dp)
+    )
+}
+
+@Composable
 private fun InfoAlert() {
     Card(
         modifier = Modifier
@@ -379,6 +633,12 @@ private fun EditActionButtons(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            Text(
+                "Perubahan akan tersimpan pada laporan ini. Pastikan informasi utama dan waktu sudah benar sebelum menekan simpan.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
             // Update Button
             Button(
                 onClick = onUpdate,
@@ -433,6 +693,8 @@ private fun BasicInformationSection(
         title = "Informasi Dasar",
         icon = Icons.Default.CalendarToday
     ) {
+        SectionCaption("Perbarui tanggal, kategori, nama kegiatan, dan deskripsi sebagai inti laporan.")
+
         // Tanggal Kegiatan
         OutlinedCard(
             modifier = Modifier.fillMaxWidth(),
@@ -569,6 +831,8 @@ private fun TargetOutputSection(
         title = "Target & Hasil",
         icon = Icons.Default.CheckCircle
     ) {
+        SectionCaption("Tambahkan target dan hasil jika perlu diperjelas untuk reviewer.")
+
         OutlinedTextField(
             value = targetOutput,
             onValueChange = onTargetChange,
@@ -624,6 +888,8 @@ private fun TimeSection(
         title = "Waktu Pelaksanaan",
         icon = Icons.Default.AccessTime
     ) {
+        SectionCaption("Waktu mulai dan selesai sebaiknya akurat agar durasi kegiatan terbaca dengan benar.")
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -718,6 +984,8 @@ private fun LocationSection(
         title = "Lokasi & Koordinat",
         icon = Icons.Default.Place
     ) {
+        SectionCaption("Sesuaikan lokasi jika tempat pelaksanaan berubah atau perlu diperjelas.")
+
         OutlinedTextField(
             value = lokasiKegiatan,
             onValueChange = onLokasiChange,
@@ -808,6 +1076,8 @@ private fun ParticipantsSection(
         title = "Peserta Kegiatan",
         icon = Icons.Default.Person
     ) {
+        SectionCaption("Perbarui peserta hanya jika memang ada perubahan yang relevan.")
+
         OutlinedTextField(
             value = pesertaKegiatan,
             onValueChange = onPesertaChange,
@@ -842,6 +1112,8 @@ private fun ProblemsSection(
         title = "Kendala & Solusi",
         icon = Icons.Default.Warning
     ) {
+        SectionCaption("Gunakan bagian ini untuk menambahkan konteks kendala yang muncul selama kegiatan.")
+
         OutlinedTextField(
             value = kendala,
             onValueChange = onKendalaChange,
@@ -875,6 +1147,8 @@ private fun LinkSection(
         title = "Link Referensi",
         icon = Icons.Default.Link
     ) {
+        SectionCaption("Link pendukung bisa membantu saat laporan perlu dilengkapi kembali.")
+
         OutlinedTextField(
             value = linkReferensi,
             onValueChange = onLinkChange,
@@ -942,93 +1216,93 @@ private fun formatDate(dateString: String): String {
         val outputFormat = SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID"))
         val date = inputFormat.parse(dateString)
         date?.let { outputFormat.format(it) } ?: dateString
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         dateString
     }
 }
 
-@Composable
-private fun ImageUploadSection(
-    selectedImages: List<Uri>,
-    onAddImages: (List<Uri>) -> Unit,
-    onRemoveImage: (Uri) -> Unit
-) {
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetMultipleContents()
-    ) { uris -> if (uris.isNotEmpty()) onAddImages(uris) }
+//@Composable
+//private fun ImageUploadSection(
+//    selectedImages: List<Uri>,
+//    onAddImages: (List<Uri>) -> Unit,
+//    onRemoveImage: (Uri) -> Unit
+//) {
+//    val imagePickerLauncher = rememberLauncherForActivityResult(
+//        contract = ActivityResultContracts.GetMultipleContents()
+//    ) { uris -> if (uris.isNotEmpty()) onAddImages(uris) }
+//
+//    SectionCard(
+//        title = "Foto Kegiatan",
+//        icon = Icons.Default.Image
+//    ) {
+//        Column(
+//            modifier = Modifier.fillMaxWidth(),
+//            verticalArrangement = Arrangement.spacedBy(12.dp)
+//        ) {
+//            Text(
+//                "Upload foto kegiatan (maksimal 5 foto)",
+//                style = MaterialTheme.typography.bodySmall
+//            )
+//
+//            if (selectedImages.isNotEmpty()) {
+//                LazyRow(
+//                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+//                    modifier = Modifier.fillMaxWidth()
+//                ) {
+//                    items(selectedImages.size) { index ->
+//                        ImagePreview(
+//                            uri = selectedImages[index],
+//                            onRemove = { onRemoveImage(selectedImages[index]) }
+//                        )
+//                    }
+//                }
+//            }
+//
+//            if (selectedImages.size < 5) {
+//                OutlinedButton(
+//                    onClick = { imagePickerLauncher.launch("image/*") },
+//                    modifier = Modifier.fillMaxWidth()
+//                ) {
+//                    Icon(Icons.Default.AddPhotoAlternate, null)
+//                    Spacer(Modifier.width(8.dp))
+//                    Text("Tambah Foto (${selectedImages.size}/5)")
+//                }
+//            }
+//        }
+//    }
+//}
 
-    SectionCard(
-        title = "Foto Kegiatan",
-        icon = Icons.Default.Image
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                "Upload foto kegiatan (maksimal 5 foto)",
-                style = MaterialTheme.typography.bodySmall
-            )
-
-            if (selectedImages.isNotEmpty()) {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(selectedImages.size) { index ->
-                        ImagePreview(
-                            uri = selectedImages[index],
-                            onRemove = { onRemoveImage(selectedImages[index]) }
-                        )
-                    }
-                }
-            }
-
-            if (selectedImages.size < 5) {
-                OutlinedButton(
-                    onClick = { imagePickerLauncher.launch("image/*") },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.AddPhotoAlternate, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Tambah Foto (${selectedImages.size}/5)")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ImagePreview(uri: Uri, onRemove: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(100.dp)
-            .clip(RoundedCornerShape(8.dp))
-    ) {
-        AsyncImage(
-            model = uri,
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
-
-        IconButton(
-            onClick = onRemove,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .size(24.dp)
-                .background(
-                    MaterialTheme.colorScheme.error.copy(0.9f),
-                    CircleShape
-                )
-        ) {
-            Icon(
-                Icons.Default.Close,
-                null,
-                tint = Color.White,
-                modifier = Modifier.size(16.dp)
-            )
-        }
-    }
-}
+//@Composable
+//private fun ImagePreview(uri: Uri, onRemove: () -> Unit) {
+//    Box(
+//        modifier = Modifier
+//            .size(100.dp)
+//            .clip(RoundedCornerShape(8.dp))
+//    ) {
+//        AsyncImage(
+//            model = uri,
+//            contentDescription = null,
+//            modifier = Modifier.fillMaxSize(),
+//            contentScale = ContentScale.Crop
+//        )
+//
+//        IconButton(
+//            onClick = onRemove,
+//            modifier = Modifier
+//                .align(Alignment.TopEnd)
+//                .size(24.dp)
+//                .background(
+//                    MaterialTheme.colorScheme.error.copy(0.9f),
+//                    CircleShape
+//                )
+//        ) {
+//            Icon(
+//                Icons.Default.Close,
+//                null,
+//                tint = Color.White,
+//                modifier = Modifier.size(16.dp)
+//            )
+//        }
+//    }
+//}
 

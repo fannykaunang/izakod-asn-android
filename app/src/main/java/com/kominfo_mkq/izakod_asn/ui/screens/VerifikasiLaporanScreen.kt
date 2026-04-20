@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusApproved
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusPending
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusRejected
@@ -67,23 +68,9 @@ fun VerifikasiLaporanScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "Verifikasi Laporan",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, "Kembali")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+            IZAKODHeaderBar(
+                title = "Verifikasi Laporan",
+                onBack = onNavigateBack
             )
         }
     ) { paddingValues ->

@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
@@ -14,11 +15,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.CreateLaporanViewModel
 import com.kominfo_mkq.izakod_asn.data.model.KategoriKegiatan
 import java.text.SimpleDateFormat
@@ -65,6 +69,8 @@ fun CreateLaporanScreen(
     // Date picker state
     var showDatePicker by remember { mutableStateOf(false) }
     var hasNavigated by remember { mutableStateOf(false) }
+    var showAdditionalDetails by rememberSaveable { mutableStateOf(false) }
+    var showSupportingDetails by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         android.util.Log.d("CreateLaporanScreen", "🆕 Screen opened, resetting success")
@@ -104,23 +110,9 @@ fun CreateLaporanScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "Buat Laporan Kegiatan",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Kembali")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+            IZAKODHeaderBar(
+                title = "Buat Laporan Kegiatan",
+                onBack = onNavigateBack
             )
         }
     ) { paddingValues ->
@@ -131,10 +123,9 @@ fun CreateLaporanScreen(
                 .verticalScroll(scrollState)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            // Info Alert
-            if (!uiState.hasCheckedAttendance) {
-                InfoAlert()
-            }
+            CreateFormHeroCard(
+                hasCheckedAttendance = uiState.hasCheckedAttendance
+            )
 
             // Form Sections
             Spacer(modifier = Modifier.height(16.dp))
@@ -155,16 +146,6 @@ fun CreateLaporanScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Target & Output Section
-            TargetOutputSection(
-                targetOutput = uiState.targetOutput,
-                hasilOutput = uiState.hasilOutput,
-                onTargetChange = { viewModel.updateTargetOutput(it) },
-                onHasilChange = { viewModel.updateHasilOutput(it) }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
             // Time Section
             TimeSection(
                 waktuMulai = uiState.waktuMulai,
@@ -176,63 +157,82 @@ fun CreateLaporanScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Location Section
-            LocationSection(
-                lokasiKegiatan = uiState.lokasiKegiatan,
-                latitude = uiState.latitude,
-                longitude = uiState.longitude,
-                gettingLocation = uiState.gettingLocation,
-                onLokasiChange = { viewModel.updateLokasiKegiatan(it) },
-                onGetLocation = {
-                    when (PackageManager.PERMISSION_GRANTED) {
-                        ContextCompat.checkSelfPermission(
-                            context,
-                            Manifest.permission.ACCESS_FINE_LOCATION
-                        ) -> {
-                            viewModel.getCurrentLocation(context)
-                        }
-                        else -> {
-                            locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            ExpandableSectionCard(
+                title = "Tambah detail laporan",
+                subtitle = "Lokasi, target hasil, dan peserta bisa diisi jika diperlukan.",
+                isExpanded = showAdditionalDetails,
+                onToggle = { showAdditionalDetails = !showAdditionalDetails }
+            ) {
+                LocationSection(
+                    lokasiKegiatan = uiState.lokasiKegiatan,
+                    latitude = uiState.latitude,
+                    longitude = uiState.longitude,
+                    gettingLocation = uiState.gettingLocation,
+                    onLokasiChange = { viewModel.updateLokasiKegiatan(it) },
+                    onGetLocation = {
+                        when (PackageManager.PERMISSION_GRANTED) {
+                            ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.ACCESS_FINE_LOCATION
+                            ) -> {
+                                viewModel.getCurrentLocation(context)
+                            }
+                            else -> {
+                                locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                            }
                         }
                     }
-                }
-            )
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                TargetOutputSection(
+                    targetOutput = uiState.targetOutput,
+                    hasilOutput = uiState.hasilOutput,
+                    onTargetChange = { viewModel.updateTargetOutput(it) },
+                    onHasilChange = { viewModel.updateHasilOutput(it) }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                ParticipantsSection(
+                    pesertaKegiatan = uiState.pesertaKegiatan,
+                    jumlahPeserta = uiState.jumlahPeserta,
+                    onPesertaChange = { viewModel.updatePesertaKegiatan(it) },
+                    onJumlahChange = { viewModel.updateJumlahPeserta(it) }
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Participants Section
-            ParticipantsSection(
-                pesertaKegiatan = uiState.pesertaKegiatan,
-                jumlahPeserta = uiState.jumlahPeserta,
-                onPesertaChange = { viewModel.updatePesertaKegiatan(it) },
-                onJumlahChange = { viewModel.updateJumlahPeserta(it) }
-            )
+            ExpandableSectionCard(
+                title = "Dokumentasi & pendukung",
+                subtitle = "Kendala, solusi, foto, dan link referensi bisa ditambahkan untuk laporan yang lebih lengkap.",
+                isExpanded = showSupportingDetails,
+                onToggle = { showSupportingDetails = !showSupportingDetails }
+            ) {
+                ProblemsSection(
+                    kendala = uiState.kendala,
+                    solusi = uiState.solusi,
+                    onKendalaChange = { viewModel.updateKendala(it) },
+                    onSolusiChange = { viewModel.updateSolusi(it) }
+                )
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-            // Problems & Solutions Section
-            ProblemsSection(
-                kendala = uiState.kendala,
-                solusi = uiState.solusi,
-                onKendalaChange = { viewModel.updateKendala(it) },
-                onSolusiChange = { viewModel.updateSolusi(it) }
-            )
+                ImageUploadSection(
+                    selectedImages = uiState.selectedImages,
+                    onAddImages = { viewModel.addImages(it) },
+                    onRemoveImage = { viewModel.removeImage(it) }
+                )
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-            ImageUploadSection(
-                selectedImages = uiState.selectedImages,
-                onAddImages = { viewModel.addImages(it) },
-                onRemoveImage = { viewModel.removeImage(it) }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Link Reference Section
-            LinkSection(
-                linkReferensi = uiState.linkReferensi,
-                onLinkChange = { viewModel.updateLinkReferensi(it) }
-            )
+                LinkSection(
+                    linkReferensi = uiState.linkReferensi,
+                    onLinkChange = { viewModel.updateLinkReferensi(it) }
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -293,6 +293,197 @@ fun CreateLaporanScreen(
 }
 
 @Composable
+private fun CreateFormHeroCard(
+    hasCheckedAttendance: Boolean
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.EditNote,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        "Mulai dari Informasi Dasar",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Text(
+                        "Lengkapi tanggal, kategori, nama kegiatan, deskripsi, dan waktu terlebih dahulu. Detail lain bisa ditambahkan setelah bagian inti selesai.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FormHintChip(
+                    text = "Field wajib bertanda *",
+                    icon = Icons.Default.TaskAlt
+                )
+                FormHintChip(
+                    text = if (hasCheckedAttendance) "Siap diajukan" else "Pastikan sudah absen",
+                    icon = if (hasCheckedAttendance) Icons.Default.CheckCircle else Icons.Default.Schedule
+                )
+            }
+
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        "Simpan sesuai kebutuhan",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        "Gunakan Draft jika laporan belum final. Gunakan Ajukan Laporan jika semua data sudah siap direview.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FormHintChip(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExpandableSectionCard(
+    title: String,
+    subtitle: String,
+    isExpanded: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggle),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            AnimatedVisibility(visible = isExpanded) {
+                Column(
+                    modifier = Modifier.padding(top = 16.dp)
+                ) {
+                    content()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionCaption(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 14.dp)
+    )
+}
+
+@Composable
 private fun InfoAlert() {
     Card(
         modifier = Modifier
@@ -332,55 +523,55 @@ private fun InfoAlert() {
     }
 }
 
-@Composable
-private fun ErrorAlert(
-    message: String,
-    requiresAttendance: Boolean,
-    onDismiss: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            Icon(
-                Icons.Default.Warning,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.error
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    if (requiresAttendance) "Belum Absen" else "Error",
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = MaterialTheme.colorScheme.onErrorContainer
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer
-                )
-            }
-            IconButton(onClick = onDismiss) {
-                Icon(
-                    Icons.Default.Close,
-                    contentDescription = "Tutup",
-                    tint = MaterialTheme.colorScheme.onErrorContainer
-                )
-            }
-        }
-    }
-}
+//@Composable
+//private fun ErrorAlert(
+//    message: String,
+//    requiresAttendance: Boolean,
+//    onDismiss: () -> Unit
+//) {
+//    Card(
+//        modifier = Modifier
+//            .fillMaxWidth()
+//            .padding(horizontal = 16.dp, vertical = 8.dp),
+//        colors = CardDefaults.cardColors(
+//            containerColor = MaterialTheme.colorScheme.errorContainer
+//        )
+//    ) {
+//        Row(
+//            modifier = Modifier.padding(16.dp),
+//            horizontalArrangement = Arrangement.spacedBy(12.dp),
+//            verticalAlignment = Alignment.Top
+//        ) {
+//            Icon(
+//                Icons.Default.Warning,
+//                contentDescription = null,
+//                tint = MaterialTheme.colorScheme.error
+//            )
+//            Column(modifier = Modifier.weight(1f)) {
+//                Text(
+//                    if (requiresAttendance) "Belum Absen" else "Error",
+//                    style = MaterialTheme.typography.titleSmall.copy(
+//                        fontWeight = FontWeight.Bold
+//                    ),
+//                    color = MaterialTheme.colorScheme.onErrorContainer
+//                )
+//                Spacer(modifier = Modifier.height(4.dp))
+//                Text(
+//                    message,
+//                    style = MaterialTheme.typography.bodySmall,
+//                    color = MaterialTheme.colorScheme.onErrorContainer
+//                )
+//            }
+//            IconButton(onClick = onDismiss) {
+//                Icon(
+//                    Icons.Default.Close,
+//                    contentDescription = "Tutup",
+//                    tint = MaterialTheme.colorScheme.onErrorContainer
+//                )
+//            }
+//        }
+//    }
+//}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -400,6 +591,8 @@ private fun BasicInformationSection(
         title = "Informasi Dasar",
         icon = Icons.Default.CalendarToday
     ) {
+        SectionCaption("Isi bagian inti laporan terlebih dahulu agar proses simpan dan review lebih lancar.")
+
         // Tanggal Kegiatan
         OutlinedCard(
             modifier = Modifier.fillMaxWidth(),
@@ -536,6 +729,8 @@ private fun TargetOutputSection(
         title = "Target & Hasil",
         icon = Icons.Default.CheckCircle
     ) {
+        SectionCaption("Tambahkan target dan hasil jika sudah ada. Bagian ini membantu laporan terlihat lebih lengkap.")
+
         OutlinedTextField(
             value = targetOutput,
             onValueChange = onTargetChange,
@@ -591,6 +786,8 @@ private fun TimeSection(
         title = "Waktu Pelaksanaan",
         icon = Icons.Default.AccessTime
     ) {
+        SectionCaption("Gunakan format jam yang ringkas agar durasi kegiatan terbaca jelas.")
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -685,6 +882,8 @@ private fun LocationSection(
         title = "Lokasi & Koordinat",
         icon = Icons.Default.Place
     ) {
+        SectionCaption("Lokasi membantu memperjelas konteks kegiatan. Koordinat akan terisi saat mengambil lokasi saat ini.")
+
         OutlinedTextField(
             value = lokasiKegiatan,
             onValueChange = onLokasiChange,
@@ -775,6 +974,8 @@ private fun ParticipantsSection(
         title = "Peserta Kegiatan",
         icon = Icons.Default.Person
     ) {
+        SectionCaption("Isi jika kegiatan melibatkan tim, rapat, atau peserta lain.")
+
         OutlinedTextField(
             value = pesertaKegiatan,
             onValueChange = onPesertaChange,
@@ -809,6 +1010,8 @@ private fun ProblemsSection(
         title = "Kendala & Solusi",
         icon = Icons.Default.Warning
     ) {
+        SectionCaption("Bagian ini opsional, tetapi berguna jika ada hambatan yang perlu dicatat.")
+
         OutlinedTextField(
             value = kendala,
             onValueChange = onKendalaChange,
@@ -842,6 +1045,8 @@ private fun LinkSection(
         title = "Link Referensi",
         icon = Icons.Default.Link
     ) {
+        SectionCaption("Tambahkan tautan dokumen, drive, atau sumber pendukung bila diperlukan.")
+
         OutlinedTextField(
             value = linkReferensi,
             onValueChange = onLinkChange,
@@ -879,6 +1084,12 @@ private fun ActionButtons(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            Text(
+                "Laporan masih bisa disimpan sebagai draft sebelum diajukan untuk review.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
             // Submit Button
             Button(
                 onClick = onSubmit,
@@ -897,7 +1108,7 @@ private fun ActionButtons(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Mengirim...")
                 } else {
-                    Icon(Icons.Default.Send, contentDescription = null)
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Ajukan Laporan")
                 }
@@ -977,7 +1188,7 @@ private fun formatDate(dateString: String): String {
         val outputFormat = SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID"))
         val date = inputFormat.parse(dateString)
         date?.let { outputFormat.format(it) } ?: dateString
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         dateString
     }
 }
@@ -996,6 +1207,8 @@ private fun ImageUploadSection(
         title = "Foto Kegiatan",
         icon = Icons.Default.Image
     ) {
+        SectionCaption("Lampiran foto dapat membantu reviewer memahami kegiatan dengan lebih cepat.")
+
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp)

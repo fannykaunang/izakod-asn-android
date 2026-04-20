@@ -5,24 +5,54 @@ import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.StarRate
 import androidx.compose.material.icons.outlined.SystemUpdate
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,21 +62,45 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.kominfo_mkq.izakod_asn.BuildConfig
 import com.kominfo_mkq.izakod_asn.R
+import com.kominfo_mkq.izakod_asn.data.local.TokenStore
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
+import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
 import com.kominfo_mkq.izakod_asn.ui.theme.PrimaryLight
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.ProfileViewModel
-import com.kominfo_mkq.izakod_asn.BuildConfig
-import com.kominfo_mkq.izakod_asn.data.local.TokenStore
-import androidx.core.net.toUri
-
-enum class ProfileTab(val title: String) { PROFILE("Profil"), SETTINGS("Settings") }
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 private fun String?.displayOrDash(): String = this?.takeIf { it.isNotBlank() } ?: "-"
+
+private fun String?.formatDateIndonesianOrDash(): String {
+    val raw = this?.trim().orEmpty()
+    if (raw.isBlank()) return "-"
+
+    val outputFormat = SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID"))
+    val inputPatterns = listOf(
+        "yyyy-MM-dd",
+        "yyyy-MM-dd'T'HH:mm:ss",
+        "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+    )
+
+    for (pattern in inputPatterns) {
+        runCatching {
+            val parser = SimpleDateFormat(pattern, Locale.US).apply { isLenient = false }
+            parser.parse(raw)
+        }.getOrNull()?.let { parsedDate ->
+            return outputFormat.format(parsedDate)
+        }
+    }
+
+    return raw
+}
 
 /* =========================
    PROFILE SCREEN
@@ -56,8 +110,10 @@ private fun String?.displayOrDash(): String = this?.takeIf { it.isNotBlank() } ?
 @Composable
 fun ProfileScreen(
     onBackToDashboard: () -> Unit,
-    onNavigateToSettings: () -> Unit,
     onLogout: () -> Unit,
+    isDarkTheme: Boolean,
+    onToggleTheme: (Boolean) -> Unit,
+    isRootTab: Boolean = false,
     viewModel: ProfileViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -81,7 +137,9 @@ fun ProfileScreen(
     }
 
     // Back selalu ke dashboard
-    BackHandler { onBackToDashboard() }
+    if (!isRootTab) {
+        BackHandler { onBackToDashboard() }
+    }
 
     // fungsi logout dipusatkan biar tidak error scope
     val doLogout = remember {
@@ -99,28 +157,8 @@ fun ProfileScreen(
         topBar = {
             AccountTopBar(
                 title = "Akun",
-                onBack = onBackToDashboard
+                onBack = if (isRootTab) null else onBackToDashboard
             )
-        },
-        bottomBar = {
-            // Sticky logout hanya di tab Profil
-            Surface(tonalElevation = 2.dp) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                ) {
-                    Button(
-                        onClick = { showLogoutDialog = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Text("Logout")
-                    }
-                }
-            }
         }
     ) { paddingValues ->
 
@@ -129,12 +167,6 @@ fun ProfileScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            AccountTabs(
-                selectedTab = ProfileTab.PROFILE,
-                onClickProfile = { /* tetap di sini */ },
-                onClickSettings = onNavigateToSettings
-            )
-
             when {
                 pin.isNullOrBlank() -> {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -149,11 +181,10 @@ fun ProfileScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(scrollState)
-                            // supaya konten tidak ketutup sticky logout
-                            .padding(bottom = 96.dp)
+                            .padding(bottom = if (isRootTab) 120.dp else 32.dp)
                             .background(MaterialTheme.colorScheme.background)
                     ) {
-                        ProfileHeader(
+                        AccountProfileHero(
                             photoUrl = uiState.photoUrl,
                             nama = profile.pegawaiNama.displayOrDash(),
                             nip = profile.pegawaiNip.displayOrDash(),
@@ -162,16 +193,77 @@ fun ProfileScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Field profil tetap (tidak diubah)
-                        PersonalInfoSection(profile)
+                        AccountSectionLabel("Akun Saya")
+                        ProfileOverviewSection(profile)
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
-                        WorkInfoSection(profile)
+                        AccountSectionLabel("Informasi Pegawai")
+                        ProfileDetailSection(profile)
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
-                        ContactInfoSection(profile)
+                        AccountSectionLabel("Pengaturan")
+                        SettingsSwitchSection(
+                            items = listOf(
+                                SettingSwitchItem(
+                                    icon = Icons.Outlined.DarkMode,
+                                    title = "Mode Gelap",
+                                    subtitle = "Sesuaikan tampilan aplikasi",
+                                    checked = isDarkTheme,
+                                    onCheckedChange = onToggleTheme
+                                ),
+                                SettingSwitchItem(
+                                    icon = Icons.Outlined.Notifications,
+                                    title = "Pengaturan Notifikasi",
+                                    subtitle = "Kelola notifikasi aplikasi",
+                                    checked = uiState.notificationsEnabled,
+                                    onCheckedChange = { viewModel.setNotifications(it) }
+                                )
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        AccountSectionLabel("Aplikasi")
+                        SettingsActionSection(
+                            items = listOf(
+                                SettingActionItem(
+                                    icon = Icons.Outlined.SystemUpdate,
+                                    title = "Cek Pembaruan",
+                                    subtitle = "Buka halaman aplikasi di Google Play"
+                                ) { openPlayStoreListing(context) },
+                                SettingActionItem(
+                                    icon = Icons.Outlined.StarRate,
+                                    title = "Beri Rating",
+                                    subtitle = "Nilai aplikasi IZAKOD-ASN"
+                                ) { openPlayStoreListing(context) },
+                                SettingActionItem(
+                                    icon = Icons.Outlined.Public,
+                                    title = "Website",
+                                    subtitle = "Website resmi IZAKOD-ASN"
+                                ) { openOfficialWebsite(context) },
+                                SettingActionItem(
+                                    icon = Icons.Default.Settings,
+                                    title = "Versi Aplikasi",
+                                    subtitle = "IZAKOD-ASN ${BuildConfig.VERSION_NAME}",
+                                    showChevron = false
+                                ) {}
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        AccountSectionLabel("Sesi")
+                        SimpleActionSection(
+                            items = listOf(
+                                SettingSimpleAction(
+                                    title = "Logout",
+                                    subtitle = "Keluar dari aplikasi IZAKOD-ASN",
+                                    tint = MaterialTheme.colorScheme.error
+                                ) { showLogoutDialog = true }
+                            )
+                        )
 
                         Spacer(modifier = Modifier.height(24.dp))
                     }
@@ -197,7 +289,7 @@ fun ProfileScreen(
     // ✅ Dialog logout HANYA di ProfileScreen
     if (showLogoutDialog) {
         AlertDialog(
-            onDismissRequest = { },
+            onDismissRequest = { showLogoutDialog = false },
             title = { Text("Konfirmasi Logout") },
             text = { Text("Apakah Anda yakin ingin keluar dari aplikasi?") },
             confirmButton = {
@@ -210,7 +302,7 @@ fun ProfileScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { }) {
+                TextButton(onClick = { showLogoutDialog = false }) {
                     Text("Batal")
                 }
             }
@@ -223,154 +315,6 @@ fun ProfileScreen(
    (TIDAK ADA logout dialog di sini)
    ========================= */
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SettingsScreen(
-    onBackToDashboard: () -> Unit,
-    onNavigateToProfile: () -> Unit,
-    isDarkTheme: Boolean,
-    onToggleTheme: (Boolean) -> Unit,
-    viewModel: ProfileViewModel
-) {
-    val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
-    val scrollState = rememberScrollState()
-
-    BackHandler { onBackToDashboard() }
-
-    Scaffold(
-        topBar = {
-            AccountTopBar(
-                title = "Akun",
-                onBack = onBackToDashboard
-            )
-        }
-    ) { paddingValues ->
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            AccountTabs(
-                selectedTab = ProfileTab.SETTINGS,
-                onClickProfile = onNavigateToProfile,
-                onClickSettings = { /* tetap di sini */ }
-            )
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(scrollState)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                ElevatedCard {
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Text(
-                            "Tampilan",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-
-                        SettingSwitchRow(
-                            icon = { Icon(Icons.Outlined.DarkMode, contentDescription = null) },
-                            title = "Mode Gelap",
-                            subtitle = "Aktifkan tema gelap",
-                            checked = isDarkTheme,
-                            onCheckedChange = onToggleTheme
-                        )
-                    }
-                }
-
-                ElevatedCard {
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Text(
-                            "Notifikasi",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-
-                        SettingSwitchRow(
-                            icon = { Icon(Icons.Outlined.Notifications, contentDescription = null) },
-                            title = "Notifikasi",
-                            subtitle = "Aktifkan notifikasi aplikasi",
-                            checked = uiState.notificationsEnabled,
-                            onCheckedChange = { viewModel.setNotifications(it) }
-                        )
-                    }
-                }
-
-                ElevatedCard {
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Text(
-                            "Aplikasi",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-
-                        SettingActionRow(
-                            icon = { Icon(Icons.Outlined.SystemUpdate, contentDescription = null) },
-                            title = "Cek Pembaruan",
-                            subtitle = "Buka halaman aplikasi di Google Play",
-                            onClick = { openPlayStoreListing(context) }
-                        )
-
-                        SettingActionRow(
-                            icon = { Icon(Icons.Outlined.StarRate, contentDescription = null) },
-                            title = "Beri Rating",
-                            subtitle = "Beri ulasan di Google Play",
-                            onClick = { openPlayStoreListing(context) }
-                        )
-
-                        SettingActionRow(
-                            icon = { Icon(Icons.Outlined.Public, contentDescription = null) },
-                            title = "Website",
-                            subtitle = "Website resmi IZAKOD-ASN",
-                            onClick = { openOfficialWebsite(context) }
-                        )
-                    }
-                }
-
-                ElevatedCard {
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "Tentang",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "Integrasi Laporan Kegiatan Online Digital-ASN \nIZAKOD-ASN Versi ${BuildConfig.VERSION_NAME}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
 /* =========================
    SMALL REUSABLE UI
    ========================= */
@@ -379,57 +323,28 @@ fun SettingsScreen(
 @Composable
 private fun AccountTopBar(
     title: String,
-    onBack: () -> Unit
+    onBack: (() -> Unit)? = null
 ) {
-    CenterAlignedTopAppBar(
-        title = { Text(title, fontWeight = FontWeight.Bold) },
-        navigationIcon = {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
-            }
-        }
+    IZAKODHeaderBar(
+        title = title,
+        onBack = onBack
     )
 }
 
 @Composable
-private fun AccountTabs(
-    selectedTab: ProfileTab,
-    onClickProfile: () -> Unit,
-    onClickSettings: () -> Unit
-) {
-    val selectedIndex = if (selectedTab == ProfileTab.PROFILE) 0 else 1
-
-    TabRow(selectedTabIndex = selectedIndex) {
-        Tab(
-            selected = selectedTab == ProfileTab.PROFILE,
-            onClick = onClickProfile,
-            text = { Text(ProfileTab.PROFILE.title) }
-        )
-        Tab(
-            selected = selectedTab == ProfileTab.SETTINGS,
-            onClick = onClickSettings,
-            text = { Text(ProfileTab.SETTINGS.title) }
-        )
-    }
-}
-
-/* =========================
-   PROFILE CONTENT (tetap)
-   ========================= */
-
-@Composable
-private fun ProfileHeader(
+private fun AccountProfileHero(
     photoUrl: String?,
     nama: String,
     nip: String,
     jabatan: String
 ) {
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .padding(top = 16.dp),
-        colors = CardDefaults.cardColors(containerColor = PrimaryLight)
+        shape = MaterialTheme.shapes.extraLarge,
+        color = PrimaryLight
     ) {
         Column(
             modifier = Modifier
@@ -504,63 +419,114 @@ private fun ProfileHeader(
 }
 
 @Composable
-private fun PersonalInfoSection(profile: PegawaiProfile) {
-    InfoCard(title = "Informasi Pribadi", icon = Icons.Default.Person) {
-        InfoRow(label = "Nama Lengkap", value = profile.pegawaiNama.displayOrDash())
-        InfoRow(label = "NIP", value = profile.pegawaiNip.displayOrDash())
-        InfoRow(label = "PIN", value = profile.pegawaiPin.displayOrDash())
-
-        if (!profile.tempatLahir.isNullOrEmpty()) InfoRow(label = "Tempat Lahir", value = profile.tempatLahir)
-        if (profile.tglLahir != null && profile.tglLahir != "0") InfoRow(label = "Tanggal Lahir", value = profile.tglLahir)
-
-        InfoRow(label = "Jenis Kelamin", value = if (profile.gender == 1) "Laki-laki" else "Perempuan")
-        InfoRow(label = "Status", value = if (profile.pegawaiStatus == 1) "Aktif" else "Tidak Aktif")
-    }
+private fun AccountSectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+    )
 }
 
 @Composable
-private fun WorkInfoSection(profile: PegawaiProfile) {
-    InfoCard(title = "Informasi Kepegawaian", icon = Icons.Default.Work) {
-        if (profile.jabatan != null) InfoRow(label = "Jabatan", value = profile.jabatan.displayOrDash())
-        if (profile.skpd != null) InfoRow(label = "SKPD", value = profile.skpd.displayOrDash())
-        if (profile.sotk != null) InfoRow(label = "SOTK", value = profile.sotk.displayOrDash())
-        if (profile.tglMulaiKerja != null) InfoRow(label = "Tanggal Mulai Kerja", value = profile.tglMulaiKerja.displayOrDash())
+private fun ProfileOverviewSection(profile: PegawaiProfile) {
+    SettingsActionSection(
+        items = listOf(
+            SettingActionItem(
+                icon = Icons.Default.Person,
+                title = "Nama Lengkap",
+                subtitle = profile.pegawaiNama.displayOrDash(),
+                showChevron = false
+            ) {},
+            SettingActionItem(
+                icon = Icons.Default.Work,
+                title = "Jabatan",
+                subtitle = profile.jabatan.displayOrDash(),
+                showChevron = false
+            ) {},
+            SettingActionItem(
+                icon = Icons.Default.Phone,
+                title = "No. Telepon",
+                subtitle = profile.pegawaiTelp.displayOrDash(),
+                showChevron = false
+            ) {}
+        )
+    )
+}
 
-        if (profile.pegawaiPrivilege != null) {
-            InfoRow(
-                label = "Level",
-                value = when (profile.pegawaiPrivilege) {
-                    "1" -> "Admin"
-                    "2" -> "Atasan"
-                    "3" -> "Pegawai"
-                    else -> profile.pegawaiPrivilege
-                }
-            )
+@Composable
+private fun ProfileDetailSection(profile: PegawaiProfile) {
+    val detailItems = buildList {
+        add(
+            SettingActionItem(
+                icon = Icons.Default.Person,
+                title = "NIP / NIK",
+                subtitle = profile.pegawaiNip.displayOrDash(),
+                showChevron = false
+            ) {}
+        )
+        add(
+            SettingActionItem(
+                icon = Icons.Default.Work,
+                title = "SKPD",
+                subtitle = profile.skpd.displayOrDash(),
+                showChevron = false
+            ) {}
+        )
+        add(
+            SettingActionItem(
+                icon = Icons.Default.Person,
+                title = "Jenis Kelamin",
+                subtitle = if (profile.gender == 1) "Laki-laki" else "Perempuan",
+                showChevron = false
+            ) {}
+        )
+        add(
+            SettingActionItem(
+                icon = Icons.Default.Settings,
+                title = "Status Kepegawaian",
+                subtitle = if (profile.pegawaiStatus == 1) "Aktif" else "Tidak Aktif",
+                showChevron = false
+            ) {}
+        )
+        if (!profile.tempatLahir.isNullOrBlank() || !profile.tglLahir.isNullOrBlank()) {
+                        add(
+                            SettingActionItem(
+                                icon = Icons.Default.Person,
+                                title = "Tempat / Tanggal Lahir",
+                                subtitle = listOf(
+                                    profile.tempatLahir.displayOrDash(),
+                                    profile.tglLahir.formatDateIndonesianOrDash()
+                                ).joinToString(", "),
+                                showChevron = false
+                            ) {}
+                        )
         }
     }
+
+    SettingsActionSection(items = detailItems)
 }
 
-@Composable
-private fun ContactInfoSection(profile: PegawaiProfile) {
-    InfoCard(title = "Kontak", icon = Icons.Default.Phone) {
-        if (!profile.pegawaiTelp.isNullOrEmpty()) {
-            InfoRow(label = "No. Telepon", value = profile.pegawaiTelp.displayOrDash())
-        } else {
-            Text(
-                text = "Tidak ada informasi kontak",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
-        }
-    }
-}
+private data class SettingActionItem(
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val title: String,
+    val subtitle: String,
+    val tint: Color? = null,
+    val showChevron: Boolean = true,
+    val onClick: () -> Unit
+)
+
+private data class SettingSwitchItem(
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val title: String,
+    val subtitle: String,
+    val checked: Boolean,
+    val onCheckedChange: (Boolean) -> Unit
+)
 
 @Composable
-private fun InfoCard(
-    title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    content: @Composable ColumnScope.() -> Unit
+private fun SettingsActionSection(
+    items: List<SettingActionItem>
 ) {
     Card(
         modifier = Modifier
@@ -568,38 +534,82 @@ private fun InfoCard(
             .padding(horizontal = 16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(bottom = 12.dp)
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
+        Column {
+            items.forEachIndexed { index, item ->
+                SettingListRow(
+                    icon = item.icon,
+                    title = item.title,
+                    subtitle = item.subtitle,
+                    tint = item.tint,
+                    showChevron = item.showChevron,
+                    onClick = item.onClick
                 )
-                Text(title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+
+                if (index != items.lastIndex) {
+                    DividerLike()
+                }
             }
-            content()
         }
     }
 }
 
 @Composable
-private fun InfoRow(label: String, value: String) {
-    Column(modifier = Modifier.padding(vertical = 8.dp)) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-            color = MaterialTheme.colorScheme.onSurface
+private fun SimpleActionSection(
+    items: List<SettingSimpleAction>
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column {
+            items.forEachIndexed { index, item ->
+                SimpleActionRow(item = item)
+                if (index != items.lastIndex) {
+                    DividerLike()
+                }
+            }
+        }
+    }
+}
+
+private data class SettingSimpleAction(
+    val title: String,
+    val subtitle: String,
+    val tint: Color? = null,
+    val onClick: () -> Unit
+)
+
+@Composable
+private fun SimpleActionRow(item: SettingSimpleAction) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = item.onClick)
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                color = item.tint ?: MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = item.subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = item.tint ?: MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -633,45 +643,103 @@ private fun ProfileErrorContent(message: String, onRetry: () -> Unit) {
     }
 }
 
-/* =========================
-   SETTINGS UI HELPERS
-   ========================= */
-
 @Composable
-private fun SettingSwitchRow(
-    icon: @Composable () -> Unit,
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+private fun SettingsSwitchSection(
+    items: List<SettingSwitchItem>
 ) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        icon()
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column {
+            items.forEachIndexed { index, item ->
+                SettingsSwitchRow(item = item)
+                if (index != items.lastIndex) {
+                    DividerLike()
+                }
+            }
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
 @Composable
-private fun SettingActionRow(
-    icon: @Composable () -> Unit,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit
-) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        icon()
+private fun SettingsSwitchRow(item: SettingSwitchItem) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = item.icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary
+        )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(item.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Text(item.subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        TextButton(onClick = onClick) { Text("Buka") }
+        Switch(checked = item.checked, onCheckedChange = item.onCheckedChange)
     }
+}
+
+@Composable
+private fun SettingListRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    tint: Color? = null,
+    showChevron: Boolean = true,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint ?: MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = tint ?: MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (showChevron) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun DividerLike() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .padding(start = 52.dp)
+            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+    )
 }
 
 private fun openPlayStoreListing(context: Context) {

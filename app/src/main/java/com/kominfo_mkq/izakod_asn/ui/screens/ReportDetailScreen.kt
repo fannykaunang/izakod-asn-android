@@ -1,28 +1,84 @@
 package com.kominfo_mkq.izakod_asn.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.EventAvailable
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Tag
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Update
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.kominfo_mkq.izakod_asn.ui.viewmodel.LaporanDetailViewModel
+import coil.compose.AsyncImage
+import com.kominfo_mkq.izakod_asn.data.model.LampiranKegiatan
 import com.kominfo_mkq.izakod_asn.data.model.LaporanDetail
+import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
+import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusApproved
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusPending
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusRejected
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusRevised
+import com.kominfo_mkq.izakod_asn.ui.viewmodel.LaporanDetailViewModel
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Locale
+import java.util.TimeZone
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,23 +98,9 @@ fun ReportDetailScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "Detail Laporan",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Kembali")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+            IZAKODHeaderBar(
+                title = "Detail Laporan",
+                onBack = onNavigateBack
             )
         },
         bottomBar = {
@@ -186,22 +228,11 @@ private fun LaporanDetailContent(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Status Card
-        StatusCard(status = laporan.statusLaporan)
+        StatusHeroCard(laporan = laporan)
 
-        // Basic Info Section
-        BasicInfoSection(laporan = laporan)
+        MainReportSection(laporan = laporan)
 
-        // Activity Details Section
-        ActivityDetailsSection(laporan = laporan)
-
-        // Time & Location Section
-        TimeLocationSection(laporan = laporan)
-
-        // Participants Section
-        if (laporan.pesertaKegiatan != null || laporan.jumlahPeserta != null) {
-            ParticipantsInfoSection(laporan = laporan)
-        }
+        QuickFactsSection(laporan = laporan)
 
         // Target & Output Section
         if (laporan.targetOutput != null || laporan.hasilOutput != null) {
@@ -213,8 +244,17 @@ private fun LaporanDetailContent(
             ProblemsSolutionsSection(laporan = laporan)
         }
 
-        // Verification Section (if verified)
-        if (laporan.statusLaporan == "Diverifikasi" || laporan.catatanVerifikator != null) {
+        if (laporan.lampiran.isNotEmpty()) {
+            LampiranSection(laporan = laporan)
+        }
+
+        // Verification Section
+        if (
+            laporan.statusLaporan == "Diverifikasi" ||
+            laporan.verifikatorNama != null ||
+            laporan.tanggalVerifikasi != null ||
+            laporan.catatanVerifikator != null
+        ) {
             VerificationSection(laporan = laporan)
         }
 
@@ -227,7 +267,7 @@ private fun LaporanDetailContent(
         // Metadata Section
         MetadataSection(laporan = laporan)
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(if (canEdit || canVerify) 32.dp else 16.dp))
     }
 }
 
@@ -429,6 +469,224 @@ private fun ParticipantsInfoSection(laporan: LaporanDetail) {
     }
 }
 
+private data class StatusPresentation(
+    val background: Color,
+    val foreground: Color,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val title: String,
+    val subtitle: String
+)
+
+@Composable
+private fun statusPresentation(status: String): StatusPresentation {
+    return when (status) {
+        "Draft" -> StatusPresentation(
+            background = MaterialTheme.colorScheme.surfaceVariant,
+            foreground = MaterialTheme.colorScheme.onSurfaceVariant,
+            icon = Icons.Default.Edit,
+            title = "Draft",
+            subtitle = "Laporan masih bisa dilengkapi sebelum diajukan"
+        )
+        "Diajukan", "Pending" -> StatusPresentation(
+            background = StatusPending.copy(alpha = 0.14f),
+            foreground = StatusPending,
+            icon = Icons.Default.Schedule,
+            title = "Menunggu Verifikasi",
+            subtitle = "Laporan sudah diajukan dan menunggu penilaian atasan"
+        )
+        "Diverifikasi", "Approved" -> StatusPresentation(
+            background = StatusApproved.copy(alpha = 0.14f),
+            foreground = StatusApproved,
+            icon = Icons.Default.CheckCircle,
+            title = "Diverifikasi",
+            subtitle = "Laporan telah diverifikasi dan tidak memerlukan tindakan lanjutan"
+        )
+        "Ditolak", "Rejected" -> StatusPresentation(
+            background = StatusRejected.copy(alpha = 0.14f),
+            foreground = StatusRejected,
+            icon = Icons.Default.Cancel,
+            title = "Ditolak",
+            subtitle = "Laporan ditolak dan perlu ditinjau ulang sebelum diajukan kembali"
+        )
+        "Revisi", "Revised" -> StatusPresentation(
+            background = StatusRevised.copy(alpha = 0.14f),
+            foreground = StatusRevised,
+            icon = Icons.Default.Edit,
+            title = "Perlu Revisi",
+            subtitle = "Ada catatan atasan yang perlu diperbaiki pada laporan ini"
+        )
+        else -> StatusPresentation(
+            background = MaterialTheme.colorScheme.surfaceVariant,
+            foreground = MaterialTheme.colorScheme.onSurfaceVariant,
+            icon = Icons.Default.Info,
+            title = status,
+            subtitle = "Status laporan saat ini"
+        )
+    }
+}
+
+@Composable
+private fun StatusHeroCard(laporan: LaporanDetail) {
+    val statusUi = statusPresentation(laporan.statusLaporan)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = statusUi.background)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = statusUi.icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = statusUi.foreground
+                )
+                Text(
+                    text = statusUi.title,
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = statusUi.foreground
+                )
+            }
+
+            Text(
+                text = statusUi.subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                MetaPill(
+                    icon = Icons.Default.CalendarToday,
+                    text = formatDate(laporan.tanggalKegiatan),
+                    modifier = Modifier.weight(1f)
+                )
+                MetaPill(
+                    icon = Icons.Default.AccessTime,
+                    text = "${formatTimeShort(laporan.waktuMulai)} - ${formatTimeShort(laporan.waktuSelesai)}",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                laporan.durasiMenit?.let {
+                    MetaPill(
+                        icon = Icons.Default.Timer,
+                        text = "$it menit",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                MetaPill(
+                    icon = Icons.Default.Category,
+                    text = laporan.kategoriNama ?: "-",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MainReportSection(laporan: LaporanDetail) {
+    SectionCard(title = "Inti Laporan", icon = Icons.Default.Description) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column {
+                Text(
+                    "Nama Kegiatan",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    laporan.namaKegiatan,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            }
+
+            Divider()
+
+            Column {
+                Text(
+                    "Deskripsi Kegiatan",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    laporan.deskripsiKegiatan,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickFactsSection(laporan: LaporanDetail) {
+    SectionCard(title = "Informasi Kerja", icon = Icons.Default.Info) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                FactTile(
+                    icon = Icons.Default.Person,
+                    label = "Pegawai",
+                    value = laporan.pegawaiNama ?: "-",
+                    modifier = Modifier.weight(1f)
+                )
+                FactTile(
+                    icon = Icons.Default.CalendarMonth,
+                    label = "NIP",
+                    value = laporan.pegawaiNip ?: "-",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                FactTile(
+                    icon = Icons.Default.Place,
+                    label = "Lokasi",
+                    value = laporan.lokasiKegiatan ?: "-",
+                    modifier = Modifier.weight(1f)
+                )
+                FactTile(
+                    icon = Icons.Default.People,
+                    label = "Peserta",
+                    value = laporan.jumlahPeserta?.let { "$it orang" } ?: (laporan.pesertaKegiatan ?: "-"),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            if (!laporan.skpd.isNullOrBlank()) {
+                FactTile(
+                    icon = Icons.Default.People,
+                    label = "Unit Kerja",
+                    value = laporan.skpd,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            if (laporan.latitude != null && laporan.longitude != null) {
+                FactTile(
+                    icon = Icons.Default.MyLocation,
+                    label = "Koordinat",
+                    value = "${laporan.latitude}, ${laporan.longitude}",
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun TargetOutputSection(laporan: LaporanDetail) {
     SectionCard(title = "Target & Hasil") {
@@ -504,34 +762,122 @@ private fun ProblemsSolutionsSection(laporan: LaporanDetail) {
 }
 
 @Composable
+private fun LampiranSection(laporan: LaporanDetail) {
+    SectionCard(title = "Foto & Lampiran", icon = Icons.Default.Description) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(laporan.lampiran.size) { index ->
+                LampiranCard(lampiran = laporan.lampiran[index])
+            }
+        }
+    }
+}
+
+@Composable
+private fun LampiranCard(lampiran: LampiranKegiatan) {
+    val relativePath = lampiran.pathFile?.trim().orEmpty()
+    val fileUrl = buildLampiranUrl(relativePath)
+    val isImage = lampiran.tipeFile?.lowercase(Locale.getDefault())?.startsWith("image/") == true
+
+    Surface(
+        modifier = Modifier.width(188.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (isImage && fileUrl != null) {
+                AsyncImage(
+                    model = fileUrl,
+                    contentDescription = lampiran.namaFileAsli ?: "Lampiran laporan",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp)
+                        .clip(RoundedCornerShape(14.dp)),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.surface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = lampiran.tipeFile?.uppercase(Locale.getDefault()) ?: "FILE",
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Text(
+                text = lampiran.namaFileAsli ?: "Lampiran kegiatan",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.SemiBold
+                ),
+                maxLines = 2
+            )
+
+            Text(
+                text = lampiran.createdAt?.let { formatDateTime(it) } ?: "Waktu upload tidak tersedia",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
 private fun VerificationSection(laporan: LaporanDetail) {
     SectionCard(
         title = "Verifikasi",
         icon = Icons.Default.VerifiedUser
     ) {
+        DetailRow(
+            icon = Icons.Default.Person,
+            label = "Diverifikasi oleh",
+            value = laporan.verifikatorNama?.takeIf { it.isNotBlank() } ?: "-"
+        )
+
+        Divider()
+
+        DetailRow(
+            icon = Icons.Default.EventAvailable,
+            label = "Tanggal Verifikasi",
+            value = laporan.tanggalVerifikasi?.let { formatDateTime(it) } ?: "-"
+        )
+
         if (laporan.rating != null) {
+            Divider()
+
             DetailRow(
                 icon = Icons.Default.Star,
                 label = "Rating",
-                value = "${laporan.rating}/5"
+                value = "${formatRating(laporan.rating)}/5"
             )
         }
 
-        if (laporan.catatanVerifikator != null) {
-            if (laporan.rating != null) Divider()
+        Divider()
 
-            Column {
-                Text(
-                    "Catatan Verifikator",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    laporan.catatanVerifikator,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
+        Column {
+            Text(
+                "Catatan Verifikasi",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                laporan.catatanVerifikator?.takeIf { it.isNotBlank() } ?: "-",
+                style = MaterialTheme.typography.bodyMedium
+            )
         }
     }
 }
@@ -649,6 +995,72 @@ private fun DetailRow(
 }
 
 @Composable
+private fun MetaPill(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun FactTile(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun DetailLoadingContent() {
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -730,6 +1142,26 @@ private fun formatDateTime(dateTimeString: String): String {
     } catch (e: Exception) {
         dateTimeString
     }
+}
+
+private fun formatRating(rating: Double): String {
+    val roundedWhole = rating.toInt().toDouble()
+    return if (rating == roundedWhole) {
+        roundedWhole.toInt().toString()
+    } else {
+        rating.toString()
+    }
+}
+
+private fun formatTimeShort(timeString: String): String {
+    return timeString.take(5)
+}
+
+private fun buildLampiranUrl(path: String): String? {
+    if (path.isBlank()) return null
+    if (path.startsWith("http://") || path.startsWith("https://")) return path
+
+    return "${ApiClient.BASE_URL.trimEnd('/')}/${path.trimStart('/')}"
 }
 
 // Helper data class for status tuple

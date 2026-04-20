@@ -2,12 +2,11 @@
 
 package com.kominfo_mkq.izakod_asn.ui.screens
 
+// alias supaya tidak bentrok dengan androidx.compose.ui.graphics.Color
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
@@ -19,22 +18,74 @@ import android.print.PrintManager
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material.pullrefresh.PullRefreshIndicator
-import androidx.compose.material.pullrefresh.pullRefresh
-import androidx.compose.material.pullrefresh.rememberPullRefreshState
-import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Comment
-import androidx.compose.material.icons.filled.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,25 +97,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kominfo_mkq.izakod_asn.data.model.LaporanKegiatan
+import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
 import com.kominfo_mkq.izakod_asn.ui.components.StatusBadge
 import com.kominfo_mkq.izakod_asn.ui.components.StatusType
-import com.kominfo_mkq.izakod_asn.ui.theme.*
+import com.kominfo_mkq.izakod_asn.ui.theme.PrimaryLight
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusApproved
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusPending
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusRejected
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusRevised
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.LaporanListViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-import kotlin.math.min
-
-// alias supaya tidak bentrok dengan androidx.compose.ui.graphics.Color
 import android.graphics.Color as GColor
 
 enum class FilterType { ALL, PENDING, APPROVED, REJECTED, REVISED }
@@ -93,7 +142,10 @@ data class PersonBlock(
 fun ReportListScreen(
     onBack: () -> Unit,
     onReportClick: (String) -> Unit,
+    onOpenSearch: () -> Unit,
     onCreateReport: () -> Unit,
+    showBackButton: Boolean = true,
+    showCreateFab: Boolean = true,
     viewModel: LaporanListViewModel = viewModel()
 ) {
     @Suppress("UNUSED_PARAMETER")
@@ -102,9 +154,9 @@ fun ReportListScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(FilterType.ALL) }
     var showFilterDialog by remember { mutableStateOf(false) }
+    var showOverflowMenu by remember { mutableStateOf(false) }
 
     // Print preview state
     var showPrintPreview by remember { mutableStateOf(false) }
@@ -132,17 +184,9 @@ fun ReportListScreen(
         uiState.laporanList.map { it.toUi() }
     }
 
-    val filteredReports = remember(allReports, searchQuery, selectedFilter) {
+    val filteredReports = remember(allReports, selectedFilter) {
         allReports
             .asSequence()
-            .filter { r ->
-                val q = searchQuery.trim()
-                if (q.isEmpty()) true else {
-                    r.namaKegiatan.contains(q, ignoreCase = true) ||
-                            r.kategoriLabel.contains(q, ignoreCase = true) ||
-                            r.deskripsi.contains(q, ignoreCase = true)
-                }
-            }
             .filter { r ->
                 when (selectedFilter) {
                     FilterType.ALL -> true
@@ -155,6 +199,33 @@ fun ReportListScreen(
             .toList()
     }
 
+    val totalCount = remember(allReports) { allReports.size }
+    val pendingCount = remember(allReports) { allReports.count { it.status == StatusType.PENDING } }
+    val approvedCount = remember(allReports) { allReports.count { it.status == StatusType.APPROVED } }
+    val revisedCount = remember(allReports) { allReports.count { it.status == StatusType.REVISED } }
+
+    val actionReports = remember(filteredReports, selectedFilter) {
+        if (selectedFilter == FilterType.ALL) {
+            filteredReports.filter { it.status == StatusType.REVISED || it.status == StatusType.REJECTED }
+        } else {
+            emptyList()
+        }
+    }
+
+    val regularReports = remember(filteredReports, actionReports, selectedFilter) {
+        if (selectedFilter == FilterType.ALL && actionReports.isNotEmpty()) {
+            filteredReports.filterNot { it.status == StatusType.REVISED || it.status == StatusType.REJECTED }
+        } else {
+            filteredReports
+        }
+    }
+
+    val activePeriodLabel = remember(uiState.filterBulan, uiState.filterTahun) {
+        if (uiState.filterBulan != null && uiState.filterTahun != null) {
+            "${monthNameId(uiState.filterBulan!!)} ${uiState.filterTahun}"
+        } else null
+    }
+
     // Pull-to-refresh state
     val pullRefreshState = rememberPullRefreshState(
         refreshing = uiState.isLoading,
@@ -163,51 +234,71 @@ fun ReportListScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "Laporan Kegiatan",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
-                    }
-                },
+            IZAKODHeaderBar(
+                title = "Laporan Kegiatan",
+                onBack = if (showBackButton) onBack else null,
                 actions = {
                     // ✅ PRINT button
-                    IconButton(onClick = { showPrintPreview = true }) {
-                        Icon(Icons.Default.Print, contentDescription = "Print")
+                    IconButton(onClick = onOpenSearch) {
+                        Icon(Icons.Default.Search, contentDescription = "Cari")
                     }
 
-                    // Filter button + dot indicator
                     val isFilterActive = (uiState.filterBulan != null && uiState.filterTahun != null)
-                    IconButton(onClick = { showFilterDialog = true }) {
-                        BadgedBox(
-                            badge = {
-                                if (isFilterActive) {
-                                    Badge(
-                                        containerColor = PrimaryLight,
-                                        modifier = Modifier.size(10.dp)
-                                    )
+                    Box {
+                        IconButton(onClick = { showOverflowMenu = true }) {
+                            BadgedBox(
+                                badge = {
+                                    if (isFilterActive) {
+                                        Badge(
+                                            containerColor = PrimaryLight,
+                                            modifier = Modifier.size(10.dp)
+                                        )
+                                    }
                                 }
+                            ) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "Opsi lainnya")
                             }
+                        }
+
+                        DropdownMenu(
+                            expanded = showOverflowMenu,
+                            onDismissRequest = { showOverflowMenu = false }
                         ) {
-                            Icon(Icons.Default.FilterList, contentDescription = "Filter")
+                            DropdownMenuItem(
+                                text = { Text("Print") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Print, contentDescription = null)
+                                },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    showPrintPreview = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Filter") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.FilterList, contentDescription = null)
+                                },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    showFilterDialog = true
+                                }
+                            )
                         }
                     }
                 }
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onCreateReport,
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Buat Laporan") },
-                containerColor = PrimaryLight,
-                contentColor = Color.White
-            )
+            if (showCreateFab) {
+                ExtendedFloatingActionButton(
+                    onClick = onCreateReport,
+                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    text = { Text("Buat Laporan") },
+                    containerColor = PrimaryLight,
+                    contentColor = Color.White
+                )
+            }
         }
     ) { paddingValues ->
         Box(
@@ -224,16 +315,17 @@ fun ReportListScreen(
 
                 else -> {
                     Column(modifier = Modifier.fillMaxSize()) {
-
-                        SearchBar(
-                            value = searchQuery,
-                            onChange = { searchQuery = it },
-                            onClear = { searchQuery = "" }
+                        ReportSummaryStrip(
+                            totalCount = totalCount,
+                            pendingCount = pendingCount,
+                            approvedCount = approvedCount,
+                            revisedCount = revisedCount
                         )
 
                         FilterChipsRow(
                             selected = selectedFilter,
-                            onSelect = { selectedFilter = it }
+                            onSelect = { selectedFilter = it },
+                            activePeriodLabel = activePeriodLabel
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -245,35 +337,53 @@ fun ReportListScreen(
                         ) {
                             if (filteredReports.isEmpty()) {
                                 EmptyState(
-                                    message = if (searchQuery.isNotEmpty())
-                                        "Tidak ada laporan yang cocok dengan pencarian"
-                                    else
-                                        "Belum ada laporan kegiatan",
-                                    onAction = if (searchQuery.isEmpty()) onCreateReport else null,
+                                    message = "Belum ada laporan kegiatan",
+                                    onAction = onCreateReport,
                                     actionText = "Buat Laporan"
                                 )
                             } else {
                                 LazyColumn(
-                                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                                    contentPadding = PaddingValues(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 112.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
                                     item {
-                                        Text(
-                                            text = "${filteredReports.size} Laporan",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        SectionHeading(
+                                            title = if (actionReports.isNotEmpty()) "Perlu Tindakan" else "Semua Laporan",
+                                            subtitle = if (actionReports.isNotEmpty()) {
+                                                "${actionReports.size} laporan perlu perhatian"
+                                            } else {
+                                                "${filteredReports.size} laporan ditampilkan"
+                                            }
                                         )
-                                        Spacer(modifier = Modifier.height(4.dp))
                                     }
 
-                                    items(filteredReports, key = { it.id }) { report ->
+                                    items(if (actionReports.isNotEmpty()) actionReports else regularReports, key = { it.id }) { report ->
                                         ReportCard(
                                             report = report,
                                             onClick = { onReportClick(report.id.toString()) }
                                         )
                                     }
 
-                                    item { Spacer(modifier = Modifier.height(80.dp)) }
+                                    if (actionReports.isNotEmpty()) {
+                                        item {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            SectionHeading(
+                                                title = "Semua Laporan",
+                                                subtitle = if (regularReports.isNotEmpty()) {
+                                                    "${regularReports.size} laporan lainnya"
+                                                } else {
+                                                    "Tidak ada laporan lainnya"
+                                                }
+                                            )
+                                        }
+
+                                        items(regularReports, key = { "regular-${it.id}" }) { report ->
+                                            ReportCard(
+                                                report = report,
+                                                onClick = { onReportClick(report.id.toString()) }
+                                            )
+                                        }
+                                    }
                                 }
                             }
 
@@ -481,39 +591,261 @@ fun ReportListScreen(
 /* ----------------------------- UI pieces ----------------------------- */
 
 @Composable
-private fun SearchBar(
-    value: String,
-    onChange: (String) -> Unit,
-    onClear: () -> Unit
+fun ReportSearchScreen(
+    onBack: () -> Unit,
+    onReportClick: (String) -> Unit,
+    viewModel: LaporanListViewModel = viewModel()
 ) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onChange,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        placeholder = { Text("Cari laporan...") },
-        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-        trailingIcon = {
-            if (value.isNotEmpty()) {
-                IconButton(onClick = onClear) {
-                    Icon(Icons.Default.Close, contentDescription = "Clear")
+    val uiState by viewModel.uiState.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var searchQuery by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        viewModel.loadLaporanList(context)
+    }
+
+    val allReports = remember(uiState.laporanList) {
+        uiState.laporanList.map { it.toUi() }
+    }
+
+    val filteredReports = remember(allReports, searchQuery) {
+        val query = searchQuery.trim()
+        if (query.isBlank()) {
+            emptyList()
+        } else {
+            allReports.filter { report ->
+                report.namaKegiatan.contains(query, ignoreCase = true) ||
+                    report.kategoriLabel.contains(query, ignoreCase = true) ||
+                    report.deskripsi.contains(query, ignoreCase = true)
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            SearchTopBar(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                onBack = onBack,
+                placeholder = "Cari laporan..."
+            )
+        }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(paddingValues)
+        ) {
+            when {
+                uiState.isLoading && allReports.isEmpty() -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+
+                uiState.isError && allReports.isEmpty() -> {
+                    ErrorState(
+                        message = uiState.errorMessage ?: "Terjadi kesalahan",
+                        onRetry = { viewModel.loadLaporanList(context) }
+                    )
+                }
+
+                searchQuery.isBlank() -> {
+                    SearchHintState()
+                }
+
+                filteredReports.isEmpty() -> {
+                    EmptyState(message = "Tidak ada laporan yang cocok dengan pencarian")
+                }
+
+                else -> {
+                    LazyColumn(
+                        contentPadding = PaddingValues(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 32.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        item {
+                            SectionHeading(
+                                title = "Hasil Pencarian",
+                                subtitle = "${filteredReports.size} laporan ditemukan"
+                            )
+                        }
+
+                        items(filteredReports, key = { it.id }) { report ->
+                            ReportCard(
+                                report = report,
+                                onClick = { onReportClick(report.id.toString()) }
+                            )
+                        }
+                    }
                 }
             }
-        },
-        shape = RoundedCornerShape(16.dp),
-        singleLine = true,
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = PrimaryLight,
-            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+        }
+    }
+}
+
+@Composable
+private fun SearchTopBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onBack: () -> Unit,
+    placeholder: String
+) {
+    Surface(
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Kembali"
+                )
+            }
+
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.weight(1f),
+                placeholder = { Text(placeholder) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { onQueryChange("") }) {
+                            Icon(Icons.Default.Close, contentDescription = "Hapus pencarian")
+                        }
+                    }
+                },
+                shape = RoundedCornerShape(16.dp),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = PrimaryLight,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchHintState() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Search,
+            contentDescription = null,
+            modifier = Modifier.size(72.dp),
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.24f)
         )
-    )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Cari laporan kegiatan",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "Cari nama kegiatan, kategori, atau deskripsi laporan.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun ReportSummaryStrip(
+    totalCount: Int,
+    pendingCount: Int,
+    approvedCount: Int,
+    revisedCount: Int
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, top = 10.dp, end = 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        SummaryStatCard(
+            modifier = Modifier.weight(1f),
+            value = totalCount.toString(),
+            label = "Total",
+            accent = MaterialTheme.colorScheme.primary
+        )
+        SummaryStatCard(
+            modifier = Modifier.weight(1f),
+            value = pendingCount.toString(),
+            label = "Diajukan",
+            accent = StatusPending
+        )
+        SummaryStatCard(
+            modifier = Modifier.weight(1f),
+            value = approvedCount.toString(),
+            label = "Disetujui",
+            accent = StatusApproved
+        )
+        SummaryStatCard(
+            modifier = Modifier.weight(1f),
+            value = revisedCount.toString(),
+            label = "Revisi",
+            accent = StatusRevised
+        )
+    }
+}
+
+@Composable
+private fun SummaryStatCard(
+    modifier: Modifier = Modifier,
+    value: String,
+    label: String,
+    accent: Color
+) {
+    ElevatedCard(
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(width = 24.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(accent)
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                maxLines = 1
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2
+            )
+        }
+    }
 }
 
 @Composable
 private fun FilterChipsRow(
     selected: FilterType,
-    onSelect: (FilterType) -> Unit
+    onSelect: (FilterType) -> Unit,
+    activePeriodLabel: String? = null
 ) {
     LazyRow(
         modifier = Modifier.padding(horizontal = 20.dp),
@@ -566,6 +898,37 @@ private fun FilterChipsRow(
                 }
             )
         }
+        if (!activePeriodLabel.isNullOrBlank()) {
+            item {
+                FilterChip(
+                    selected = false,
+                    onClick = {},
+                    enabled = false,
+                    label = { Text(activePeriodLabel) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionHeading(
+    title: String,
+    subtitle: String
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+        )
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -610,11 +973,38 @@ private fun ReportCard(
     report: ReportUi,
     onClick: () -> Unit
 ) {
+    val needsAttention = report.status == StatusType.REJECTED || report.status == StatusType.REVISED
+    val accentColor = when (report.status) {
+        StatusType.REJECTED -> StatusRejected
+        StatusType.REVISED -> StatusRevised
+        StatusType.PENDING -> StatusPending
+        StatusType.APPROVED -> StatusApproved
+    }
+
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         onClick = onClick
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            if (needsAttention) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(accentColor)
+                    )
+                    Text(
+                        text = "Perlu tindakan",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = accentColor
+                    )
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -624,27 +1014,24 @@ private fun ReportCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = report.namaKegiatan,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.CalendarToday,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        ReportMetaItem(
+                            icon = Icons.Default.CalendarToday,
+                            text = report.tanggalLabel
                         )
-                        Text(
-                            text = report.tanggalLabel,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        ReportMetaItem(
+                            icon = Icons.Default.AccessTime,
+                            text = report.jamLabel
                         )
                     }
                 }
@@ -660,38 +1047,14 @@ private fun ReportCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Category,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = PrimaryLight
-                    )
-                    Text(
-                        text = report.kategoriLabel,
-                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                        color = PrimaryLight
-                    )
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.AccessTime,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                    Text(
-                        text = "${report.durasiMenit} menit",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
+                CategoryChip(label = report.kategoriLabel)
+                ReportMetaItem(
+                    icon = Icons.Default.AccessTime,
+                    text = "${report.durasiMenit} menit"
+                )
             }
 
-            if ((report.status == StatusType.REJECTED || report.status == StatusType.REVISED) &&
-                !report.catatanAtasan.isNullOrBlank()
-            ) {
+            if (needsAttention && !report.catatanAtasan.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(12.dp))
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(12.dp))
@@ -699,11 +1062,8 @@ private fun ReportCard(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            if (report.status == StatusType.REJECTED) StatusRejected.copy(alpha = 0.1f)
-                            else StatusRevised.copy(alpha = 0.1f)
-                        )
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(accentColor.copy(alpha = 0.1f))
                         .padding(12.dp),
                     verticalAlignment = Alignment.Top
                 ) {
@@ -711,19 +1071,74 @@ private fun ReportCard(
                         imageVector = Icons.AutoMirrored.Filled.Comment,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
-                        tint = if (report.status == StatusType.REJECTED) StatusRejected else StatusRevised
+                        tint = accentColor
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = report.catatanAtasan,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Catatan atasan",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = accentColor
+                        )
+                        Text(
+                            text = report.catatanAtasan,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ReportMetaItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(15.dp),
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f)
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f)
+        )
+    }
+}
+
+@Composable
+private fun CategoryChip(label: String) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(PrimaryLight.copy(alpha = 0.12f))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.Category,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = PrimaryLight
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+            color = PrimaryLight,
+            maxLines = 1
+        )
     }
 }
 
