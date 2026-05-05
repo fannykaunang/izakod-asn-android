@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Base64
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,12 +23,14 @@ import androidx.lifecycle.lifecycleScope
 import com.kominfo_mkq.izakod_asn.data.local.AppContextHolder
 import com.kominfo_mkq.izakod_asn.data.local.TokenStore
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
+import com.kominfo_mkq.izakod_asn.data.repository.AuthRepository
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
 import com.kominfo_mkq.izakod_asn.ui.navigation.IZAKODNavigation
 import com.kominfo_mkq.izakod_asn.ui.navigation.Screen
 import com.kominfo_mkq.izakod_asn.ui.theme.IZAKODASNTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 
 @Composable
@@ -81,8 +84,37 @@ class MainActivity : ComponentActivity() {
         }
 
         val prefs = UserPreferences(this)
-        TokenStore.setToken(prefs.getMobileJwtToken())
-        TokenStore.setRefreshToken(prefs.getRefreshToken())
+        migrateLegacyTokensIfNeeded(prefs)
+        val restoredMobileToken = prefs.getMobileJwtToken()?.takeIf { isLikelyMobileToken(it) }
+        if (restoredMobileToken == null) {
+            prefs.setMobileJwtToken(null)
+        }
+        TokenStore.setToken(restoredMobileToken)
+        TokenStore.setRefreshToken(null)
+
+        if (prefs.isLoggedIn() && restoredMobileToken == null) {
+            val session = prefs.getSessionData()
+            if (session?.pegawaiId != null && session.pin.isNotBlank()) {
+                lifecycleScope.launch {
+                    try {
+                        val response = AuthRepository().fetchNextJsMobileToken(
+                            pegawaiId = session.pegawaiId,
+                            pin = session.pin
+                        )
+                        val nextJsMobileToken = response.body()?.data?.token?.trim()
+                        if (response.isSuccessful && !nextJsMobileToken.isNullOrBlank()) {
+                            prefs.setMobileJwtToken(nextJsMobileToken)
+                            TokenStore.setToken(nextJsMobileToken)
+                            Log.d("MainActivity", "✅ Next.js mobile token refreshed on startup")
+                        } else {
+                            Log.w("MainActivity", "Failed refreshing mobile token on startup: ${response.code()}")
+                        }
+                    } catch (e: Exception) {
+                        Log.w("MainActivity", "Failed refreshing mobile token on startup: ${e.message}")
+                    }
+                }
+            }
+        }
 
         enableEdgeToEdge()
 
@@ -148,6 +180,42 @@ class MainActivity : ComponentActivity() {
                 StatistikRepository.setUserData(it.pegawaiId, it.pin)
                 Log.d("MainActivity", "✅ Session restored on resume")
             }
+        }
+    }
+
+    private fun isLikelyMobileToken(token: String): Boolean {
+        return try {
+            val parts = token.split(".")
+            if (parts.size < 2) return false
+
+            val payloadBytes = Base64.decode(
+                parts[1],
+                Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+            )
+            val payload = JSONObject(String(payloadBytes))
+            val authType = payload.optString("authType")
+            val pegawaiId = payload.optInt("pegawai_id", 0)
+
+            authType == "mobile" && pegawaiId > 0
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun migrateLegacyTokensIfNeeded(prefs: UserPreferences) {
+        val entagoAccess = prefs.getEntagoAccessToken()
+        val entagoRefresh = prefs.getEntagoRefreshToken()
+        val legacyMobileToken = prefs.getMobileJwtToken()
+        val legacyRefreshToken = prefs.getRefreshToken()
+
+        if (entagoAccess.isNullOrBlank() && !legacyMobileToken.isNullOrBlank() && !isLikelyMobileToken(legacyMobileToken)) {
+            prefs.setEntagoAccessToken(legacyMobileToken)
+            Log.d("MainActivity", "✅ Migrated legacy E-NTAGO access token")
+        }
+
+        if (entagoRefresh.isNullOrBlank() && !legacyRefreshToken.isNullOrBlank()) {
+            prefs.setEntagoRefreshToken(legacyRefreshToken)
+            Log.d("MainActivity", "✅ Migrated legacy E-NTAGO refresh token")
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.kominfo_mkq.izakod_asn.ui.viewmodel
 
 import android.app.Application
+import android.util.Base64
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.messaging.FirebaseMessaging
@@ -8,6 +9,7 @@ import com.kominfo_mkq.izakod_asn.data.local.TokenStore
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.AuthenticatedSession
 import com.kominfo_mkq.izakod_asn.data.model.FcmRegisterRequest
+import com.kominfo_mkq.izakod_asn.data.model.MobileTokenResponse
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
 import com.kominfo_mkq.izakod_asn.data.repository.AuthRepository
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import org.json.JSONObject
 
 data class LoginUiState(
     val isLoading: Boolean = false,
@@ -38,16 +41,32 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
         if (!isLoggedIn) return false
 
+        migrateLegacyTokensIfNeeded()
+
         val sessionData = userPrefs.getSessionData()
         sessionData?.let {
             StatistikRepository.setUserData(it.pegawaiId, it.pin)
         }
 
-        val jwt = userPrefs.getMobileJwtToken()
+        val jwt = userPrefs.getMobileJwtToken()?.takeIf { isLikelyMobileToken(it) }
+        if (jwt == null) {
+            userPrefs.setMobileJwtToken(null)
+        }
         if (!jwt.isNullOrBlank()) {
             TokenStore.setToken(jwt)
         }
-        TokenStore.setRefreshToken(userPrefs.getRefreshToken())
+        TokenStore.setRefreshToken(null)
+
+        if (jwt.isNullOrBlank()) {
+            sessionData?.let { session ->
+                viewModelScope.launch {
+                    issueAndPersistMobileToken(
+                        pegawaiId = session.pegawaiId ?: return@launch,
+                        pin = session.pin
+                    )
+                }
+            }
+        }
 
         viewModelScope.launch {
             try {
@@ -116,11 +135,23 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                         skpdid = userData.skpdid,
                         pegawaiId = pegawaiId
                     )
-                    userPrefs.setMobileJwtToken(authSession.token)
-                    userPrefs.setRefreshToken(authSession.refreshToken)
+                    userPrefs.setEntagoAccessToken(authSession.token)
+                    userPrefs.setEntagoRefreshToken(authSession.refreshToken)
 
-                    TokenStore.setToken(authSession.token)
-                    TokenStore.setRefreshToken(authSession.refreshToken)
+                    val mobileToken = issueAndPersistMobileToken(
+                        pegawaiId = pegawaiId,
+                        pin = userData.pin
+                    )
+
+                    if (mobileToken.isNullOrBlank()) {
+                        userPrefs.clearSession()
+                        TokenStore.setToken(null)
+                        TokenStore.setRefreshToken(null)
+                        _uiState.value = LoginUiState(
+                            errorMessage = "Login berhasil, tetapi token aplikasi gagal dibuat. Silakan coba lagi."
+                        )
+                        return@launch
+                    }
 
                     StatistikRepository.setUserData(
                         pegawaiId = pegawaiId,
@@ -174,5 +205,69 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
+    }
+
+    private suspend fun issueAndPersistMobileToken(
+        pegawaiId: Int,
+        pin: String
+    ): String? {
+        return try {
+            val response = repository.fetchNextJsMobileToken(pegawaiId, pin)
+            val body: MobileTokenResponse? = response.body()
+            val token = body?.data?.token?.trim()
+
+            if (!response.isSuccessful || body?.success != true || token.isNullOrBlank()) {
+                android.util.Log.e(
+                    "LoginViewModel",
+                    "Failed to issue mobile token: code=${response.code()} message=${body?.message}"
+                )
+                null
+            } else {
+                userPrefs.setMobileJwtToken(token)
+                userPrefs.setRefreshToken(null)
+                TokenStore.setToken(token)
+                TokenStore.setRefreshToken(null)
+                token
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("LoginViewModel", "Failed to issue mobile token: ${e.message}", e)
+            null
+        }
+    }
+
+    private fun isLikelyMobileToken(token: String): Boolean {
+        return try {
+            val parts = token.split(".")
+            if (parts.size < 2) return false
+
+            val payloadBytes = Base64.decode(
+                parts[1],
+                Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+            )
+            val payload = JSONObject(String(payloadBytes))
+            val authType = payload.optString("authType")
+            val pegawaiId = payload.optInt("pegawai_id", 0)
+
+            authType == "mobile" && pegawaiId > 0
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun migrateLegacyTokensIfNeeded() {
+        val entagoAccess = userPrefs.getEntagoAccessToken()
+        val entagoRefresh = userPrefs.getEntagoRefreshToken()
+        val legacyMobileToken = userPrefs.getMobileJwtToken()
+        val legacyRefreshToken = userPrefs.getRefreshToken()
+
+        if (entagoAccess.isNullOrBlank() && !legacyMobileToken.isNullOrBlank() && !isLikelyMobileToken(legacyMobileToken)) {
+            userPrefs.setEntagoAccessToken(legacyMobileToken)
+            android.util.Log.d("LoginViewModel", "✅ Migrated legacy E-NTAGO access token")
+        }
+
+        if (entagoRefresh.isNullOrBlank() && !legacyRefreshToken.isNullOrBlank()) {
+            userPrefs.setEntagoRefreshToken(legacyRefreshToken)
+            android.util.Log.d("LoginViewModel", "✅ Migrated legacy E-NTAGO refresh token")
+        }
     }
 }

@@ -20,15 +20,22 @@ import androidx.navigation.navArgument
 import com.kominfo_mkq.izakod_asn.ui.components.IZAKODBottomNavigationBar
 import com.kominfo_mkq.izakod_asn.ui.screens.CreateLaporanScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.DashboardScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.DeveloperScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.EditLaporanScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.LoginScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.NotificationScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.PenilaianKinerjaDetailScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.PenilaianKinerjaListScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.ProfileScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.ReminderScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.ReportDetailScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.ReportListScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.ReportSearchScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.SettingsScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.StatisticsScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.TargetKinerjaDetailScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.TargetKinerjaFormScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.TargetKinerjaListScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.TemplateKegiatanScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.VerifikasiLaporanScreen
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.CreateLaporanViewModel
@@ -41,10 +48,19 @@ sealed class Screen(val route: String) {
     object ReportSearch : Screen("report_search")
     object Statistics : Screen("statistics")
     object Templates : Screen("templates")
+    object TargetKinerja : Screen("target_kinerja")
+    object TargetKinerjaCreate : Screen("target_kinerja_create")
+    object PenilaianKinerja : Screen("penilaian_kinerja")
     object Reminders : Screen("reminders")
     object Profile : Screen("profile")
+    object Settings : Screen("settings")
+    object Developer : Screen("developer")
     object CreateReport : Screen("create_report")
     object Notifications : Screen("notifications")
+}
+
+private fun penilaianKinerjaRoute(mode: String = "mine"): String {
+    return "${Screen.PenilaianKinerja.route}?mode=$mode"
 }
 
 fun NavHostController.backToDashboardAlways() {
@@ -141,6 +157,15 @@ fun IZAKODNavigation(
                             launchSingleTop = true
                         }
                     },
+                    onNavigateToTargetKinerja = { navController.navigate(Screen.TargetKinerja.route) },
+                    onNavigateToTargetDetail = { targetId, reviewMode ->
+                        navController.navigate("target_kinerja_detail/$targetId?reviewMode=$reviewMode") {
+                            // Memastikan Dashboard tetap tersimpan di backstack dengan statenya
+                            restoreState = true
+                        }
+                    },
+                    onNavigateToPenilaianKinerja = { navController.navigate(penilaianKinerjaRoute("mine")) },
+                    onNavigateToPenilaianBawahan = { navController.navigate(penilaianKinerjaRoute("subordinate")) },
                     onNavigateToTemplates = { navController.navigate(Screen.Templates.route) },
                     onNavigateToReminder = { navController.navigate(Screen.Reminders.route) },
                     onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) },
@@ -175,6 +200,96 @@ fun IZAKODNavigation(
 
             composable(Screen.Statistics.route) {
                 StatisticsScreen()
+            }
+
+            composable(Screen.TargetKinerja.route) {
+                TargetKinerjaListScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToDetail = { targetId, reviewMode ->
+                        navController.navigate("target_kinerja_detail/$targetId?reviewMode=$reviewMode")
+                    },
+                    onNavigateToCreate = { navController.navigate(Screen.TargetKinerjaCreate.route) }
+                )
+            }
+
+            composable(
+                route = "${Screen.PenilaianKinerja.route}?mode={mode}",
+                arguments = listOf(
+                    navArgument("mode") {
+                        type = NavType.StringType
+                        defaultValue = "mine"
+                    }
+                )
+            ) { backStackEntry ->
+                val initialMode = backStackEntry.arguments?.getString("mode") ?: "mine"
+                PenilaianKinerjaListScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToDetail = { assessmentId ->
+                        navController.navigate("penilaian_kinerja_detail/$assessmentId")
+                    },
+                    initialMode = initialMode
+                )
+            }
+
+            composable(Screen.TargetKinerjaCreate.route) {
+                TargetKinerjaFormScreen(
+                    targetId = null,
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToDetail = { targetId ->
+                        navController.navigate("target_kinerja_detail/$targetId") {
+                            popUpTo(Screen.TargetKinerjaCreate.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+
+            composable(
+                route = "target_kinerja_detail/{targetId}?reviewMode={reviewMode}",
+                arguments = listOf(
+                    navArgument("targetId") { type = NavType.IntType },
+                    navArgument("reviewMode") {
+                        type = NavType.BoolType
+                        defaultValue = false
+                    }
+                )
+            ) { backStackEntry ->
+                val targetId = backStackEntry.arguments?.getInt("targetId") ?: 0
+                val reviewMode = backStackEntry.arguments?.getBoolean("reviewMode") ?: false
+                TargetKinerjaDetailScreen(
+                    targetId = targetId,
+                    reviewMode = reviewMode,
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToEdit = { id -> navController.navigate("target_kinerja_edit/$id") },
+                    onDeleted = {
+                        navController.popBackStack(Screen.TargetKinerja.route, false)
+                    }
+                )
+            }
+
+            composable(
+                route = "target_kinerja_edit/{targetId}",
+                arguments = listOf(navArgument("targetId") { type = NavType.IntType })
+            ) { backStackEntry ->
+                val targetId = backStackEntry.arguments?.getInt("targetId")
+                TargetKinerjaFormScreen(
+                    targetId = targetId,
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToDetail = { id ->
+                        navController.popBackStack()
+                        navController.navigate("target_kinerja_detail/$id")
+                    }
+                )
+            }
+
+            composable(
+                route = "penilaian_kinerja_detail/{assessmentId}",
+                arguments = listOf(navArgument("assessmentId") { type = NavType.IntType })
+            ) { backStackEntry ->
+                val assessmentId = backStackEntry.arguments?.getInt("assessmentId") ?: 0
+                PenilaianKinerjaDetailScreen(
+                    assessmentId = assessmentId,
+                    onNavigateBack = { navController.popBackStack() }
+                )
             }
 
             composable(
@@ -241,6 +356,7 @@ fun IZAKODNavigation(
             composable(Screen.Profile.route) {
                 ProfileScreen(
                     onBackToDashboard = { navController.backToDashboardAlways() },
+                    onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
                     onLogout = {
                         navController.navigate(Screen.Login.route) {
                             popUpTo(navController.graph.id) { inclusive = true }
@@ -251,6 +367,20 @@ fun IZAKODNavigation(
                     onToggleTheme = onToggleTheme,
                     isRootTab = true,
                     viewModel = profileViewModel
+                )
+            }
+            composable(Screen.Settings.route) {
+                SettingsScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToDeveloper = { navController.navigate(Screen.Developer.route) },
+                    isDarkTheme = isDarkTheme,
+                    onToggleTheme = onToggleTheme,
+                    viewModel = profileViewModel
+                )
+            }
+            composable(Screen.Developer.route) {
+                DeveloperScreen(
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
             composable(Screen.Notifications.route) {

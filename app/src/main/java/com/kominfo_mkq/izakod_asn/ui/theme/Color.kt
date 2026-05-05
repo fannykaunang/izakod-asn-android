@@ -72,5 +72,5 @@ val StatusRevised = Color(0xFFF59E0B) // Orange
 // Gradient Colors
 val GradientStartLight = Color(0xFF3B82F6)
 val GradientEndLight = Color(0xFF8B5CF6)
-val GradientStartDark = Color(0xFF1E40AF)
-val GradientEndDark = Color(0xFF6D28D9)
+val GradientStartDark = Color(0xFF1B3A94)
+val GradientEndDark = Color(0xFF5B21B6)

@@ -1,7 +1,6 @@
 package com.kominfo_mkq.izakod_asn.data.remote
 
 import com.kominfo_mkq.izakod_asn.data.local.AppContextHolder
-import com.kominfo_mkq.izakod_asn.data.local.TokenStore
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.RefreshTokenRequest
 import okhttp3.Interceptor
@@ -30,7 +29,9 @@ object EabsenRetrofitClient {
             .header("EabsenApiKey", API_KEY)
             .method(originalRequest.method, originalRequest.body)
 
-        val token = TokenStore.getToken()
+        val token = AppContextHolder.get()?.let { context ->
+            UserPreferences(context).getEntagoAccessToken()
+        }
         if (!token.isNullOrBlank()) {
             builder.header("Authorization", "Bearer $token")
         }
@@ -49,7 +50,9 @@ object EabsenRetrofitClient {
                 ?.removePrefix("Bearer ")
                 ?.trim()
 
-            val refreshToken = TokenStore.getRefreshToken()
+            val refreshToken = AppContextHolder.get()?.let { context ->
+                UserPreferences(context).getEntagoRefreshToken()
+            }
             if (refreshToken.isNullOrBlank()) return@authenticator null
 
             val refreshClient = OkHttpClient.Builder()
@@ -71,7 +74,9 @@ object EabsenRetrofitClient {
                 .create(EabsenCoreApiService::class.java)
 
             return@authenticator synchronized(refreshLock) {
-                val latestToken = TokenStore.getToken()?.trim()
+                val latestToken = AppContextHolder.get()?.let { context ->
+                    UserPreferences(context).getEntagoAccessToken()
+                }?.trim()
                 if (!latestToken.isNullOrBlank() && latestToken != failedToken) {
                     return@synchronized response.request.newBuilder()
                         .header("Authorization", "Bearer $latestToken")
@@ -88,8 +93,11 @@ object EabsenRetrofitClient {
                             "EabsenRetrofitClient",
                             "Refresh token gagal: ${refreshResponse.code()}"
                         )
-                        TokenStore.setToken(null)
-                        TokenStore.setRefreshToken(null)
+                        AppContextHolder.get()?.let { context ->
+                            val prefs = UserPreferences(context)
+                            prefs.setEntagoAccessToken(null)
+                            prefs.setEntagoRefreshToken(null)
+                        }
                         return@synchronized null
                     }
 
@@ -99,17 +107,18 @@ object EabsenRetrofitClient {
 
                     if (newToken.isEmpty() || newRefreshToken.isEmpty()) {
                         android.util.Log.e("EabsenRetrofitClient", "Refresh response tidak lengkap")
-                        TokenStore.setToken(null)
-                        TokenStore.setRefreshToken(null)
+                        AppContextHolder.get()?.let { context ->
+                            val prefs = UserPreferences(context)
+                            prefs.setEntagoAccessToken(null)
+                            prefs.setEntagoRefreshToken(null)
+                        }
                         return@synchronized null
                     }
 
-                    TokenStore.setToken(newToken)
-                    TokenStore.setRefreshToken(newRefreshToken)
                     AppContextHolder.get()?.let { context ->
                         val prefs = UserPreferences(context)
-                        prefs.setMobileJwtToken(newToken)
-                        prefs.setRefreshToken(newRefreshToken)
+                        prefs.setEntagoAccessToken(newToken)
+                        prefs.setEntagoRefreshToken(newRefreshToken)
                     }
 
                     response.request.newBuilder()

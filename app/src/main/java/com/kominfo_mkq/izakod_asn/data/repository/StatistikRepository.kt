@@ -1,6 +1,7 @@
 package com.kominfo_mkq.izakod_asn.data.repository
 
 import com.kominfo_mkq.izakod_asn.data.model.ApiResponse
+import com.kominfo_mkq.izakod_asn.data.model.StatistikHarianResponse
 import com.kominfo_mkq.izakod_asn.data.model.StatistikBulananResponse
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
 import kotlinx.coroutines.Dispatchers
@@ -91,6 +92,54 @@ class StatistikRepository {
                     ApiResponse(
                         success = false,
                         error = "Gagal memuat data statistik"
+                    )
+                }
+            } else {
+                ApiResponse(
+                    success = false,
+                    error = "Error: ${response.code()} ${response.message()}"
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            ApiResponse(
+                success = false,
+                error = e.message ?: "Network error"
+            )
+        }
+    }
+
+    /**
+     * Get statistik harian
+     *
+     * @param skpdid Filter by SKPD ID (optional, admin only)
+     * @param pegawaiId Filter by Pegawai ID (optional, admin only)
+     * @return ApiResponse dengan StatistikHarianResponse
+     */
+    suspend fun getStatistikHarian(
+        skpdid: Int? = null,
+        pegawaiId: Int? = null
+    ): ApiResponse<StatistikHarianResponse> = withContext(Dispatchers.IO) {
+        try {
+            val effectivePegawaiId = pegawaiId ?: currentPegawaiId
+
+            val response = apiService.getStatistikHarian(
+                skpdid = skpdid,
+                pegawaiId = effectivePegawaiId
+            )
+
+            if (response.isSuccessful) {
+                val body = response.body()
+
+                if (body != null && body.success) {
+                    ApiResponse(
+                        success = true,
+                        data = body
+                    )
+                } else {
+                    ApiResponse(
+                        success = false,
+                        error = "Gagal memuat data statistik harian"
                     )
                 }
             } else {

@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,12 +20,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Work
@@ -40,6 +46,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -71,9 +78,11 @@ import com.kominfo_mkq.izakod_asn.data.local.TokenStore
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
+import com.kominfo_mkq.izakod_asn.ui.components.GradientCard
 import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
 import com.kominfo_mkq.izakod_asn.ui.theme.PrimaryLight
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.ProfileViewModel
+import com.kominfo_mkq.izakod_asn.utils.UpdateInfoDialog
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -110,6 +119,7 @@ private fun String?.formatDateIndonesianOrDash(): String {
 @Composable
 fun ProfileScreen(
     onBackToDashboard: () -> Unit,
+    onNavigateToSettings: () -> Unit,
     onLogout: () -> Unit,
     isDarkTheme: Boolean,
     onToggleTheme: (Boolean) -> Unit,
@@ -157,7 +167,15 @@ fun ProfileScreen(
         topBar = {
             AccountTopBar(
                 title = "Akun",
-                onBack = if (isRootTab) null else onBackToDashboard
+                onBack = if (isRootTab) null else onBackToDashboard,
+                actions = {
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Buka Pengaturan"
+                        )
+                    }
+                }
             )
         }
     ) { paddingValues ->
@@ -188,7 +206,8 @@ fun ProfileScreen(
                             photoUrl = uiState.photoUrl,
                             nama = profile.pegawaiNama.displayOrDash(),
                             nip = profile.pegawaiNip.displayOrDash(),
-                            jabatan = profile.jabatan.displayOrDash()
+                            jabatan = profile.jabatan.displayOrDash(),
+                            isDarkTheme = isDarkTheme
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
@@ -202,58 +221,7 @@ fun ProfileScreen(
                         ProfileDetailSection(profile)
 
                         Spacer(modifier = Modifier.height(14.dp))
-
-                        AccountSectionLabel("Pengaturan")
-                        SettingsSwitchSection(
-                            items = listOf(
-                                SettingSwitchItem(
-                                    icon = Icons.Outlined.DarkMode,
-                                    title = "Mode Gelap",
-                                    subtitle = "Sesuaikan tampilan aplikasi",
-                                    checked = isDarkTheme,
-                                    onCheckedChange = onToggleTheme
-                                ),
-                                SettingSwitchItem(
-                                    icon = Icons.Outlined.Notifications,
-                                    title = "Pengaturan Notifikasi",
-                                    subtitle = "Kelola notifikasi aplikasi",
-                                    checked = uiState.notificationsEnabled,
-                                    onCheckedChange = { viewModel.setNotifications(it) }
-                                )
-                            )
-                        )
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        AccountSectionLabel("Aplikasi")
-                        SettingsActionSection(
-                            items = listOf(
-                                SettingActionItem(
-                                    icon = Icons.Outlined.SystemUpdate,
-                                    title = "Cek Pembaruan",
-                                    subtitle = "Buka halaman aplikasi di Google Play"
-                                ) { openPlayStoreListing(context) },
-                                SettingActionItem(
-                                    icon = Icons.Outlined.StarRate,
-                                    title = "Beri Rating",
-                                    subtitle = "Nilai aplikasi IZAKOD-ASN"
-                                ) { openPlayStoreListing(context) },
-                                SettingActionItem(
-                                    icon = Icons.Outlined.Public,
-                                    title = "Website",
-                                    subtitle = "Website resmi IZAKOD-ASN"
-                                ) { openOfficialWebsite(context) },
-                                SettingActionItem(
-                                    icon = Icons.Default.Settings,
-                                    title = "Versi Aplikasi",
-                                    subtitle = "IZAKOD-ASN ${BuildConfig.VERSION_NAME}",
-                                    showChevron = false
-                                ) {}
-                            )
-                        )
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
+                        
                         AccountSectionLabel("Sesi")
                         SimpleActionSection(
                             items = listOf(
@@ -310,10 +278,209 @@ fun ProfileScreen(
     }
 }
 
-/* =========================
-   SETTINGS SCREEN
-   (TIDAK ADA logout dialog di sini)
-   ========================= */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen(
+    onNavigateBack: () -> Unit,
+    onNavigateToDeveloper: () -> Unit,
+    isDarkTheme: Boolean,
+    onToggleTheme: (Boolean) -> Unit,
+    viewModel: ProfileViewModel
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    var showUpdateInfoDialog by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            AccountTopBar(
+                title = "Pengaturan",
+                onBack = onNavigateBack
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 32.dp)
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            AccountSectionLabel("Pengaturan")
+            SettingsSwitchSection(
+                items = listOf(
+                    SettingSwitchItem(
+                        icon = Icons.Outlined.DarkMode,
+                        title = "Mode Gelap",
+                        subtitle = "Sesuaikan tampilan aplikasi",
+                        checked = isDarkTheme,
+                        onCheckedChange = onToggleTheme
+                    ),
+                    SettingSwitchItem(
+                        icon = Icons.Outlined.Notifications,
+                        title = "Pengaturan Notifikasi",
+                        subtitle = "Kelola notifikasi aplikasi",
+                        checked = uiState.notificationsEnabled,
+                        onCheckedChange = { viewModel.setNotifications(it) }
+                    )
+                )
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            AccountSectionLabel("Aplikasi")
+            SettingsActionSection(
+                items = listOf(
+                    SettingActionItem(
+                        icon = Icons.Outlined.SystemUpdate,
+                        title = "Cek Pembaruan",
+                        subtitle = "Buka halaman aplikasi di Google Play"
+                    ) { openPlayStoreListing(context) },
+                    SettingActionItem(
+                        icon = Icons.Outlined.StarRate,
+                        title = "Beri Rating",
+                        subtitle = "Nilai aplikasi IZAKOD-ASN"
+                    ) { openPlayStoreListing(context) },
+                    SettingActionItem(
+                        icon = Icons.Outlined.Public,
+                        title = "Website",
+                        subtitle = "Website resmi IZAKOD-ASN"
+                    ) { openOfficialWebsite(context) },
+                    SettingActionItem(
+                        icon = Icons.Default.NewReleases,
+                        title = "Versi Aplikasi",
+                        subtitle = "IZAKOD-ASN ${BuildConfig.VERSION_NAME}"
+                    ) { showUpdateInfoDialog = true }
+                )
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            AccountSectionLabel("Bantuan")
+            SettingsActionSection(
+                items = listOf(
+                    SettingActionItem(
+                        icon = Icons.Default.Info,
+                        title = "Tentang",
+                        subtitle = "Informasi tentang IZAKOD-ASN"
+                    ) { openExternalPage(context, "https://izakod-asn.merauke.go.id/informasi/tentang") },
+                    SettingActionItem(
+                        icon = Icons.Default.Work,
+                        title = "Panduan Penggunaan",
+                        subtitle = "Pelajari cara menggunakan aplikasi"
+                    ) { openExternalPage(context, "https://izakod-asn.merauke.go.id/informasi/panduan-penggunaan") },
+                    SettingActionItem(
+                        icon = Icons.Default.Settings,
+                        title = "Ketentuan Penggunaan",
+                        subtitle = "Lihat syarat dan ketentuan layanan"
+                    ) { openExternalPage(context, "https://izakod-asn.merauke.go.id/informasi/ketentuan-penggunaan") },
+                    SettingActionItem(
+                        icon = Icons.Outlined.Public,
+                        title = "Kebijakan Privasi",
+                        subtitle = "Informasi perlindungan data pengguna"
+                    ) { openExternalPage(context, "https://izakod-asn.merauke.go.id/informasi/kebijakan-privasi") },
+                    SettingActionItem(
+                        icon = Icons.Default.Person,
+                        title = "Pengembang",
+                        subtitle = "Informasi pengembang aplikasi"
+                    ) { onNavigateToDeveloper() }
+                )
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+
+    if (showUpdateInfoDialog) {
+        UpdateInfoDialog(
+            onDismiss = { showUpdateInfoDialog = false }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DeveloperScreen(
+    onNavigateBack: () -> Unit
+) {
+    val context = LocalContext.current
+
+    Scaffold(
+        topBar = {
+            AccountTopBar(
+                title = "Pengembang",
+                onBack = onNavigateBack
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 32.dp)
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            DeveloperInfoCard(
+                title = "Informasi Pengembang",
+                description = "Hubungi pengembang jika Anda membutuhkan bantuan lanjutan terkait aplikasi IZAKOD-ASN."
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            DeveloperDetailCard(
+                icon = Icons.Default.Person,
+                label = "Nama Pengembang",
+                value = "Fanny Alfa Kaunang, S.Kom"
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            DeveloperDetailCard(
+                icon = Icons.Default.Place,
+                label = "Alamat",
+                value = "Perumahan Graha Simpati, Blok L/3. Depan Depo Simpati"
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            DeveloperDetailCard(
+                icon = Icons.Default.Phone,
+                label = "Nomor Telepon",
+                value = "+6285344049454",
+                hint = "Ketuk untuk membuka dial telepon",
+                onClick = { openDialer(context, "+6285344049454") }
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            DeveloperDetailCard(
+                icon = Icons.Default.Phone,
+                label = "WhatsApp",
+                value = "+6285344049454",
+                hint = "Ketuk untuk membuka chat WhatsApp",
+                onClick = { openWhatsApp(context, "+6285344049454") }
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            DeveloperDetailCard(
+                icon = Icons.Default.Email,
+                label = "Email",
+                value = "fannykaunang59@gmail.com",
+                hint = "Ketuk untuk membuka Gmail",
+                onClick = { openEmail(context, "fannykaunang59@gmail.com") }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
 
 /* =========================
    SMALL REUSABLE UI
@@ -323,11 +490,13 @@ fun ProfileScreen(
 @Composable
 private fun AccountTopBar(
     title: String,
-    onBack: (() -> Unit)? = null
+    onBack: (() -> Unit)? = null,
+    actions: @Composable RowScope.() -> Unit = {}
 ) {
     IZAKODHeaderBar(
         title = title,
-        onBack = onBack
+        onBack = onBack,
+        actions = actions
     )
 }
 
@@ -336,83 +505,129 @@ private fun AccountProfileHero(
     photoUrl: String?,
     nama: String,
     nip: String,
-    jabatan: String
+    jabatan: String,
+    isDarkTheme: Boolean
 ) {
-    Surface(
+    GradientCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .padding(top = 16.dp),
-        shape = MaterialTheme.shapes.extraLarge,
-        color = PrimaryLight
+        isDark = isDarkTheme,
+        cornerRadius = 28.dp,
+        elevation = 6.dp
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(24.dp)
         ) {
-            if (photoUrl != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(photoUrl)
-                        .crossfade(true)
-                        .placeholder(R.drawable.ic_launcher_foreground)
-                        .error(R.drawable.ic_launcher_foreground)
-                        .build(),
-                    contentDescription = "Profile Photo",
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(110.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.08f))
+            )
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.06f))
+            )
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Surface(
                     modifier = Modifier
-                        .size(120.dp)
-                        .clip(CircleShape)
-                        .background(Color.White),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(120.dp)
-                        .clip(CircleShape)
-                        .background(Color.White),
-                    contentAlignment = Alignment.Center
+                        .padding(bottom = 14.dp),
+                    shape = RoundedCornerShape(50),
+                    color = Color.White.copy(alpha = 0.16f)
                 ) {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = null,
-                        modifier = Modifier.size(60.dp),
-                        tint = PrimaryLight.copy(alpha = 0.5f)
+                    Text(
+                        text = "Profil Pegawai",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                     )
                 }
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Box(
+                    modifier = Modifier
+                        .size(132.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (photoUrl != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(photoUrl)
+                                .crossfade(true)
+                                .placeholder(R.drawable.ic_launcher_foreground)
+                                .error(R.drawable.ic_launcher_foreground)
+                                .build(),
+                            contentDescription = "Profile Photo",
+                            modifier = Modifier
+                                .size(120.dp)
+                                .clip(CircleShape)
+                                .background(Color.White),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(120.dp)
+                                .clip(CircleShape)
+                                .background(Color.White),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = null,
+                                modifier = Modifier.size(60.dp),
+                                tint = PrimaryLight.copy(alpha = 0.5f)
+                            )
+                        }
+                    }
+                }
 
-            Text(
-                text = nama,
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                color = Color.White,
-                textAlign = TextAlign.Center
-            )
+                Spacer(modifier = Modifier.height(18.dp))
 
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = "NIP: $nip",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.9f)
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = Color.White.copy(alpha = 0.2f)
-            ) {
                 Text(
-                    text = jabatan,
-                    style = MaterialTheme.typography.bodySmall,
+                    text = nama,
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
                     color = Color.White,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    textAlign = TextAlign.Center
                 )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = "NIP: $nip",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.82f),
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = Color.White.copy(alpha = 0.18f)
+                ) {
+                    Text(
+                        text = jabatan,
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                    )
+                }
             }
         }
     }
@@ -742,6 +957,84 @@ private fun DividerLike() {
     )
 }
 
+@Composable
+private fun DeveloperInfoCard(
+    title: String,
+    description: String
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun DeveloperDetailCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    hint: String? = null,
+    onClick: (() -> Unit)? = null
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .then(
+                if (onClick != null) Modifier.clickable(onClick = onClick)
+                else Modifier
+            ),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                if (!hint.isNullOrBlank()) {
+                    Text(
+                        text = hint,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
 private fun openPlayStoreListing(context: Context) {
     val pkg = context.packageName
     try {
@@ -754,4 +1047,25 @@ private fun openPlayStoreListing(context: Context) {
 
 private fun openOfficialWebsite(context: Context) {
     context.startActivity(Intent(Intent.ACTION_VIEW, "https://izakod-asn.merauke.go.id".toUri()))
+}
+
+private fun openExternalPage(context: Context, url: String) {
+    context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+}
+
+private fun openDialer(context: Context, phoneNumber: String) {
+    context.startActivity(Intent(Intent.ACTION_DIAL, "tel:$phoneNumber".toUri()))
+}
+
+private fun openWhatsApp(context: Context, phoneNumber: String) {
+    val normalized = phoneNumber.replace("+", "").replace(" ", "")
+    val intent = Intent(Intent.ACTION_VIEW, "https://wa.me/$normalized".toUri())
+    context.startActivity(intent)
+}
+
+private fun openEmail(context: Context, email: String) {
+    val intent = Intent(Intent.ACTION_SENDTO).apply {
+        data = "mailto:$email".toUri()
+    }
+    context.startActivity(intent)
 }

@@ -2,9 +2,13 @@ package com.kominfo_mkq.izakod_asn.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kominfo_mkq.izakod_asn.data.model.AssessmentSummaryData
+import com.kominfo_mkq.izakod_asn.data.model.DashboardActionAlertsData
+import com.kominfo_mkq.izakod_asn.data.model.DashboardTargetSummaryData
 import com.kominfo_mkq.izakod_asn.data.model.MetricsData
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
 import com.kominfo_mkq.izakod_asn.data.model.TimeSeriesItem
+import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaItem
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
 import com.kominfo_mkq.izakod_asn.data.remote.EabsenRetrofitClient
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
@@ -28,7 +32,12 @@ data class DashboardUiState(
     val pegawaiProfile: PegawaiProfile? = null,
     val photoUrl: String? = null,
     val isLoadingProfile: Boolean = false,
-    val unreadNotificationCount: Int = 0
+    val unreadNotificationCount: Int = 0,
+    val assessmentSummary: AssessmentSummaryData? = null,
+    val targetSummary: DashboardTargetSummaryData? = null,
+    val actionAlerts: DashboardActionAlertsData? = null,
+    val targetItems: List<TargetKinerjaItem> = emptyList(),
+    val currentPegawaiId: Int? = null
 )
 
 /**
@@ -42,6 +51,13 @@ class DashboardViewModel : ViewModel() {
     // UI State
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
+
+    private val _currentTabIndex = MutableStateFlow(0)
+    val currentTabIndex: StateFlow<Int> = _currentTabIndex.asStateFlow()
+
+    fun updateTabIndex(index: Int) {
+        _currentTabIndex.value = index
+    }
 
     /**
      * Load pegawai profile
@@ -115,6 +131,8 @@ class DashboardViewModel : ViewModel() {
     fun refresh() {
         loadStatistik()
         loadNotificationCount()
+        loadAssessmentSummary()
+        loadDashboardTargets()
     }
 
     /**
@@ -135,11 +153,10 @@ class DashboardViewModel : ViewModel() {
                 val finalPegawaiId = pegawaiId ?: StatistikRepository.getPegawaiId()
 
                 if (finalPegawaiId == null) {
-                    _uiState.value = DashboardUiState(
-                        isLoading = false,
-                        isError = true,
-                        errorMessage = "Session expired"
-                    )
+                    // GUNAKAN .update agar tidak meriset seluruh objek
+                    _uiState.update {
+                        it.copy(isLoading = false, isError = true, errorMessage = "Session expired")
+                    }
                     return@launch
                 }
 
@@ -155,29 +172,25 @@ class DashboardViewModel : ViewModel() {
                 )
 
                 if (response.success && response.data != null) {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        isError = false,
-                        metrics = response.data.data.metrics,
-                        timeSeries = response.data.data.timeSeries,
-                        isAdmin = response.data.data.isAdmin
-                    )
-
-                    android.util.Log.d("DashboardViewModel", "✅ UI State updated with metrics")
+                    // GUNAKAN .update agar data lama (seperti profile) tidak hilang
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isError = false,
+                            metrics = response.data.data.metrics,
+                            timeSeries = response.data.data.timeSeries,
+                            isAdmin = response.data.data.isAdmin
+                        )
+                    }
                 } else {
-                    _uiState.value = DashboardUiState(
-                        isLoading = false,
-                        isError = true,
-                        errorMessage = response.error ?: "Gagal memuat data"
-                    )
+                    _uiState.update {
+                        it.copy(isLoading = false, isError = true, errorMessage = response.error ?: "Gagal memuat data")
+                    }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
-                _uiState.value = DashboardUiState(
-                    isLoading = false,
-                    isError = true,
-                    errorMessage = e.message ?: "Error"
-                )
+                _uiState.update {
+                    it.copy(isLoading = false, isError = true, errorMessage = e.message ?: "Error")
+                }
             }
         }
     }
@@ -187,5 +200,57 @@ class DashboardViewModel : ViewModel() {
      */
     fun retry() {
         loadStatistik()
+        loadAssessmentSummary()
+        loadDashboardTargets()
+    }
+
+    fun loadAssessmentSummary() {
+        viewModelScope.launch {
+            try {
+                val response = ApiClient.eabsenApiService.getDashboardOverview()
+
+                if (response.isSuccessful && response.body()?.success == true) {
+                    _uiState.update {
+                        it.copy(
+                            assessmentSummary = response.body()?.data?.assessmentSummary,
+                            targetSummary = response.body()?.data?.targetSummary,
+                            actionAlerts = response.body()?.data?.actionAlerts
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e(
+                    "DashboardViewModel",
+                    "❌ Error loading assessment summary: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun loadDashboardTargets() {
+        viewModelScope.launch {
+            try {
+                val calendar = Calendar.getInstance()
+                val response = ApiClient.eabsenApiService.getTargetKinerjaList(
+                    tahun = calendar.get(Calendar.YEAR),
+                    bulan = calendar.get(Calendar.MONTH) + 1
+                )
+
+                if (response.isSuccessful && response.body()?.success == true) {
+                    val body = response.body()
+                    _uiState.update {
+                        it.copy(
+                            targetItems = body?.data ?: emptyList(),
+                            currentPegawaiId = body?.meta?.currentPegawaiId ?: it.currentPegawaiId
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e(
+                    "DashboardViewModel",
+                    "❌ Error loading dashboard targets: ${e.message}"
+                )
+            }
+        }
     }
 }

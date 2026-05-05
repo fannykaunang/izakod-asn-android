@@ -7,6 +7,7 @@ import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanResponse
 import com.kominfo_mkq.izakod_asn.data.model.CreateReminderRequest
 import com.kominfo_mkq.izakod_asn.data.model.CreateReminderResponse
 import com.kominfo_mkq.izakod_asn.data.model.DeleteReminderResponse
+import com.kominfo_mkq.izakod_asn.data.model.DashboardOverviewResponse
 import com.kominfo_mkq.izakod_asn.data.model.EntagoLoginRequest
 import com.kominfo_mkq.izakod_asn.data.model.EntagoLoginResponse
 import com.kominfo_mkq.izakod_asn.data.model.FcmRegisterRequest
@@ -18,11 +19,28 @@ import com.kominfo_mkq.izakod_asn.data.model.MobileTokenRequest
 import com.kominfo_mkq.izakod_asn.data.model.MobileTokenResponse
 import com.kominfo_mkq.izakod_asn.data.model.NotifikasiResponse
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiData
+import com.kominfo_mkq.izakod_asn.data.model.CreatePenilaianKinerjaRequest
+import com.kominfo_mkq.izakod_asn.data.model.PenilaianKinerjaDetailResponse
+import com.kominfo_mkq.izakod_asn.data.model.PenilaianKinerjaListResponse
+import com.kominfo_mkq.izakod_asn.data.model.UpdatePenilaianKinerjaRequest
 import com.kominfo_mkq.izakod_asn.data.model.ReminderListResponse
+import com.kominfo_mkq.izakod_asn.data.model.StatistikHarianResponse
 import com.kominfo_mkq.izakod_asn.data.model.StatistikBulananResponse
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanCreateRequest
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanCreateResponse
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanResponse
+import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaDetailResponse
+import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaHistoryResponse
+import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaListResponse
+import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaMutationResponse
+import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaRequest
+import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaReviewRequest
+import com.kominfo_mkq.izakod_asn.data.model.RealisasiKinerjaDetailResponse
+import com.kominfo_mkq.izakod_asn.data.model.RealisasiKinerjaHistoryResponse
+import com.kominfo_mkq.izakod_asn.data.model.RealisasiKinerjaListResponse
+import com.kominfo_mkq.izakod_asn.data.model.RealisasiKinerjaRequest
+import com.kominfo_mkq.izakod_asn.data.model.RealisasiLinkedLaporanResponse
+import com.kominfo_mkq.izakod_asn.data.model.RealisasiLinkLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanResponse
 import com.kominfo_mkq.izakod_asn.data.model.VerifikasiLaporanRequest
@@ -70,6 +88,19 @@ interface EabsenApiService {
         @Query("bulan") bulan: Int? = null,
         @Query("tahun") tahun: Int? = null
     ): Response<StatistikBulananResponse>
+
+    /**
+     * Get statistik harian
+     * GET /api/statistik/harian
+     */
+    @GET("api/statistik/harian")
+    suspend fun getStatistikHarian(
+        @Query("skpdid") skpdid: Int? = null,
+        @Query("pegawai_id") pegawaiId: Int? = null
+    ): Response<StatistikHarianResponse>
+
+    @GET("api/dashboard")
+    suspend fun getDashboardOverview(): Response<DashboardOverviewResponse>
 
     /**
      * ✅ NEW: Get list kategori kegiatan
@@ -231,4 +262,113 @@ interface EabsenApiService {
     suspend fun registerFcmToken(
         @Body request: FcmRegisterRequest
     ): Response<BasicActionResponse>
+
+    @GET("api/target-kinerja")
+    suspend fun getTargetKinerjaList(
+        @Query("tahun") tahun: Int? = null,
+        @Query("bulan") bulan: Int? = null,
+        @Query("status") status: String? = null,
+        @Query("pegawai_id") pegawaiId: Int? = null
+    ): Response<TargetKinerjaListResponse>
+
+    @GET("api/target-kinerja/{id}")
+    suspend fun getTargetKinerjaDetail(
+        @Path("id") targetId: Int
+    ): Response<TargetKinerjaDetailResponse>
+
+    @GET("api/target-kinerja/{id}/history")
+    suspend fun getTargetKinerjaHistory(
+        @Path("id") targetId: Int
+    ): Response<TargetKinerjaHistoryResponse>
+
+    @POST("api/target-kinerja")
+    suspend fun createTargetKinerja(
+        @Body request: TargetKinerjaRequest
+    ): Response<TargetKinerjaMutationResponse>
+
+    @PUT("api/target-kinerja/{id}")
+    suspend fun updateTargetKinerja(
+        @Path("id") targetId: Int,
+        @Body request: TargetKinerjaRequest
+    ): Response<TargetKinerjaDetailResponse>
+
+    @DELETE("api/target-kinerja/{id}")
+    suspend fun deleteTargetKinerja(
+        @Path("id") targetId: Int
+    ): Response<TargetKinerjaMutationResponse>
+
+    @POST("api/target-kinerja/{id}/submit")
+    suspend fun submitTargetKinerja(
+        @Path("id") targetId: Int
+    ): Response<TargetKinerjaDetailResponse>
+
+    @POST("api/target-kinerja/{id}/review")
+    suspend fun reviewTargetKinerja(
+        @Path("id") targetId: Int,
+        @Body request: TargetKinerjaReviewRequest
+    ): Response<TargetKinerjaDetailResponse>
+
+    @GET("api/realisasi-kinerja")
+    suspend fun getRealisasiKinerjaList(
+        @Query("target_kinerja_id") targetKinerjaId: Int? = null,
+        @Query("pegawai_id") pegawaiId: Int? = null,
+        @Query("tahun") tahun: Int? = null,
+        @Query("bulan") bulan: Int? = null
+    ): Response<RealisasiKinerjaListResponse>
+
+    @GET("api/realisasi-kinerja/{id}/history")
+    suspend fun getRealisasiKinerjaHistory(
+        @Path("id") realisasiId: Int
+    ): Response<RealisasiKinerjaHistoryResponse>
+
+    @POST("api/realisasi-kinerja")
+    suspend fun saveRealisasiKinerja(
+        @Body request: RealisasiKinerjaRequest
+    ): Response<RealisasiKinerjaDetailResponse>
+
+    @GET("api/realisasi-kinerja/{id}/laporan")
+    suspend fun getRealisasiLinkedLaporan(
+        @Path("id") realisasiId: Int
+    ): Response<RealisasiLinkedLaporanResponse>
+
+    @POST("api/realisasi-kinerja/{id}/laporan")
+    suspend fun linkLaporanToRealisasi(
+        @Path("id") realisasiId: Int,
+        @Body request: RealisasiLinkLaporanRequest
+    ): Response<BasicActionResponse>
+
+    @DELETE("api/realisasi-kinerja/{id}/laporan/{laporanId}")
+    suspend fun unlinkLaporanFromRealisasi(
+        @Path("id") realisasiId: Int,
+        @Path("laporanId") laporanId: Int
+    ): Response<BasicActionResponse>
+
+    @GET("api/penilaian-kinerja")
+    suspend fun getPenilaianKinerjaList(
+        @Query("tahun") tahun: Int? = null,
+        @Query("bulan") bulan: Int? = null,
+        @Query("status_finalisasi") statusFinalisasi: String? = null,
+        @Query("pegawai_id") pegawaiId: Int? = null
+    ): Response<PenilaianKinerjaListResponse>
+
+    @GET("api/penilaian-kinerja/{id}")
+    suspend fun getPenilaianKinerjaDetail(
+        @Path("id") assessmentId: Int
+    ): Response<PenilaianKinerjaDetailResponse>
+
+    @POST("api/penilaian-kinerja")
+    suspend fun createPenilaianKinerja(
+        @Body request: CreatePenilaianKinerjaRequest
+    ): Response<PenilaianKinerjaDetailResponse>
+
+    @PUT("api/penilaian-kinerja/{id}")
+    suspend fun updatePenilaianKinerja(
+        @Path("id") assessmentId: Int,
+        @Body request: UpdatePenilaianKinerjaRequest
+    ): Response<PenilaianKinerjaDetailResponse>
+
+    @POST("api/penilaian-kinerja/{id}/finalisasi")
+    suspend fun finalisasiPenilaianKinerja(
+        @Path("id") assessmentId: Int
+    ): Response<PenilaianKinerjaDetailResponse>
 }
