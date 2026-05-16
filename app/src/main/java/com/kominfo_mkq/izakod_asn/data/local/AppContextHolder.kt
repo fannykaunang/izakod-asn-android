@@ -1,0 +1,14 @@
+package com.kominfo_mkq.izakod_asn.data.local
+
+import android.content.Context
+
+object AppContextHolder {
+    @Volatile
+    private var appContext: Context? = null
+
+    fun init(context: Context) {
+        appContext = context.applicationContext
+    }
+
+    fun get(): Context? = appContext
+}
