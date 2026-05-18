@@ -1,5 +1,7 @@
 package com.kominfo_mkq.izakod_asn.ui.navigation
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
@@ -36,7 +38,10 @@ import com.kominfo_mkq.izakod_asn.ui.screens.StatisticsScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.TargetKinerjaDetailScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.TargetKinerjaFormScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.TargetKinerjaListScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.TargetKinerjaSubordinatePeriodScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.TemplateKegiatanScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.TppSayaDetailScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.TppSayaScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.VerifikasiLaporanScreen
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.CreateLaporanViewModel
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.ProfileViewModel
@@ -49,8 +54,10 @@ sealed class Screen(val route: String) {
     object Statistics : Screen("statistics")
     object Templates : Screen("templates")
     object TargetKinerja : Screen("target_kinerja")
+    object TargetKinerjaSubordinatePeriod : Screen("target_kinerja_bawahan")
     object TargetKinerjaCreate : Screen("target_kinerja_create")
     object PenilaianKinerja : Screen("penilaian_kinerja")
+    object TppSaya : Screen("tpp_saya")
     object Reminders : Screen("reminders")
     object Profile : Screen("profile")
     object Settings : Screen("settings")
@@ -70,6 +77,7 @@ fun NavHostController.backToDashboardAlways() {
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun IZAKODNavigation(
     navController: NavHostController = rememberNavController(),
@@ -158,14 +166,26 @@ fun IZAKODNavigation(
                         }
                     },
                     onNavigateToTargetKinerja = { navController.navigate(Screen.TargetKinerja.route) },
+                    onNavigateToTargetCreate = { tahun, bulan ->
+                        val route = if (tahun != null && bulan != null) {
+                            "${Screen.TargetKinerjaCreate.route}?tahun=$tahun&bulan=$bulan"
+                        } else {
+                            Screen.TargetKinerjaCreate.route
+                        }
+                        navController.navigate(route)
+                    },
                     onNavigateToTargetDetail = { targetId, reviewMode ->
                         navController.navigate("target_kinerja_detail/$targetId?reviewMode=$reviewMode") {
                             // Memastikan Dashboard tetap tersimpan di backstack dengan statenya
                             restoreState = true
                         }
                     },
+                    onNavigateToSubordinateTargetPeriod = { tahun, bulan ->
+                        navController.navigate("${Screen.TargetKinerjaSubordinatePeriod.route}/$tahun/$bulan")
+                    },
                     onNavigateToPenilaianKinerja = { navController.navigate(penilaianKinerjaRoute("mine")) },
                     onNavigateToPenilaianBawahan = { navController.navigate(penilaianKinerjaRoute("subordinate")) },
+                    onNavigateToTppSaya = { navController.navigate(Screen.TppSaya.route) },
                     onNavigateToTemplates = { navController.navigate(Screen.Templates.route) },
                     onNavigateToReminder = { navController.navigate(Screen.Reminders.route) },
                     onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) },
@@ -213,6 +233,25 @@ fun IZAKODNavigation(
             }
 
             composable(
+                route = "${Screen.TargetKinerjaSubordinatePeriod.route}/{tahun}/{bulan}",
+                arguments = listOf(
+                    navArgument("tahun") { type = NavType.IntType },
+                    navArgument("bulan") { type = NavType.IntType }
+                )
+            ) { backStackEntry ->
+                val tahun = backStackEntry.arguments?.getInt("tahun") ?: 0
+                val bulan = backStackEntry.arguments?.getInt("bulan") ?: 0
+                TargetKinerjaSubordinatePeriodScreen(
+                    tahun = tahun,
+                    bulan = bulan,
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToDetail = { targetId, reviewMode ->
+                        navController.navigate("target_kinerja_detail/$targetId?reviewMode=$reviewMode")
+                    }
+                )
+            }
+
+            composable(
                 route = "${Screen.PenilaianKinerja.route}?mode={mode}",
                 arguments = listOf(
                     navArgument("mode") {
@@ -231,15 +270,58 @@ fun IZAKODNavigation(
                 )
             }
 
-            composable(Screen.TargetKinerjaCreate.route) {
+            composable(
+                route = "${Screen.TargetKinerjaCreate.route}?tahun={tahun}&bulan={bulan}",
+                arguments = listOf(
+                    navArgument("tahun") {
+                        type = NavType.IntType
+                        defaultValue = -1
+                    },
+                    navArgument("bulan") {
+                        type = NavType.IntType
+                        defaultValue = -1
+                    }
+                )
+            ) { backStackEntry ->
+                val initialTahun = backStackEntry.arguments?.getInt("tahun")
+                    ?.takeIf { it > 0 }
+                val initialBulan = backStackEntry.arguments?.getInt("bulan")
+                    ?.takeIf { it in 1..12 }
                 TargetKinerjaFormScreen(
                     targetId = null,
+                    initialTahun = initialTahun,
+                    initialBulan = initialBulan,
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToDetail = { targetId ->
                         navController.navigate("target_kinerja_detail/$targetId") {
                             popUpTo(Screen.TargetKinerjaCreate.route) { inclusive = true }
                         }
                     }
+                )
+            }
+
+            composable(Screen.TppSaya.route) {
+                TppSayaScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToDetail = { tahun, bulan ->
+                        navController.navigate("tpp_saya_detail/$tahun/$bulan")
+                    }
+                )
+            }
+
+            composable(
+                route = "tpp_saya_detail/{tahun}/{bulan}",
+                arguments = listOf(
+                    navArgument("tahun") { type = NavType.IntType },
+                    navArgument("bulan") { type = NavType.IntType }
+                )
+            ) { backStackEntry ->
+                val tahun = backStackEntry.arguments?.getInt("tahun") ?: 0
+                val bulan = backStackEntry.arguments?.getInt("bulan") ?: 0
+                TppSayaDetailScreen(
+                    tahun = tahun,
+                    bulan = bulan,
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
 

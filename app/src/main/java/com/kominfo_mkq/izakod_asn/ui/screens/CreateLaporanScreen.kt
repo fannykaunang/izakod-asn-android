@@ -157,6 +157,17 @@ fun CreateLaporanScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            LaporanTargetRelationSection(
+                targetKinerjaList = uiState.targetKinerjaList,
+                selectedTargetKinerjaId = uiState.selectedTargetKinerjaId,
+                selectedTargetKinerjaDetailId = uiState.selectedTargetKinerjaDetailId,
+                isLoading = uiState.isLoadingTargetKinerja,
+                onTargetChange = { viewModel.updateTargetKinerja(it) },
+                onDetailChange = { viewModel.updateTargetKinerjaDetail(it) }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             ExpandableSectionCard(
                 title = "Tambah detail laporan",
                 subtitle = "Lokasi, target hasil, dan peserta bisa diisi jika diperlukan.",

@@ -457,7 +457,7 @@ class TargetKinerjaRepository {
         target: TargetKinerjaItem
     ): ApiResponse<List<LaporanKegiatan>> = withContext(Dispatchers.IO) {
         try {
-            val response = apiService.getLaporanList()
+            val response = apiService.getLaporanList(pegawaiId = target.pegawaiId)
             if (response.isSuccessful) {
                 val body = response.body()
                 if (body != null && body.success) {

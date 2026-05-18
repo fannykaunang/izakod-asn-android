@@ -490,7 +490,7 @@ fun PenilaianKinerjaDetailScreen(
                                 ) {
                                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         Text(
-                                            text = "Nilai Penilaian",
+                                            text = "Berikan Penilaian",
                                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                                         )
                                         Text(
@@ -504,22 +504,6 @@ fun PenilaianKinerjaDetailScreen(
                                         )
                                     }
 
-                                    if (uiState.autoFill != null) {
-                                        TextButton(
-                                            onClick = {
-                                                val autoFill = uiState.autoFill ?: return@TextButton
-                                                nilaiTarget = autoFill.suggestedNilaiTarget?.toString().orEmpty()
-                                                nilaiRealisasi = autoFill.suggestedNilaiRealisasi?.toString().orEmpty()
-                                                nilaiAkhir = autoFill.suggestedNilaiAkhir?.toString().orEmpty()
-                                                predikat = autoFill.suggestedPredikat.orEmpty()
-                                            },
-                                            enabled = !readonly
-                                        ) {
-                                            Icon(Icons.Default.SmartToy, contentDescription = null)
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text("Nilai Otomatis")
-                                        }
-                                    }
                                 }
 
                                 OutlinedTextField(
@@ -608,7 +592,16 @@ fun PenilaianKinerjaDetailScreen(
                     }
 
                     item {
-                        PenilaianAutoFillCard(autoFill = uiState.autoFill)
+                        PenilaianAutoFillCard(
+                            autoFill = uiState.autoFill,
+                            enabled = !readonly,
+                            onUseAutoFill = { autoFill ->
+                                nilaiTarget = autoFill.suggestedNilaiTarget?.toString().orEmpty()
+                                nilaiRealisasi = autoFill.suggestedNilaiRealisasi?.toString().orEmpty()
+                                nilaiAkhir = autoFill.suggestedNilaiAkhir?.toString().orEmpty()
+                                predikat = autoFill.suggestedPredikat.orEmpty()
+                            }
+                        )
                     }
                 }
             }
@@ -694,7 +687,11 @@ private fun PenilaianKinerjaCard(
 }
 
 @Composable
-private fun PenilaianAutoFillCard(autoFill: PenilaianKinerjaAutoFill?) {
+private fun PenilaianAutoFillCard(
+    autoFill: PenilaianKinerjaAutoFill?,
+    enabled: Boolean,
+    onUseAutoFill: (PenilaianKinerjaAutoFill) -> Unit
+) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp)
@@ -709,7 +706,7 @@ private fun PenilaianAutoFillCard(autoFill: PenilaianKinerjaAutoFill?) {
             ) {
                 Icon(Icons.Default.AutoGraph, contentDescription = null, tint = PrimaryLight)
                 Text(
-                    text = "Auto-fill dari Target & Realisasi",
+                    text = "Saran Nilai Otomatis",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                 )
             }
@@ -768,6 +765,16 @@ private fun PenilaianAutoFillCard(autoFill: PenilaianKinerjaAutoFill?) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                Button(
+                    onClick = { onUseAutoFill(autoFill) },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled
+                ) {
+                    Icon(Icons.Default.SmartToy, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Gunakan Nilai Otomatis")
+                }
             }
         }
     }

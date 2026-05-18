@@ -8,10 +8,12 @@ import androidx.lifecycle.viewModelScope
 import com.google.android.gms.location.LocationServices
 import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.KategoriKegiatan
+import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaItem
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatan
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
 import com.kominfo_mkq.izakod_asn.data.repository.LaporanRepository
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
+import com.kominfo_mkq.izakod_asn.data.repository.TargetKinerjaRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,6 +40,8 @@ data class CreateLaporanUiState(
     val deskripsiKegiatan: String = "",
     val targetOutput: String = "",
     val hasilOutput: String = "",
+    val selectedTargetKinerjaId: String = "",
+    val selectedTargetKinerjaDetailId: String = "",
     val waktuMulai: String = "",
     val waktuSelesai: String = "",
     val lokasiKegiatan: String = "",
@@ -51,9 +55,11 @@ data class CreateLaporanUiState(
 
     // Data
     val kategoris: List<KategoriKegiatan> = emptyList(),
+    val targetKinerjaList: List<TargetKinerjaItem> = emptyList(),
 
     // UI states
     val gettingLocation: Boolean = false,
+    val isLoadingTargetKinerja: Boolean = false,
 
     // Validation
     val errors: Map<String, String> = emptyMap()
@@ -77,12 +83,14 @@ class CreateLaporanViewModel : ViewModel() {
 
     private val apiService = ApiClient.eabsenApiService
     private val repository = LaporanRepository()
+    private val targetRepository = TargetKinerjaRepository()
 
     private val _uiState = MutableStateFlow(CreateLaporanUiState())
     val uiState: StateFlow<CreateLaporanUiState> = _uiState.asStateFlow()
 
     init {
         loadKategoriList()
+        loadTargetKinerjaOptions()
     }
 
     /**
@@ -120,13 +128,16 @@ class CreateLaporanViewModel : ViewModel() {
 
         // ✅ Preserve kategoris
         val currentKategoris = _uiState.value.kategoris
+        val currentTargetKinerjaList = _uiState.value.targetKinerjaList
 
         _uiState.value = CreateLaporanUiState(
             kategoris = currentKategoris,  // ✅ Keep kategoris!
+            targetKinerjaList = currentTargetKinerjaList,
             isSuccess = false,
             isLoading = false,
             errorMessage = null
         )
+        loadTargetKinerjaOptions(clearSelection = true)
     }
 
     /**
@@ -135,8 +146,22 @@ class CreateLaporanViewModel : ViewModel() {
     fun updateTanggalKegiatan(value: String) {
         _uiState.value = _uiState.value.copy(
             tanggalKegiatan = value,
+            selectedTargetKinerjaId = "",
+            selectedTargetKinerjaDetailId = "",
             errors = _uiState.value.errors - "tanggal_kegiatan"
         )
+        loadTargetKinerjaOptions(clearSelection = true)
+    }
+
+    fun updateTargetKinerja(value: String) {
+        _uiState.value = _uiState.value.copy(
+            selectedTargetKinerjaId = value,
+            selectedTargetKinerjaDetailId = ""
+        )
+    }
+
+    fun updateTargetKinerjaDetail(value: String) {
+        _uiState.value = _uiState.value.copy(selectedTargetKinerjaDetailId = value)
     }
 
     fun updateKategori(value: String) {
@@ -340,6 +365,8 @@ class CreateLaporanViewModel : ViewModel() {
                     deskripsiKegiatan = state.deskripsiKegiatan.trim(),
                     targetOutput = state.targetOutput.takeIf { it.isNotBlank() },
                     hasilOutput = state.hasilOutput.takeIf { it.isNotBlank() },
+                    targetKinerjaId = state.selectedTargetKinerjaId.toIntOrNull(),
+                    targetKinerjaDetailId = state.selectedTargetKinerjaDetailId.toIntOrNull(),
                     waktuMulai = state.waktuMulai,
                     waktuSelesai = state.waktuSelesai,
                     lokasiKegiatan = state.lokasiKegiatan.takeIf { it.isNotBlank() },
@@ -442,6 +469,7 @@ class CreateLaporanViewModel : ViewModel() {
      */
     fun loadFromTemplate(template: TemplateKegiatan) {
         val currentKategoris = _uiState.value.kategoris
+        val currentTargetKinerjaList = _uiState.value.targetKinerjaList
 
         _uiState.value = CreateLaporanUiState(
             kategoriId = template.kategoriId.toString(),
@@ -463,8 +491,10 @@ class CreateLaporanViewModel : ViewModel() {
             isSuccess = false,
             isLoading = false,
             errorMessage = null,
-            kategoris = currentKategoris
+            kategoris = currentKategoris,
+            targetKinerjaList = currentTargetKinerjaList
         )
+        loadTargetKinerjaOptions(clearSelection = true)
     }
 
     /**
@@ -473,13 +503,16 @@ class CreateLaporanViewModel : ViewModel() {
     fun clearForm() {
         // ✅ Preserve kategoris
         val currentKategoris = _uiState.value.kategoris
+        val currentTargetKinerjaList = _uiState.value.targetKinerjaList
 
         _uiState.value = CreateLaporanUiState(
             kategoris = currentKategoris,
+            targetKinerjaList = currentTargetKinerjaList,
             isSuccess = false,
             isLoading = false,
             errorMessage = null
         )
+        loadTargetKinerjaOptions(clearSelection = true)
     }
 
     fun resetSuccess() {
@@ -488,5 +521,104 @@ class CreateLaporanViewModel : ViewModel() {
             errorMessage = null
         )
         android.util.Log.d("CreateLaporanViewModel", "✅ Success state reset")
+    }
+
+    private fun loadTargetKinerjaOptions(clearSelection: Boolean = false) {
+        viewModelScope.launch {
+            val (tahun, bulan) = parseYearMonth(_uiState.value.tanggalKegiatan)
+                ?: run {
+                    _uiState.value = _uiState.value.copy(
+                        targetKinerjaList = emptyList(),
+                        isLoadingTargetKinerja = false,
+                        selectedTargetKinerjaId = "",
+                        selectedTargetKinerjaDetailId = ""
+                    )
+                    return@launch
+                }
+
+            _uiState.value = _uiState.value.copy(
+                isLoadingTargetKinerja = true,
+                selectedTargetKinerjaId = if (clearSelection) "" else _uiState.value.selectedTargetKinerjaId,
+                selectedTargetKinerjaDetailId = if (clearSelection) "" else _uiState.value.selectedTargetKinerjaDetailId
+            )
+
+            try {
+                val response = targetRepository.getTargetKinerjaList(
+                    tahun = tahun,
+                    bulan = bulan
+                )
+
+                if (response.success) {
+                    val targetOptions = response.data?.data
+                        .orEmpty()
+                        .filter { it.status.lowercase(Locale.getDefault()) in READY_TARGET_STATUSES }
+                        .map { loadTargetWithDetails(it) }
+
+                    val currentTargetId = _uiState.value.selectedTargetKinerjaId
+                    val currentDetailId = _uiState.value.selectedTargetKinerjaDetailId
+                    val selectedTarget = targetOptions.firstOrNull { it.id.toString() == currentTargetId }
+                    val detailStillValid = currentDetailId.isBlank() ||
+                        selectedTarget?.details?.any { it.id?.toString() == currentDetailId } == true
+                    val nextTargetId = when {
+                        clearSelection || currentTargetId.isBlank() -> selectedTarget?.id?.toString().orEmpty()
+                        selectedTarget != null -> selectedTarget.id.toString()
+                        else -> currentTargetId
+                    }
+                    val nextDetailId = when {
+                        currentDetailId.isBlank() -> ""
+                        selectedTarget != null && detailStillValid -> currentDetailId
+                        selectedTarget == null && !clearSelection -> currentDetailId
+                        else -> ""
+                    }
+
+                    _uiState.value = _uiState.value.copy(
+                        targetKinerjaList = targetOptions,
+                        isLoadingTargetKinerja = false,
+                        selectedTargetKinerjaId = nextTargetId,
+                        selectedTargetKinerjaDetailId = nextDetailId
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        targetKinerjaList = emptyList(),
+                        isLoadingTargetKinerja = false
+                    )
+                    android.util.Log.e(
+                        "CreateLaporanViewModel",
+                        "Failed to load target kinerja: ${response.error}"
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    targetKinerjaList = emptyList(),
+                    isLoadingTargetKinerja = false
+                )
+                android.util.Log.e("CreateLaporanViewModel", "Error loading target kinerja: ${e.message}", e)
+            }
+        }
+    }
+
+    private suspend fun loadTargetWithDetails(target: TargetKinerjaItem): TargetKinerjaItem {
+        if (target.details.isNotEmpty()) return target
+
+        val response = targetRepository.getTargetKinerjaDetail(target.id)
+        return if (response.success) {
+            response.data?.data ?: target
+        } else {
+            target
+        }
+    }
+
+    private fun parseYearMonth(date: String): Pair<Int, Int>? {
+        val parts = date.take(10).split("-")
+        if (parts.size < 2) return null
+
+        val tahun = parts[0].toIntOrNull() ?: return null
+        val bulan = parts[1].toIntOrNull() ?: return null
+
+        return tahun to bulan
+    }
+
+    companion object {
+        private val READY_TARGET_STATUSES = setOf("disetujui", "final")
     }
 }

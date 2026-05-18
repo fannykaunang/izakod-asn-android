@@ -16,7 +16,8 @@ import java.util.concurrent.TimeUnit
 
 object ApiClient {
 
-    const val BASE_URL = "http://192.168.110.236:3000/"
+    // const val BASE_URL = "http://192.168.110.236:3001/"
+    const val BASE_URL = "https://izakod-asn.merauke.go.id/"
     const val API_KEY = "f26d27b0b8a01f0390767155e17745e2"
 
     private val apiKeyInterceptor = Interceptor { chain ->

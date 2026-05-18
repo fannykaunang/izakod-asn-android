@@ -1,5 +1,6 @@
 package com.kominfo_mkq.izakod_asn.data.model
 
+import com.google.gson.JsonElement
 import com.google.gson.annotations.SerializedName
 
 data class LaporanDetail(
@@ -38,6 +39,15 @@ data class LaporanDetail(
 
     @SerializedName("hasil_output")
     val hasilOutput: String?,
+
+    @SerializedName("target_kinerja_id")
+    val targetKinerjaId: Int? = null,
+
+    @SerializedName("target_kinerja_detail_id")
+    val targetKinerjaDetailId: Int? = null,
+
+    @SerializedName("target_detail_uraian")
+    val targetDetailUraian: String? = null,
 
     @SerializedName("waktu_mulai")
     val waktuMulai: String,
@@ -122,6 +132,8 @@ data class UpdateLaporanRequest(
     val deskripsi_kegiatan: String? = null,
     val target_output: String? = null,
     val hasil_output: String? = null,
+    val target_kinerja_id: JsonElement? = null,
+    val target_kinerja_detail_id: JsonElement? = null,
     val waktu_mulai: String? = null,
     val waktu_selesai: String? = null,
     val lokasi_kegiatan: String? = null,

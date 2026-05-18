@@ -34,7 +34,10 @@ class TargetKinerjaListViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(TargetKinerjaListUiState(isLoading = true))
     val uiState: StateFlow<TargetKinerjaListUiState> = _uiState.asStateFlow()
 
-    fun refresh() {
+    fun refresh(
+        tahun: Int? = null,
+        bulan: Int? = null
+    ) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isLoading = true,
@@ -42,7 +45,10 @@ class TargetKinerjaListViewModel : ViewModel() {
                 errorMessage = null
             )
 
-            val response = repository.getTargetKinerjaList()
+            val response = repository.getTargetKinerjaList(
+                tahun = tahun,
+                bulan = bulan
+            )
             if (response.success && response.data != null) {
                 _uiState.value = TargetKinerjaListUiState(
                     isLoading = false,

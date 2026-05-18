@@ -3,6 +3,7 @@ package com.kominfo_mkq.izakod_asn.ui.screens
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,14 +22,18 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.filled.Warning
@@ -52,6 +57,10 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -65,8 +74,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.LaporanKegiatan
@@ -366,6 +378,238 @@ fun TargetKinerjaListScreen(
     }
 }
 
+@Composable
+fun TargetKinerjaSubordinatePeriodScreen(
+    tahun: Int,
+    bulan: Int,
+    onNavigateBack: () -> Unit,
+    onNavigateToDetail: (Int, Boolean) -> Unit,
+    viewModel: TargetKinerjaListViewModel = viewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    var statusFilter by remember { mutableStateOf(TargetStatusFilter.ALL) }
+    var searchQuery by remember { mutableStateOf("") }
+    var isSearchActive by remember { mutableStateOf(false) }
+    val periodLabel = remember(tahun, bulan) { formatPeriodeTarget(bulan, tahun) }
+
+    LaunchedEffect(tahun, bulan) {
+        viewModel.refresh(tahun = tahun, bulan = bulan)
+    }
+
+    val subordinateTargets = remember(uiState.targets, uiState.currentPegawaiId) {
+        if (uiState.currentPegawaiId != null) {
+            uiState.targets.filter { it.pegawaiId != uiState.currentPegawaiId }
+        } else {
+            emptyList()
+        }
+    }
+    val filteredTargets = remember(subordinateTargets, statusFilter, searchQuery) {
+        subordinateTargets.filter { target ->
+            val matchesStatus = statusFilter.raw == null ||
+                target.status.equals(statusFilter.raw, ignoreCase = true)
+            val matchesSearch = searchQuery.isBlank() ||
+                target.pegawaiNama.orEmpty().contains(searchQuery, ignoreCase = true)
+            matchesStatus && matchesSearch
+        }.sortedBy { it.pegawaiNama.orEmpty() }
+    }
+
+    Scaffold(
+        topBar = {
+            TargetBawahanPeriodTopBar(
+                isSearchActive = isSearchActive,
+                searchQuery = searchQuery,
+                onSearchQueryChange = { searchQuery = it },
+                onToggleSearch = { isSearchActive = true },
+                onCloseSearch = {
+                    isSearchActive = false
+                    searchQuery = ""
+                },
+                onRefresh = { viewModel.refresh(tahun = tahun, bulan = bulan) },
+                onNavigateBack = onNavigateBack
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .background(MaterialTheme.colorScheme.background),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = periodLabel,
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold)
+                    )
+                    Text(
+                        text = "${subordinateTargets.size} target bawahan pada periode ini",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(end = 16.dp)
+            ) {
+                items(TargetStatusFilter.entries) { filter ->
+                    FilterChip(
+                        selected = statusFilter == filter,
+                        onClick = { statusFilter = filter },
+                        label = { Text(filter.label) }
+                    )
+                }
+            }
+
+            when {
+                uiState.isLoading -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                }
+
+                uiState.isError -> {
+                    SimpleStateCard(
+                        icon = Icons.Default.Warning,
+                        title = "Gagal memuat target bawahan",
+                        message = uiState.errorMessage ?: "Terjadi kesalahan",
+                        actionText = "Coba Lagi",
+                        onAction = { viewModel.refresh(tahun = tahun, bulan = bulan) }
+                    )
+                }
+
+                filteredTargets.isEmpty() -> {
+                    SimpleStateCard(
+                        icon = Icons.Default.Groups,
+                        title = if (subordinateTargets.isEmpty()) {
+                            "Belum ada target bawahan"
+                        } else {
+                            "Tidak ada hasil"
+                        },
+                        message = if (subordinateTargets.isEmpty()) {
+                            "Belum ada bawahan yang menginput target pada periode $periodLabel."
+                        } else {
+                            "Coba ubah kata kunci pencarian atau filter status."
+                        },
+                        actionText = "Refresh",
+                        onAction = { viewModel.refresh(tahun = tahun, bulan = bulan) }
+                    )
+                }
+
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 112.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(filteredTargets, key = { it.id }) { target ->
+                            TargetKinerjaCard(
+                                target = target,
+                                showPegawaiName = true,
+                                onClick = {
+                                    onNavigateToDetail(target.id, true)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TargetBawahanPeriodTopBar(
+    isSearchActive: Boolean,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onToggleSearch: () -> Unit,
+    onCloseSearch: () -> Unit,
+    onRefresh: () -> Unit,
+    onNavigateBack: () -> Unit
+) {
+    TopAppBar(
+        title = {
+            if (isSearchActive) {
+                TextField(
+                    value = searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    placeholder = {
+                        Text(
+                            text = "Cari nama bawahan...",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                    )
+                )
+            } else {
+                Text(
+                    text = "Target Bawahan",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        },
+        navigationIcon = {
+            IconButton(onClick = onNavigateBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
+            }
+        },
+        actions = {
+            IconButton(
+                onClick = if (isSearchActive) onCloseSearch else onToggleSearch
+            ) {
+                Icon(
+                    imageVector = if (isSearchActive) Icons.Default.Close else Icons.Default.Search,
+                    contentDescription = if (isSearchActive) "Tutup pencarian" else "Cari bawahan"
+                )
+            }
+            IconButton(onClick = onRefresh) {
+                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+            }
+        },
+        windowInsets = WindowInsets(0, 0, 0, 0),
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            scrolledContainerColor = MaterialTheme.colorScheme.surface
+        )
+    )
+}
+
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -470,6 +714,14 @@ fun TargetKinerjaDetailScreen(
             }
 
             else -> {
+                val totalDetails = target.details.size
+                val filledCount = target.details.count { detail ->
+                    hasFilledRealisasi(realisasiByDetailId[detail.id ?: -1])
+                }
+                val linkedCount = linkedLaporanByDetailId.values.sumOf { it.size }
+                val totalWeight = target.details.sumOf { it.bobot ?: 0.0 }
+                val isRealisasiComplete = totalDetails > 0 && filledCount == totalDetails
+
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
@@ -478,60 +730,9 @@ fun TargetKinerjaDetailScreen(
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     item {
-                        Surface(
-                            shape = RoundedCornerShape(28.dp),
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(20.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.Top
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = target.pegawaiNama ?: "Pegawai #${target.pegawaiId}",
-                                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold)
-                                        )
-                                        Text(
-                                            text = formatPeriodeTarget(target.bulan, target.tahun),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    StatusBadgeTarget(status = target.status)
-                                }
-
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    AssistChip(
-                                        onClick = {},
-                                        label = { Text("${target.details.size} item") },
-                                        leadingIcon = {
-                                            Icon(Icons.Outlined.Description, contentDescription = null)
-                                        }
-                                    )
-                                    if (!target.approverNama.isNullOrBlank()) {
-                                        AssistChip(
-                                            onClick = {},
-                                            label = { Text("Review: ${target.approverNama}") },
-                                            leadingIcon = {
-                                                Icon(Icons.Default.TaskAlt, contentDescription = null)
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    item {
-                        DetailCardSection(
-                            title = "Catatan Pegawai",
-                            body = target.catatanPegawai?.takeIf { it.isNotBlank() }
-                                ?: "Belum ada catatan pegawai."
+                        TargetDetailHeroCard(
+                            target = target,
+                            isAssessmentFinalized = isAssessmentFinalized
                         )
                     }
 
@@ -542,49 +743,30 @@ fun TargetKinerjaDetailScreen(
                     }
 
                     item {
-                        ElevatedCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(22.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Text(
-                                    text = "Progres Realisasi",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                                )
+                        TargetDetailNoteCard(
+                            title = "Catatan Pegawai",
+                            body = target.catatanPegawai?.takeIf { it.isNotBlank() }
+                                ?: "Belum ada catatan pegawai."
+                        )
+                    }
 
-                                val filledCount = target.details.count { detail ->
-                                    hasFilledRealisasi(realisasiByDetailId[detail.id ?: -1])
-                                }
-                                val linkedCount = linkedLaporanByDetailId.values.sumOf { it.size }
+                    item {
+                        TargetDetailProgressCard(
+                            totalItems = totalDetails,
+                            filledItems = filledCount,
+                            linkedReports = linkedCount,
+                            totalWeight = totalWeight,
+                            isRefreshing = uiState.isRefreshingRealisasi
+                        )
+                    }
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    InfoBoxTarget(
-                                        label = "Item Terisi",
-                                        value = "$filledCount/${target.details.size}",
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    InfoBoxTarget(
-                                        label = "Laporan Tertaut",
-                                        value = linkedCount.toString(),
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-
-                                if (uiState.isRefreshingRealisasi) {
-                                    Text(
-                                        text = "Memperbarui data realisasi...",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
+                    item {
+                        TargetDetailFlowCard(
+                            hasTarget = totalDetails > 0,
+                            hasRealisasi = isRealisasiComplete,
+                            hasLinkedLaporan = linkedCount > 0,
+                            isFinal = isAssessmentFinalized
+                        )
                     }
 
                     item {
@@ -596,7 +778,7 @@ fun TargetKinerjaDetailScreen(
 
                     items(target.details, key = { it.id ?: it.uraianTarget.hashCode() }) { detail ->
                         val detailId = detail.id ?: -1
-                        TargetDetailItemCard(
+                        TargetDetailItemCardModern(
                             detail = detail,
                             realisasi = realisasiByDetailId[detailId],
                             linkedLaporan = linkedLaporanByDetailId[detailId].orEmpty(),
@@ -646,7 +828,7 @@ fun TargetKinerjaDetailScreen(
                     }
 
                     item {
-                        DetailCardSection(
+                        TargetDetailNoteCard(
                             title = "Catatan Atasan",
                             body = target.catatanAtasan?.takeIf { it.isNotBlank() }
                                 ?: "Belum ada catatan atasan."
@@ -918,6 +1100,8 @@ fun TargetKinerjaDetailScreen(
 @Composable
 fun TargetKinerjaFormScreen(
     targetId: Int?,
+    initialTahun: Int? = null,
+    initialBulan: Int? = null,
     onNavigateBack: () -> Unit,
     onNavigateToDetail: (Int) -> Unit,
     viewModel: TargetKinerjaFormViewModel = viewModel()
@@ -927,8 +1111,12 @@ fun TargetKinerjaFormScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    var tahun by remember { mutableStateOf(java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)) }
-    var bulan by remember { mutableStateOf(java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1) }
+    var tahun by remember {
+        mutableStateOf(initialTahun ?: java.util.Calendar.getInstance().get(java.util.Calendar.YEAR))
+    }
+    var bulan by remember {
+        mutableStateOf(initialBulan ?: java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1)
+    }
     var catatanPegawai by remember { mutableStateOf("") }
     val detailItems = remember { mutableStateListOf(emptyTargetDetailFormState()) }
 
@@ -1179,6 +1367,769 @@ private fun TargetKinerjaCard(
 }
 
 @Composable
+private fun TargetDetailHeroCard(
+    target: TargetKinerjaItem,
+    isAssessmentFinalized: Boolean
+) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(30.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = target.pegawaiNama ?: "Pegawai #${target.pegawaiId}",
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = formatPeriodeTarget(target.bulan, target.tahun),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                StatusBadgeTarget(status = target.status)
+            }
+
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item {
+                    InfoMiniChip(
+                        icon = Icons.Outlined.Description,
+                        text = "${target.detailCount ?: target.details.size} item"
+                    )
+                }
+                if (!target.approverNama.isNullOrBlank()) {
+                    item {
+                        InfoMiniChip(
+                            icon = Icons.Default.TaskAlt,
+                            text = "Review: ${target.approverNama}"
+                        )
+                    }
+                }
+                if (isAssessmentFinalized) {
+                    item {
+                        InfoMiniChip(
+                            icon = Icons.Default.Warning,
+                            text = "Periode final"
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TargetDetailProgressCard(
+    totalItems: Int,
+    filledItems: Int,
+    linkedReports: Int,
+    totalWeight: Double,
+    isRefreshing: Boolean
+) {
+    val progress = if (totalItems == 0) 0.0 else (filledItems.toDouble() / totalItems.toDouble()) * 100.0
+    val statusText = when {
+        totalItems == 0 -> "Belum ada item"
+        filledItems == totalItems -> "Lengkap"
+        else -> "Belum lengkap"
+    }
+
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(18.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TargetProgressCircle(progress = progress)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Progress Realisasi",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold)
+                    )
+                    Text(
+                        text = if (totalItems == 0) {
+                            "Belum ada item target untuk periode ini."
+                        } else {
+                            "$filledItems dari $totalItems item sudah memiliki realisasi."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    TargetSoftPill(
+                        text = statusText,
+                        color = if (filledItems == totalItems && totalItems > 0) StatusApproved else StatusPending
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                InfoBoxTarget(
+                    label = "Item terisi",
+                    value = "$filledItems/$totalItems",
+                    modifier = Modifier.weight(1f)
+                )
+                InfoBoxTarget(
+                    label = "Laporan tertaut",
+                    value = linkedReports.toString(),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                InfoBoxTarget(
+                    label = "Status",
+                    value = statusText,
+                    modifier = Modifier.weight(1f)
+                )
+                InfoBoxTarget(
+                    label = "Total bobot",
+                    value = "${formatNullableDouble(totalWeight)}%",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            if (isRefreshing) {
+                Text(
+                    text = "Memperbarui data realisasi...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TargetProgressCircle(progress: Double) {
+    val progressFraction = (progress / 100.0).toFloat().coerceIn(0f, 1f)
+    val ringColor = if (progress >= 100.0) StatusApproved else StatusPending
+
+    Box(
+        modifier = Modifier.size(112.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator(
+            progress = { progressFraction },
+            modifier = Modifier.fillMaxSize(),
+            color = ringColor,
+            trackColor = ringColor.copy(alpha = 0.16f),
+            strokeWidth = 10.dp
+        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "${progress.toInt()}%",
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = "Progress",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun TargetDetailFlowCard(
+    hasTarget: Boolean,
+    hasRealisasi: Boolean,
+    hasLinkedLaporan: Boolean,
+    isFinal: Boolean
+) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Alur Target Bulan Ini",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold)
+            )
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                item { TargetFlowStep("Target", if (hasTarget) "Sudah dibuat" else "Belum ada", hasTarget) }
+                item { TargetFlowStep("Realisasi", if (hasRealisasi) "Terisi" else "Perlu diisi", hasRealisasi) }
+                item { TargetFlowStep("Laporan", if (hasLinkedLaporan) "Tertaut" else "Opsional", hasLinkedLaporan) }
+                item { TargetFlowStep("Final", if (isFinal) "Terkunci" else "Belum final", isFinal) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TargetFlowStep(
+    title: String,
+    subtitle: String,
+    completed: Boolean
+) {
+    val color = if (completed) StatusApproved else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = color.copy(alpha = if (completed) 0.14f else 0.08f),
+        modifier = Modifier.width(132.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Surface(
+                modifier = Modifier.size(28.dp),
+                shape = RoundedCornerShape(50),
+                color = color.copy(alpha = 0.18f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = if (completed) Icons.Default.TaskAlt else Icons.Default.Flag,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = color
+                    )
+                }
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun TargetDetailNoteCard(
+    title: String,
+    body: String
+) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold)
+            )
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun TargetDetailItemCardModern(
+    detail: TargetKinerjaDetailItem,
+    realisasi: RealisasiKinerjaItem?,
+    linkedLaporan: List<RealisasiLinkedLaporanItem>,
+    candidateLaporan: List<LaporanKegiatan>,
+    draft: RealisasiFormState,
+    canManageRealisasi: Boolean,
+    isAssessmentFinalized: Boolean,
+    showRealisasiSection: Boolean,
+    realisasiHistory: List<RealisasiKinerjaHistoryItem>,
+    isSaving: Boolean,
+    isLinking: Boolean,
+    unlinkingKey: String?,
+    onDraftChange: (RealisasiFormState) -> Unit,
+    onSaveRealisasi: () -> Unit,
+    onOpenLaporanPicker: () -> Unit,
+    onUnlinkLaporan: (Int) -> Unit
+) {
+    val isFilled = hasFilledRealisasi(realisasi)
+
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    text = detail.uraianTarget,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                TargetSoftPill(
+                    text = if (isFilled) "Realisasi terisi" else "Belum terisi",
+                    color = if (isFilled) StatusApproved else StatusPending
+                )
+            }
+
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(end = 4.dp)
+            ) {
+                item { InfoMiniChip(icon = Icons.Outlined.Description, text = detail.indikator ?: "-") }
+                item { InfoMiniChip(icon = Icons.Default.Flag, text = "Bobot ${formatNullableDouble(detail.bobot)}%") }
+            }
+
+            HorizontalDivider()
+
+            if (showRealisasiSection) {
+                TargetRealityCompareGrid(
+                    detail = detail,
+                    realisasi = realisasi,
+                    draft = draft
+                )
+
+                if (canManageRealisasi) {
+                    Text(
+                        text = "Isi Realisasi",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                    OutlinedTextField(
+                        value = draft.realisasiKuantitas,
+                        onValueChange = { onDraftChange(draft.copy(realisasiKuantitas = it)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Realisasi Kuantitas") },
+                        enabled = !isSaving
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = draft.realisasiKualitas,
+                            onValueChange = { onDraftChange(draft.copy(realisasiKualitas = it)) },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("Kualitas") },
+                            enabled = !isSaving
+                        )
+                        OutlinedTextField(
+                            value = draft.realisasiWaktu,
+                            onValueChange = { onDraftChange(draft.copy(realisasiWaktu = it)) },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("Waktu") },
+                            enabled = !isSaving
+                        )
+                    }
+                    OutlinedTextField(
+                        value = draft.catatan,
+                        onValueChange = { onDraftChange(draft.copy(catatan = it)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                        label = { Text("Catatan Realisasi") },
+                        enabled = !isSaving
+                    )
+                    Button(
+                        onClick = onSaveRealisasi,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isSaving
+                    ) {
+                        Icon(Icons.Default.Save, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(if (isSaving) "Menyimpan..." else "Simpan Realisasi")
+                    }
+                } else {
+                    TargetReadOnlyInfo(
+                        text = if (isAssessmentFinalized) {
+                            "Periode final. Realisasi dan tautan laporan hanya bisa dilihat."
+                        } else {
+                            "Mode baca saja. Realisasi diisi oleh pemilik target atau admin saat target sudah disetujui/final."
+                        }
+                    )
+                    if (draft.catatan.isNotBlank()) {
+                        TargetDetailNoteCard(
+                            title = "Catatan Realisasi",
+                            body = draft.catatan
+                        )
+                    }
+                }
+
+                TargetLinkedLaporanSection(
+                    detailId = detail.id,
+                    linkedLaporan = linkedLaporan,
+                    candidateLaporan = candidateLaporan,
+                    realisasi = realisasi,
+                    canManageRealisasi = canManageRealisasi,
+                    isAssessmentFinalized = isAssessmentFinalized,
+                    isLinking = isLinking,
+                    unlinkingKey = unlinkingKey,
+                    onOpenLaporanPicker = onOpenLaporanPicker,
+                    onUnlinkLaporan = onUnlinkLaporan
+                )
+
+                if (realisasiHistory.isNotEmpty()) {
+                    HorizontalDivider()
+                    RealisasiHistorySection(history = realisasiHistory)
+                }
+            } else {
+                TargetMetricGrid(detail = detail)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TargetMetricGrid(detail: TargetKinerjaDetailItem) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            InfoBoxTarget(
+                label = "Satuan",
+                value = detail.satuan ?: "-",
+                modifier = Modifier.weight(1f)
+            )
+            InfoBoxTarget(
+                label = "Kuantitas",
+                value = formatNullableDouble(detail.targetKuantitas),
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            InfoBoxTarget(
+                label = "Kualitas",
+                value = formatNullableDouble(detail.targetKualitas),
+                modifier = Modifier.weight(1f)
+            )
+            InfoBoxTarget(
+                label = "Waktu",
+                value = formatNullableDouble(detail.targetWaktu),
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TargetRealityCompareGrid(
+    detail: TargetKinerjaDetailItem,
+    realisasi: RealisasiKinerjaItem?,
+    draft: RealisasiFormState
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            text = "Target dan Realisasi",
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            TargetMetricCompareBox(
+                label = detail.satuan?.takeIf { it.isNotBlank() } ?: "Kuantitas",
+                target = formatNullableDouble(detail.targetKuantitas),
+                realisasi = draft.realisasiKuantitas.takeIf { it.isNotBlank() }
+                    ?: formatNullableDouble(realisasi?.realisasiKuantitas),
+                modifier = Modifier.weight(1f)
+            )
+            TargetMetricCompareBox(
+                label = "Kualitas",
+                target = formatNullableDouble(detail.targetKualitas),
+                realisasi = draft.realisasiKualitas.takeIf { it.isNotBlank() }
+                    ?: formatNullableDouble(realisasi?.realisasiKualitas),
+                modifier = Modifier.weight(1f)
+            )
+            TargetMetricCompareBox(
+                label = "Waktu",
+                target = formatNullableDouble(detail.targetWaktu),
+                realisasi = draft.realisasiWaktu.takeIf { it.isNotBlank() }
+                    ?: formatNullableDouble(realisasi?.realisasiWaktu),
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TargetMetricCompareBox(
+    label: String,
+    target: String,
+    realisasi: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "Target",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = target,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold)
+            )
+            HorizontalDivider()
+            Text(
+                text = "Realisasi",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = realisasi,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
+private fun TargetLinkedLaporanSection(
+    detailId: Int?,
+    linkedLaporan: List<RealisasiLinkedLaporanItem>,
+    candidateLaporan: List<LaporanKegiatan>,
+    realisasi: RealisasiKinerjaItem?,
+    canManageRealisasi: Boolean,
+    isAssessmentFinalized: Boolean,
+    isLinking: Boolean,
+    unlinkingKey: String?,
+    onOpenLaporanPicker: () -> Unit,
+    onUnlinkLaporan: (Int) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Laporan Pendukung",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+            )
+            TargetSoftPill(
+                text = "${linkedLaporan.size} tertaut",
+                color = if (linkedLaporan.isNotEmpty()) StatusApproved else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        if (linkedLaporan.isEmpty()) {
+            TargetEmptySupportCard(
+                message = if (isAssessmentFinalized) {
+                    "Belum ada laporan yang ditautkan. Periode final, jadi laporan tidak bisa ditambah."
+                } else {
+                    "Belum ada laporan yang ditautkan ke item ini."
+                }
+            )
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                linkedLaporan.forEach { laporan ->
+                    TargetLinkedLaporanCard(
+                        detailId = detailId,
+                        laporan = laporan,
+                        canManageRealisasi = canManageRealisasi,
+                        unlinkingKey = unlinkingKey,
+                        onUnlinkLaporan = onUnlinkLaporan
+                    )
+                }
+            }
+        }
+
+        if (canManageRealisasi) {
+            Button(
+                onClick = onOpenLaporanPicker,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = realisasi != null && !isLinking && candidateLaporan.isNotEmpty()
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    when {
+                        realisasi == null -> "Simpan realisasi dulu"
+                        candidateLaporan.isEmpty() -> "Semua laporan sudah tertaut"
+                        isLinking -> "Menautkan..."
+                        else -> "Tautkan Laporan Pendukung"
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TargetLinkedLaporanCard(
+    detailId: Int?,
+    laporan: RealisasiLinkedLaporanItem,
+    canManageRealisasi: Boolean,
+    unlinkingKey: String?,
+    onUnlinkLaporan: (Int) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = laporan.namaKegiatan,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.ExtraBold)
+            )
+            Text(
+                text = "${formatTargetTanggalShort(laporan.tanggalKegiatan)} - ${formatTargetRentangWaktu(laporan.waktuMulai, laporan.waktuSelesai)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = laporan.namaKategori ?: "Tanpa kategori",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            if (canManageRealisasi) {
+                TextButton(
+                    onClick = { onUnlinkLaporan(laporan.laporanId) },
+                    enabled = unlinkingKey != "$detailId-${laporan.laporanId}"
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = null)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        if (unlinkingKey == "$detailId-${laporan.laporanId}") {
+                            "Melepas..."
+                        } else {
+                            "Lepas"
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TargetEmptySupportCard(message: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f)
+    ) {
+        Text(
+            text = message,
+            modifier = Modifier.padding(14.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun TargetReadOnlyInfo(text: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = StatusPending.copy(alpha = 0.12f)
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Icon(
+                imageVector = Icons.Default.Warning,
+                contentDescription = null,
+                tint = StatusPending,
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun TargetSoftPill(
+    text: String,
+    color: Color
+) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = color.copy(alpha = 0.14f),
+        modifier = Modifier.border(
+            width = 1.dp,
+            color = color.copy(alpha = 0.20f),
+            shape = RoundedCornerShape(50)
+        )
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
 private fun TargetDetailItemCard(
     detail: TargetKinerjaDetailItem,
     realisasi: RealisasiKinerjaItem?,
@@ -1210,12 +2161,13 @@ private fun TargetDetailItemCard(
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
             )
 
-            Row(
+            LazyRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(end = 4.dp)
             ) {
-                InfoMiniChip(icon = Icons.Outlined.Description, text = detail.indikator ?: "-")
-                InfoMiniChip(icon = Icons.Default.Flag, text = "Bobot ${formatNullableDouble(detail.bobot)}%")
+                item { InfoMiniChip(icon = Icons.Outlined.Description, text = detail.indikator ?: "-") }
+                item { InfoMiniChip(icon = Icons.Default.Flag, text = "Bobot ${formatNullableDouble(detail.bobot)}%") }
             }
 
             HorizontalDivider()
@@ -1431,7 +2383,7 @@ private fun TargetDetailItemCard(
 private fun LockedPeriodBanner() {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp)
+        shape = RoundedCornerShape(24.dp)
     ) {
         Row(
             modifier = Modifier
@@ -1455,11 +2407,11 @@ private fun LockedPeriodBanner() {
             }
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "Periode Dikunci",
+                    text = "Periode sudah final",
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                 )
                 Text(
-                    text = "Penilaian kinerja untuk periode ini sudah final. Target, realisasi, dan tautan laporan pendukung hanya bisa dilihat.",
+                    text = "Penilaian kinerja untuk periode ini sudah final. Target, realisasi, dan laporan pendukung hanya bisa dilihat.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1468,8 +2420,174 @@ private fun LockedPeriodBanner() {
     }
 }
 
+private data class TimelineHistoryEntry(
+    val title: String,
+    val subtitle: String?,
+    val timestamp: String
+)
+
 @Composable
 private fun TargetHistorySection(history: List<TargetKinerjaHistoryItem>) {
+    TargetTimelineHistoryCard(
+        title = "Riwayat Target",
+        emptyMessage = "Belum ada riwayat target.",
+        entries = history.map { item ->
+            TimelineHistoryEntry(
+                title = readableHistoryAction(item.aksi),
+                subtitle = item.catatan?.takeIf { it.isNotBlank() },
+                timestamp = formatHistoryTimestamp(item.createdAt)
+            )
+        }
+    )
+}
+
+@Composable
+private fun RealisasiHistorySection(history: List<RealisasiKinerjaHistoryItem>) {
+    TargetTimelineHistoryCard(
+        title = "Riwayat Realisasi",
+        emptyMessage = "Belum ada riwayat realisasi.",
+        entries = history.map { item ->
+            TimelineHistoryEntry(
+                title = readableHistoryAction(item.aksi),
+                subtitle = item.catatan?.takeIf { it.isNotBlank() },
+                timestamp = formatHistoryTimestamp(item.createdAt)
+            )
+        }
+    )
+}
+
+@Composable
+private fun TargetTimelineHistoryCard(
+    title: String,
+    emptyMessage: String,
+    entries: List<TimelineHistoryEntry>
+) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            if (entries.isEmpty()) {
+                TargetEmptySupportCard(message = emptyMessage)
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                    entries.forEachIndexed { index, entry ->
+                        TimelineHistoryRow(
+                            entry = entry,
+                            isLast = index == entries.lastIndex
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimelineHistoryRow(
+    entry: TimelineHistoryEntry,
+    isLast: Boolean
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Column(
+            modifier = Modifier.width(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Surface(
+                modifier = Modifier.size(20.dp),
+                shape = RoundedCornerShape(50),
+                color = StatusApproved
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.TaskAlt,
+                        contentDescription = null,
+                        modifier = Modifier.size(13.dp),
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+            }
+            if (!isLast) {
+                Box(
+                    modifier = Modifier
+                        .width(2.dp)
+                        .height(28.dp)
+                        .background(StatusApproved.copy(alpha = 0.65f))
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(bottom = if (isLast) 0.dp else 14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    text = entry.title,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.ExtraBold),
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = entry.timestamp,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.End
+                )
+            }
+            if (!entry.subtitle.isNullOrBlank()) {
+                Text(
+                    text = entry.subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TargetHistorySectionLegacy(history: List<TargetKinerjaHistoryItem>) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp)
@@ -1519,7 +2637,7 @@ private fun TargetHistorySection(history: List<TargetKinerjaHistoryItem>) {
 }
 
 @Composable
-private fun RealisasiHistorySection(history: List<RealisasiKinerjaHistoryItem>) {
+private fun RealisasiHistorySectionLegacy(history: List<RealisasiKinerjaHistoryItem>) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
             text = "Riwayat Realisasi",

@@ -26,6 +26,12 @@ data class CreateLaporanRequest(
     @SerializedName("hasil_output")
     val hasilOutput: String? = null,
 
+    @SerializedName("target_kinerja_id")
+    val targetKinerjaId: Int? = null,
+
+    @SerializedName("target_kinerja_detail_id")
+    val targetKinerjaDetailId: Int? = null,
+
     @SerializedName("waktu_mulai")
     val waktuMulai: String,  // Format: HH:mm
 

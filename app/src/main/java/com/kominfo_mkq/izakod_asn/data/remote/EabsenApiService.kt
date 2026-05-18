@@ -29,6 +29,7 @@ import com.kominfo_mkq.izakod_asn.data.model.StatistikBulananResponse
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanCreateRequest
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanCreateResponse
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanResponse
+import com.kominfo_mkq.izakod_asn.data.model.TppMeResponse
 import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaDetailResponse
 import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaHistoryResponse
 import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaListResponse
@@ -100,7 +101,16 @@ interface EabsenApiService {
     ): Response<StatistikHarianResponse>
 
     @GET("api/dashboard")
-    suspend fun getDashboardOverview(): Response<DashboardOverviewResponse>
+    suspend fun getDashboardOverview(
+        @Query("tahun") tahun: Int? = null,
+        @Query("bulan") bulan: Int? = null
+    ): Response<DashboardOverviewResponse>
+
+    @GET("api/tpp/me")
+    suspend fun getTppSaya(
+        @Query("tahun") tahun: Int? = null,
+        @Query("bulan") bulan: Int? = null
+    ): Response<TppMeResponse>
 
     /**
      * ✅ NEW: Get list kategori kegiatan

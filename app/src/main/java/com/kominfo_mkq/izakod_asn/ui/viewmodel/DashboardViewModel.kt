@@ -37,7 +37,9 @@ data class DashboardUiState(
     val targetSummary: DashboardTargetSummaryData? = null,
     val actionAlerts: DashboardActionAlertsData? = null,
     val targetItems: List<TargetKinerjaItem> = emptyList(),
-    val currentPegawaiId: Int? = null
+    val currentPegawaiId: Int? = null,
+    val targetPeriodYear: Int? = null,
+    val targetPeriodMonth: Int? = null
 )
 
 /**
@@ -47,9 +49,17 @@ data class DashboardUiState(
 class DashboardViewModel : ViewModel() {
 
     private val repository = StatistikRepository()
+    private val initialCalendar = Calendar.getInstance()
+    private var selectedTargetYear: Int = initialCalendar.get(Calendar.YEAR)
+    private var selectedTargetMonth: Int = initialCalendar.get(Calendar.MONTH) + 1
 
     // UI State
-    private val _uiState = MutableStateFlow(DashboardUiState())
+    private val _uiState = MutableStateFlow(
+        DashboardUiState(
+            targetPeriodYear = selectedTargetYear,
+            targetPeriodMonth = selectedTargetMonth
+        )
+    )
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
 
     private val _currentTabIndex = MutableStateFlow(0)
@@ -131,8 +141,14 @@ class DashboardViewModel : ViewModel() {
     fun refresh() {
         loadStatistik()
         loadNotificationCount()
-        loadAssessmentSummary()
-        loadDashboardTargets()
+        loadAssessmentSummary(
+            tahun = selectedTargetYear,
+            bulan = selectedTargetMonth
+        )
+        loadDashboardTargets(
+            tahun = selectedTargetYear,
+            bulan = selectedTargetMonth
+        )
     }
 
     /**
@@ -200,21 +216,50 @@ class DashboardViewModel : ViewModel() {
      */
     fun retry() {
         loadStatistik()
-        loadAssessmentSummary()
-        loadDashboardTargets()
+        loadAssessmentSummary(
+            tahun = selectedTargetYear,
+            bulan = selectedTargetMonth
+        )
+        loadDashboardTargets(
+            tahun = selectedTargetYear,
+            bulan = selectedTargetMonth
+        )
     }
 
-    fun loadAssessmentSummary() {
+    fun selectTargetPeriod(tahun: Int, bulan: Int) {
+        if (tahun <= 0 || bulan !in 1..12) return
+
+        selectedTargetYear = tahun
+        selectedTargetMonth = bulan
+        _uiState.update {
+            it.copy(
+                targetPeriodYear = tahun,
+                targetPeriodMonth = bulan
+            )
+        }
+        loadAssessmentSummary(tahun = tahun, bulan = bulan)
+        loadDashboardTargets(tahun = tahun, bulan = bulan)
+    }
+
+    fun loadAssessmentSummary(
+        tahun: Int? = selectedTargetYear,
+        bulan: Int? = selectedTargetMonth
+    ) {
         viewModelScope.launch {
             try {
-                val response = ApiClient.eabsenApiService.getDashboardOverview()
+                val response = ApiClient.eabsenApiService.getDashboardOverview(
+                    tahun = tahun,
+                    bulan = bulan
+                )
 
                 if (response.isSuccessful && response.body()?.success == true) {
                     _uiState.update {
                         it.copy(
                             assessmentSummary = response.body()?.data?.assessmentSummary,
                             targetSummary = response.body()?.data?.targetSummary,
-                            actionAlerts = response.body()?.data?.actionAlerts
+                            actionAlerts = response.body()?.data?.actionAlerts,
+                            targetPeriodYear = tahun,
+                            targetPeriodMonth = bulan
                         )
                     }
                 }
@@ -227,13 +272,15 @@ class DashboardViewModel : ViewModel() {
         }
     }
 
-    fun loadDashboardTargets() {
+    fun loadDashboardTargets(
+        tahun: Int? = selectedTargetYear,
+        bulan: Int? = selectedTargetMonth
+    ) {
         viewModelScope.launch {
             try {
-                val calendar = Calendar.getInstance()
                 val response = ApiClient.eabsenApiService.getTargetKinerjaList(
-                    tahun = calendar.get(Calendar.YEAR),
-                    bulan = calendar.get(Calendar.MONTH) + 1
+                    tahun = tahun,
+                    bulan = bulan
                 )
 
                 if (response.isSuccessful && response.body()?.success == true) {
@@ -241,7 +288,9 @@ class DashboardViewModel : ViewModel() {
                     _uiState.update {
                         it.copy(
                             targetItems = body?.data ?: emptyList(),
-                            currentPegawaiId = body?.meta?.currentPegawaiId ?: it.currentPegawaiId
+                            currentPegawaiId = body?.meta?.currentPegawaiId ?: it.currentPegawaiId,
+                            targetPeriodYear = tahun,
+                            targetPeriodMonth = bulan
                         )
                     }
                 }
