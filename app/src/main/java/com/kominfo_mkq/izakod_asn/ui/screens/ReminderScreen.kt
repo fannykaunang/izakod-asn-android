@@ -59,6 +59,7 @@ fun ReminderScreen(
         topBar = {
             IZAKODHeaderBar(
                 title = "Pengingat",
+                compact = true,
                 onBack = onNavigateBack
             )
         },

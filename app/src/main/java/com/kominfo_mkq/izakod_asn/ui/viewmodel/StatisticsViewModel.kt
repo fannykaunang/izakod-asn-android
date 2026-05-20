@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 data class StatisticsUiState(
     val isLoading: Boolean = false,
@@ -21,7 +22,8 @@ data class StatisticsUiState(
     val dailyMetrics: DailyMetricsData? = null,
     val dailyTimeSeries: List<DailyTimeSeriesItem> = emptyList(),
     val monthlyMetrics: MetricsData? = null,
-    val monthlyTimeSeries: List<TimeSeriesItem> = emptyList()
+    val monthlyTimeSeries: List<TimeSeriesItem> = emptyList(),
+    val summaryMetrics: MetricsData? = null
 )
 
 class StatisticsViewModel : ViewModel() {
@@ -46,18 +48,32 @@ class StatisticsViewModel : ViewModel() {
             }
 
             try {
+                val calendar = Calendar.getInstance()
+                val currentMonth = calendar.get(Calendar.MONTH) + 1
+                val currentYear = calendar.get(Calendar.YEAR)
                 val dailyDeferred = async { repository.getStatistikHarian() }
                 val monthlyDeferred = async { repository.getStatistikBulanan() }
+                val summaryDeferred = async {
+                    repository.getStatistikBulanan(
+                        bulan = currentMonth,
+                        tahun = currentYear
+                    )
+                }
 
                 val dailyResponse = dailyDeferred.await()
                 val monthlyResponse = monthlyDeferred.await()
+                val summaryResponse = summaryDeferred.await()
 
                 val dailyData = dailyResponse.data?.data
                 val monthlyData = monthlyResponse.data?.data
+                val summaryData = summaryResponse.data?.data
 
-                val hasError = !dailyResponse.success && !monthlyResponse.success
+                val hasError = !dailyResponse.success && !monthlyResponse.success && !summaryResponse.success
                 val errorMessage =
-                    dailyResponse.error ?: monthlyResponse.error ?: "Gagal memuat data statistik"
+                    dailyResponse.error
+                        ?: monthlyResponse.error
+                        ?: summaryResponse.error
+                        ?: "Gagal memuat data statistik"
 
                 _uiState.value = StatisticsUiState(
                     isLoading = false,
@@ -66,7 +82,8 @@ class StatisticsViewModel : ViewModel() {
                     dailyMetrics = dailyData?.metrics,
                     dailyTimeSeries = dailyData?.timeSeries.orEmpty(),
                     monthlyMetrics = monthlyData?.metrics,
-                    monthlyTimeSeries = monthlyData?.timeSeries.orEmpty()
+                    monthlyTimeSeries = monthlyData?.timeSeries.orEmpty(),
+                    summaryMetrics = summaryData?.metrics
                 )
             } catch (e: Exception) {
                 e.printStackTrace()

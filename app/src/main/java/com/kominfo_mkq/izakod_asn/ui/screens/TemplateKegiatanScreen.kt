@@ -6,8 +6,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
@@ -17,13 +22,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.TemplateKegiatanViewModel
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatan
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanCreateRequest
-import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
 fun TemplateKegiatanScreen(
     onNavigateBack: () -> Unit,
@@ -33,6 +38,7 @@ fun TemplateKegiatanScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
+    var isSearchActive by remember { mutableStateOf(false) }
     var filterPublic by remember { mutableStateOf(false) }
     var showFilterDialog by remember { mutableStateOf(false) }
 
@@ -59,9 +65,15 @@ fun TemplateKegiatanScreen(
     }
 
     val filteredTemplates = remember(uiState.templates, searchQuery, filterPublic) {
+        val keyword = searchQuery.trim()
         uiState.templates.filter { template ->
-            val matchesSearch =
-                template.deskripsi?.contains(searchQuery, ignoreCase = true) == true
+            val matchesSearch = keyword.isBlank() || listOfNotNull(
+                template.namaTemplate,
+                template.deskripsi,
+                template.kategoriNama,
+                template.targetOutputDefault,
+                template.lokasiDefault
+            ).any { it.contains(keyword, ignoreCase = true) }
             val matchesFilter = !filterPublic || template.isPublic == 1
             matchesSearch && matchesFilter
         }
@@ -74,26 +86,26 @@ fun TemplateKegiatanScreen(
             .distinctBy { it.first }
             .sortedBy { it.second }
     }
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = uiState.isLoading,
+        onRefresh = { viewModel.loadTemplates() }
+    )
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            IZAKODHeaderBar(
-                title = "Template Kegiatan",
+            TemplateKegiatanTopBar(
+                isSearchActive = isSearchActive,
+                searchQuery = searchQuery,
+                filterActive = filterPublic,
+                onSearchQueryChange = { searchQuery = it },
+                onToggleSearch = { isSearchActive = true },
+                onCloseSearch = {
+                    isSearchActive = false
+                    searchQuery = ""
+                },
+                onOpenFilter = { showFilterDialog = true },
                 onBack = onNavigateBack,
-                actions = {
-                    IconButton(onClick = { showFilterDialog = true }) {
-                        Icon(
-                            Icons.Default.FilterList,
-                            contentDescription = "Filter",
-                            tint = if (filterPublic) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    IconButton(onClick = { viewModel.loadTemplates() }) {
-                        Icon(Icons.Default.Refresh, "Refresh")
-                    }
-                }
             )
         },
         floatingActionButton = {
@@ -116,45 +128,66 @@ fun TemplateKegiatanScreen(
             }
         }
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
+                .pullRefresh(pullRefreshState)
         ) {
-            SearchBar(
-                query = searchQuery,
-                onQueryChange = { searchQuery = it },
-                modifier = Modifier.padding(16.dp)
-            )
+            Column(modifier = Modifier.fillMaxSize()) {
+                TemplateOverviewCard(
+                    total = uiState.templates.size,
+                    publicCount = uiState.templates.count { it.isPublic == 1 },
+                    privateCount = uiState.templates.count { it.isPublic == 0 },
+                    onCreate = {
+                        editingTemplate = null
+                        showFormDialog = true
+                    },
+                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 4.dp)
+                )
 
-            when {
-                uiState.isLoading -> TemplateKegiatanLoadingContent()
-                uiState.isError -> TemplateKegiatanErrorContent(
-                    message = uiState.errorMessage ?: "Terjadi kesalahan",
-                    onRetry = { viewModel.loadTemplates() }
-                )
-                filteredTemplates.isEmpty() -> EmptyContent(
-                    message = if (searchQuery.isNotEmpty())
-                        "Tidak ada template yang cocok dengan pencarian"
-                    else
-                        "Belum ada template kegiatan"
-                )
-                else -> {
-                    TemplateList(
-                        templates = filteredTemplates,
-                        onUse = onTemplateClick,
-                        onEdit = { t ->
-                            editingTemplate = t
-                            showFormDialog = true
-                        },
-                        onDelete = { t ->
-                            deletingTemplate = t
-                            showDeleteConfirm = true
-                        }
+                when {
+                    uiState.isLoading -> TemplateKegiatanLoadingContent()
+                    uiState.isError -> TemplateKegiatanErrorContent(
+                        message = uiState.errorMessage ?: "Terjadi kesalahan",
+                        onRetry = { viewModel.loadTemplates() }
                     )
+                    filteredTemplates.isEmpty() -> EmptyContent(
+                        message = if (searchQuery.isNotEmpty())
+                            "Tidak ada template yang cocok dengan pencarian"
+                        else
+                            "Belum ada template kegiatan",
+                        actionLabel = if (searchQuery.isBlank()) "Buat Template" else null,
+                        onAction = if (searchQuery.isBlank()) {
+                            {
+                                editingTemplate = null
+                                showFormDialog = true
+                            }
+                        } else null
+                    )
+                    else -> {
+                        TemplateList(
+                            templates = filteredTemplates,
+                            onUse = onTemplateClick,
+                            onEdit = { t ->
+                                editingTemplate = t
+                                showFormDialog = true
+                            },
+                            onDelete = { t ->
+                                deletingTemplate = t
+                                showDeleteConfirm = true
+                            }
+                        )
+                    }
                 }
             }
+
+            PullRefreshIndicator(
+                refreshing = uiState.isLoading,
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 
@@ -205,30 +238,188 @@ fun TemplateKegiatanScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SearchBar(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    modifier: Modifier = Modifier
+private fun TemplateKegiatanTopBar(
+    isSearchActive: Boolean,
+    searchQuery: String,
+    filterActive: Boolean,
+    onSearchQueryChange: (String) -> Unit,
+    onToggleSearch: () -> Unit,
+    onCloseSearch: () -> Unit,
+    onOpenFilter: () -> Unit,
+    onBack: () -> Unit
 ) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = modifier.fillMaxWidth(),
-        placeholder = { Text("Cari template...") },
-        leadingIcon = {
-            Icon(Icons.Default.Search, contentDescription = null)
-        },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(Icons.Default.Close, contentDescription = "Clear")
+    TopAppBar(
+        title = {
+            if (isSearchActive) {
+                TextField(
+                    value = searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    placeholder = {
+                        Text(
+                            text = "Cari template...",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                    )
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "Template Kegiatan",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "Pakai pola laporan yang sering dibuat",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         },
-        singleLine = true,
-        shape = RoundedCornerShape(12.dp)
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
+            }
+        },
+        actions = {
+            IconButton(
+                onClick = if (isSearchActive) onCloseSearch else onToggleSearch
+            ) {
+                Icon(
+                    imageVector = if (isSearchActive) Icons.Default.Close else Icons.Default.Search,
+                    contentDescription = if (isSearchActive) "Tutup pencarian" else "Cari template"
+                )
+            }
+            IconButton(onClick = onOpenFilter) {
+                Icon(
+                    imageVector = Icons.Default.FilterList,
+                    contentDescription = "Filter",
+                    tint = if (filterActive) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface
+                )
+            }
+        },
+        windowInsets = WindowInsets(0, 0, 0, 0),
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            scrolledContainerColor = MaterialTheme.colorScheme.surface
+        )
     )
+}
+
+@Composable
+private fun TemplateOverviewCard(
+    total: Int,
+    publicCount: Int,
+    privateCount: Int,
+    onCreate: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    ElevatedCard(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "Template siap pakai",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                        text = "Pilih template untuk mengisi laporan lebih cepat.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                FilledTonalButton(
+                    onClick = onCreate,
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Buat")
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TemplateOverviewStat("Total", total.toString(), Modifier.weight(1f))
+                TemplateOverviewStat("Umum", publicCount.toString(), Modifier.weight(1f))
+                TemplateOverviewStat("Pribadi", privateCount.toString(), Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun TemplateOverviewStat(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+            )
+        }
+    }
 }
 
 @Composable
@@ -273,87 +464,89 @@ private fun TemplateCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
-
-    Card(
+    ElevatedCard(
         modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onUse),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.Top
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Text(
                         text = template.namaTemplate,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (template.isPublic == 1) {
-                        AssistChip(
-                            onClick = {},
-                            label = { Text("Public") },
-                            leadingIcon = { Icon(Icons.Default.Public, null, modifier = Modifier.size(16.dp)) }
+                    if (!template.deskripsi.isNullOrBlank()) {
+                        Text(
+                            text = template.deskripsi,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(Modifier.width(8.dp))
                     }
+                }
+                TemplateVisibilityBadge(isPublic = template.isPublic == 1)
+            }
 
-                    Box {
-                        IconButton(onClick = { menuExpanded = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "Opsi")
-                        }
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Gunakan template") },
-                                leadingIcon = { Icon(Icons.Default.PlayArrow, null) },
-                                onClick = {
-                                    menuExpanded = false
-                                    onUse()
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Edit") },
-                                leadingIcon = { Icon(Icons.Default.Edit, null) },
-                                onClick = {
-                                    menuExpanded = false
-                                    onEdit()
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Hapus") },
-                                leadingIcon = { Icon(Icons.Default.Delete, null) },
-                                onClick = {
-                                    menuExpanded = false
-                                    onDelete()
-                                }
-                            )
-                        }
+            if (!template.targetOutputDefault.isNullOrBlank()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = "Output laporan",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = template.targetOutputDefault,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
 
-            if (!template.deskripsi.isNullOrBlank()) {
-                Text(
-                    text = template.deskripsi,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                DetailChip(
+                    icon = Icons.Default.Category,
+                    text = template.kategoriNama ?: "-",
+                    modifier = Modifier.weight(1f)
+                )
+                DetailChip(
+                    icon = Icons.Default.Timer,
+                    text = template.estimasiDurasi?.let { "$it mnt" } ?: "-",
+                    modifier = Modifier.weight(1f)
+                )
+                DetailChip(
+                    icon = Icons.Default.Repeat,
+                    text = "${template.jumlah_penggunaan ?: 0}x",
+                    modifier = Modifier.weight(1f)
                 )
             }
 
@@ -361,13 +554,28 @@ private fun TemplateCard(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                DetailChip(icon = Icons.Default.Category, text = template.kategoriNama ?: "-")
-                template.estimasiDurasi?.let {
-                    DetailChip(icon = Icons.Default.Timer, text = "$it menit")
+                Button(
+                    onClick = onUse,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Gunakan")
                 }
-                DetailChip(icon = Icons.Default.Repeat, text = "${template.jumlah_penggunaan ?: 0} kali")
+                FilledTonalIconButton(onClick = onEdit) {
+                    Icon(Icons.Default.Edit, contentDescription = "Edit template")
+                }
+                FilledTonalIconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Hapus template",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
             }
 
             if (template.isPublic == 0 && !template.unitKerja.isNullOrBlank()) {
@@ -399,7 +607,7 @@ private fun TemplateFormDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (isEdit) "Edit Template" else "Tambah Template") },
+        title = { Text(if (isEdit) "Edit Template" else "Buat Template") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
@@ -452,28 +660,28 @@ private fun TemplateFormDialog(
                 OutlinedTextField(
                     value = deskripsi,
                     onValueChange = { deskripsi = it },
-                    label = { Text("Deskripsi") },
+                    label = { Text("Catatan singkat") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 OutlinedTextField(
                     value = targetOutput,
                     onValueChange = { targetOutput = it },
-                    label = { Text("Target output default") },
+                    label = { Text("Output yang biasa dihasilkan") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 OutlinedTextField(
                     value = lokasi,
                     onValueChange = { lokasi = it },
-                    label = { Text("Lokasi default") },
+                    label = { Text("Lokasi bawaan") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 OutlinedTextField(
                     value = durasiText,
                     onValueChange = { durasiText = it.filter { ch -> ch.isDigit() } },
-                    label = { Text("Durasi estimasi (menit)") },
+                    label = { Text("Perkiraan durasi (menit)") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -483,7 +691,14 @@ private fun TemplateFormDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Public")
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Template umum")
+                        Text(
+                            text = "Bisa dipakai pegawai lain bila diizinkan sistem.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     Switch(checked = isPublic, onCheckedChange = { isPublic = it })
                 }
 
@@ -513,7 +728,7 @@ private fun TemplateFormDialog(
                         )
                     )
                 }
-            ) { Text(if (isEdit) "Simpan" else "Tambah") }
+            ) { Text(if (isEdit) "Simpan" else "Buat") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Batal") }
@@ -522,25 +737,61 @@ private fun TemplateFormDialog(
 }
 
 @Composable
+private fun TemplateVisibilityBadge(isPublic: Boolean) {
+    val label = if (isPublic) "Umum" else "Pribadi"
+    val icon = if (isPublic) Icons.Default.Public else Icons.Default.Lock
+    val color = if (isPublic) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
+
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = color.copy(alpha = 0.12f),
+        contentColor = color
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
 private fun DetailChip(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    text: String
+    text: String,
+    modifier: Modifier = Modifier
 ) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(15.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -563,7 +814,7 @@ private fun FilterDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Hanya Template Public")
+                    Text("Hanya template umum")
                     Checkbox(
                         checked = filterPublic,
                         onCheckedChange = onFilterChange
@@ -635,7 +886,11 @@ private fun TemplateKegiatanErrorContent(
 }
 
 @Composable
-private fun EmptyContent(message: String) {
+private fun EmptyContent(
+    message: String,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null
+) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -656,6 +911,16 @@ private fun EmptyContent(message: String) {
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (actionLabel != null && onAction != null) {
+                Button(
+                    onClick = onAction,
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(actionLabel)
+                }
+            }
         }
     }
 }

@@ -70,6 +70,7 @@ fun VerifikasiLaporanScreen(
         topBar = {
             IZAKODHeaderBar(
                 title = "Verifikasi Laporan",
+                compact = true,
                 onBack = onNavigateBack
             )
         }

@@ -20,6 +20,7 @@ import com.kominfo_mkq.izakod_asn.data.model.MobileTokenResponse
 import com.kominfo_mkq.izakod_asn.data.model.NotifikasiResponse
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiData
 import com.kominfo_mkq.izakod_asn.data.model.CreatePenilaianKinerjaRequest
+import com.kominfo_mkq.izakod_asn.data.model.PenilaianBelumDibuatResponse
 import com.kominfo_mkq.izakod_asn.data.model.PenilaianKinerjaDetailResponse
 import com.kominfo_mkq.izakod_asn.data.model.PenilaianKinerjaListResponse
 import com.kominfo_mkq.izakod_asn.data.model.UpdatePenilaianKinerjaRequest
@@ -360,6 +361,13 @@ interface EabsenApiService {
         @Query("status_finalisasi") statusFinalisasi: String? = null,
         @Query("pegawai_id") pegawaiId: Int? = null
     ): Response<PenilaianKinerjaListResponse>
+
+    @GET("api/penilaian-kinerja/belum-dibuat")
+    suspend fun getPenilaianBelumDibuat(
+        @Query("tahun") tahun: Int? = null,
+        @Query("bulan") bulan: Int? = null,
+        @Query("pegawai_id") pegawaiId: Int? = null
+    ): Response<PenilaianBelumDibuatResponse>
 
     @GET("api/penilaian-kinerja/{id}")
     suspend fun getPenilaianKinerjaDetail(

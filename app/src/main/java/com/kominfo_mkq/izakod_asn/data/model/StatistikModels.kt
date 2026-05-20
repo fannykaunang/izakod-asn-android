@@ -208,6 +208,12 @@ data class AssessmentSummaryData(
     @SerializedName("activePeriodLabel")
     val activePeriodLabel: String? = null,
 
+    @SerializedName("selectedPeriodScore")
+    val selectedPeriodScore: Double? = null,
+
+    @SerializedName("selectedPeriodPredicate")
+    val selectedPeriodPredicate: String? = null,
+
     @SerializedName("latestFinalScore")
     val latestFinalScore: Double? = null,
 
@@ -217,8 +223,14 @@ data class AssessmentSummaryData(
     @SerializedName("latestFinalPeriodLabel")
     val latestFinalPeriodLabel: String? = null,
 
+    @SerializedName("pendingOwnAssessment")
+    val pendingOwnAssessment: Int? = null,
+
     @SerializedName("pendingSubordinateAssessments")
     val pendingSubordinateAssessments: Int? = null,
+
+    @SerializedName("missingSubordinateAssessments")
+    val missingSubordinateAssessments: Int? = null,
 
     @SerializedName("canReviewSubordinates")
     val canReviewSubordinates: Boolean? = null
@@ -260,6 +272,12 @@ data class DashboardActionAlertsData(
     @SerializedName("realisasiNeedAttentionCount")
     val realisasiNeedAttentionCount: Int? = null,
 
+    @SerializedName("ownAssessmentPendingCount")
+    val ownAssessmentPendingCount: Int? = null,
+
     @SerializedName("subordinateReviewCount")
-    val subordinateReviewCount: Int? = null
+    val subordinateReviewCount: Int? = null,
+
+    @SerializedName("missingAssessmentCount")
+    val missingAssessmentCount: Int? = null
 )

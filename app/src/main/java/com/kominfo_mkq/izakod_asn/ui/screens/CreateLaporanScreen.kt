@@ -112,6 +112,7 @@ fun CreateLaporanScreen(
         topBar = {
             IZAKODHeaderBar(
                 title = "Buat Laporan Kegiatan",
+                compact = true,
                 onBack = onNavigateBack
             )
         }

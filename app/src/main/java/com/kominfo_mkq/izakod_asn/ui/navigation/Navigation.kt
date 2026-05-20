@@ -26,6 +26,7 @@ import com.kominfo_mkq.izakod_asn.ui.screens.DeveloperScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.EditLaporanScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.LoginScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.NotificationScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.PenilaianBelumDibuatScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.PenilaianKinerjaDetailScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.PenilaianKinerjaListScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.ProfileScreen
@@ -57,6 +58,7 @@ sealed class Screen(val route: String) {
     object TargetKinerjaSubordinatePeriod : Screen("target_kinerja_bawahan")
     object TargetKinerjaCreate : Screen("target_kinerja_create")
     object PenilaianKinerja : Screen("penilaian_kinerja")
+    object PenilaianBelumDibuat : Screen("penilaian_belum_dibuat")
     object TppSaya : Screen("tpp_saya")
     object Reminders : Screen("reminders")
     object Profile : Screen("profile")
@@ -185,7 +187,10 @@ fun IZAKODNavigation(
                     },
                     onNavigateToPenilaianKinerja = { navController.navigate(penilaianKinerjaRoute("mine")) },
                     onNavigateToPenilaianBawahan = { navController.navigate(penilaianKinerjaRoute("subordinate")) },
-                    onNavigateToTppSaya = { navController.navigate(Screen.TppSaya.route) },
+                    onNavigateToPenilaianBelumDibuat = { navController.navigate(Screen.PenilaianBelumDibuat.route) },
+                    onNavigateToTppDetail = { tahun, bulan ->
+                        navController.navigate("tpp_saya_detail/$tahun/$bulan")
+                    },
                     onNavigateToTemplates = { navController.navigate(Screen.Templates.route) },
                     onNavigateToReminder = { navController.navigate(Screen.Reminders.route) },
                     onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) },
@@ -267,6 +272,15 @@ fun IZAKODNavigation(
                         navController.navigate("penilaian_kinerja_detail/$assessmentId")
                     },
                     initialMode = initialMode
+                )
+            }
+
+            composable(Screen.PenilaianBelumDibuat.route) {
+                PenilaianBelumDibuatScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToDetail = { assessmentId ->
+                        navController.navigate("penilaian_kinerja_detail/$assessmentId")
+                    }
                 )
             }
 

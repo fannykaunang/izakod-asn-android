@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -34,6 +35,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -57,6 +59,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kominfo_mkq.izakod_asn.data.model.PenilaianBelumDibuatItem
 import com.kominfo_mkq.izakod_asn.data.model.PenilaianKinerjaAutoFill
 import com.kominfo_mkq.izakod_asn.data.model.PenilaianKinerjaItem
 import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
@@ -64,6 +67,7 @@ import com.kominfo_mkq.izakod_asn.ui.theme.PrimaryLight
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusApproved
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusPending
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.PenilaianKinerjaDetailViewModel
+import com.kominfo_mkq.izakod_asn.ui.viewmodel.PenilaianBelumDibuatViewModel
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.PenilaianKinerjaListViewModel
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
@@ -93,6 +97,24 @@ private fun formatPenilaianPeriode(bulan: Int, tahun: Int): String {
 private fun formatPenilaianScore(value: Double?): String {
     if (value == null || value.isNaN()) return "-"
     return DecimalFormat("#.##").format(value)
+}
+
+private fun formatPenilaianEditableNumber(value: Double?): String {
+    if (value == null || value.isNaN()) return ""
+    return java.math.BigDecimal.valueOf(value).stripTrailingZeros().toPlainString()
+}
+
+private fun formatTargetStatusPenilaian(value: String): String {
+    return when (value.lowercase(Locale.getDefault())) {
+        "draft" -> "Draft"
+        "diajukan" -> "Diajukan"
+        "disetujui" -> "Disetujui"
+        "revisi" -> "Revisi"
+        "final" -> "Final"
+        else -> value.replaceFirstChar {
+            if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
+        }
+    }
 }
 
 private fun shiftMonth(month: Int, year: Int, delta: Int): Pair<Int, Int> {
@@ -161,6 +183,7 @@ fun PenilaianKinerjaListScreen(
         topBar = {
             IZAKODHeaderBar(
                 title = "Penilaian Kinerja",
+                compact = true,
                 onBack = onNavigateBack,
                 actions = {
                     IconButton(
@@ -381,6 +404,184 @@ fun PenilaianKinerjaListScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PenilaianBelumDibuatScreen(
+    onNavigateBack: () -> Unit,
+    onNavigateToDetail: (Int) -> Unit,
+    viewModel: PenilaianBelumDibuatViewModel = viewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val now = remember { Calendar.getInstance() }
+    var selectedMonth by remember { mutableStateOf(now.get(Calendar.MONTH) + 1) }
+    var selectedYear by remember { mutableStateOf(now.get(Calendar.YEAR)) }
+
+    LaunchedEffect(selectedMonth, selectedYear) {
+        viewModel.refresh(
+            tahun = selectedYear,
+            bulan = selectedMonth
+        )
+    }
+
+    Scaffold(
+        topBar = {
+            IZAKODHeaderBar(
+                title = "Penilaian Belum Dibuat",
+                onBack = onNavigateBack,
+                actions = {
+                    IconButton(
+                        onClick = {
+                            viewModel.refresh(
+                                tahun = selectedYear,
+                                bulan = selectedMonth
+                            )
+                        }
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    }
+                }
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Target pegawai sudah siap dinilai, tetapi draft penilaian belum dibuat.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = {
+                                val (month, year) = shiftMonth(selectedMonth, selectedYear, -1)
+                                selectedMonth = month
+                                selectedYear = year
+                            }
+                        ) {
+                            Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Periode sebelumnya")
+                        }
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = formatPenilaianPeriode(selectedMonth, selectedYear),
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = "${uiState.items.size} pegawai",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                val (month, year) = shiftMonth(selectedMonth, selectedYear, 1)
+                                selectedMonth = month
+                                selectedYear = year
+                            }
+                        ) {
+                            Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Periode berikutnya")
+                        }
+                    }
+                }
+            }
+
+            when {
+                uiState.isLoading -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                }
+
+                uiState.isError -> {
+                    PenilaianStateCard(
+                        icon = Icons.Default.Warning,
+                        title = "Gagal memuat daftar",
+                        message = uiState.errorMessage ?: "Terjadi kesalahan",
+                        actionText = "Coba Lagi",
+                        onAction = {
+                            viewModel.refresh(
+                                tahun = selectedYear,
+                                bulan = selectedMonth
+                            )
+                        }
+                    )
+                }
+
+                uiState.items.isEmpty() -> {
+                    PenilaianStateCard(
+                        icon = Icons.Default.AssignmentTurnedIn,
+                        title = "Semua penilaian sudah dibuat",
+                        message = "Tidak ada target pegawai yang menunggu draft penilaian pada periode ini.",
+                        actionText = "Refresh",
+                        onAction = {
+                            viewModel.refresh(
+                                tahun = selectedYear,
+                                bulan = selectedMonth
+                            )
+                        }
+                    )
+                }
+
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 112.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(uiState.items, key = { "${it.targetKinerjaId}-${it.pegawaiId}" }) { item ->
+                            PenilaianBelumDibuatCard(
+                                item = item,
+                                isCreating = uiState.isCreating &&
+                                    uiState.creatingPegawaiId == item.pegawaiId,
+                                onCreateDraft = {
+                                    viewModel.createDraftFor(
+                                        item = item,
+                                        onSuccess = { assessmentId ->
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("Draft penilaian berhasil dibuat")
+                                            }
+                                            onNavigateToDetail(assessmentId)
+                                        },
+                                        onError = { message ->
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar(message)
+                                            }
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun PenilaianKinerjaDetailScreen(
     assessmentId: Int,
@@ -402,9 +603,9 @@ fun PenilaianKinerjaDetailScreen(
 
     LaunchedEffect(uiState.assessment?.id) {
         val assessment = uiState.assessment ?: return@LaunchedEffect
-        nilaiTarget = assessment.nilaiTarget?.toString().orEmpty()
-        nilaiRealisasi = assessment.nilaiRealisasi?.toString().orEmpty()
-        nilaiAkhir = assessment.nilaiAkhir?.toString().orEmpty()
+        nilaiTarget = formatPenilaianEditableNumber(assessment.nilaiTarget)
+        nilaiRealisasi = formatPenilaianEditableNumber(assessment.nilaiRealisasi)
+        nilaiAkhir = formatPenilaianEditableNumber(assessment.nilaiAkhir)
         predikat = assessment.predikat.orEmpty()
         catatan = assessment.catatan.orEmpty()
     }
@@ -416,6 +617,7 @@ fun PenilaianKinerjaDetailScreen(
         topBar = {
             IZAKODHeaderBar(
                 title = "Detail Penilaian",
+                compact = true,
                 onBack = onNavigateBack
             )
         },
@@ -596,13 +798,113 @@ fun PenilaianKinerjaDetailScreen(
                             autoFill = uiState.autoFill,
                             enabled = !readonly,
                             onUseAutoFill = { autoFill ->
-                                nilaiTarget = autoFill.suggestedNilaiTarget?.toString().orEmpty()
-                                nilaiRealisasi = autoFill.suggestedNilaiRealisasi?.toString().orEmpty()
-                                nilaiAkhir = autoFill.suggestedNilaiAkhir?.toString().orEmpty()
+                                nilaiTarget = formatPenilaianEditableNumber(autoFill.suggestedNilaiTarget)
+                                nilaiRealisasi = formatPenilaianEditableNumber(autoFill.suggestedNilaiRealisasi)
+                                nilaiAkhir = formatPenilaianEditableNumber(autoFill.suggestedNilaiAkhir)
                                 predikat = autoFill.suggestedPredikat.orEmpty()
                             }
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PenilaianBelumDibuatCard(
+    item: PenilaianBelumDibuatItem,
+    isCreating: Boolean,
+    onCreateDraft: () -> Unit
+) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = item.pegawaiNama ?: "Pegawai #${item.pegawaiId}",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = item.pegawaiSkpd ?: "-",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = StatusPending.copy(alpha = 0.14f)
+                ) {
+                    Text(
+                        text = "Belum dibuat",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = StatusPending
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                PenilaianMetricBox(
+                    label = "Target",
+                    value = formatTargetStatusPenilaian(item.status),
+                    modifier = Modifier.weight(1f)
+                )
+                PenilaianMetricBox(
+                    label = "Realisasi",
+                    value = "${item.itemSudahRealisasi}/${item.totalItem}",
+                    modifier = Modifier.weight(1f)
+                )
+                PenilaianMetricBox(
+                    label = "Laporan",
+                    value = item.totalLaporanTertaut.toString(),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            LinearProgressIndicator(
+                progress = { (item.persentaseProgress / 100.0).toFloat().coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth(),
+                color = StatusApproved,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+
+            Button(
+                onClick = onCreateDraft,
+                enabled = !isCreating,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (isCreating) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Membuat draft...")
+                } else {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Buat Draft Penilaian")
                 }
             }
         }

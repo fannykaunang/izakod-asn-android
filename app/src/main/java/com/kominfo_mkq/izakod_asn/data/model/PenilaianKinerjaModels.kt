@@ -33,6 +33,84 @@ data class PenilaianKinerjaListMeta(
     val canReviewSubordinates: Boolean? = null
 )
 
+data class PenilaianBelumDibuatResponse(
+    @SerializedName("success")
+    val success: Boolean,
+
+    @SerializedName("message")
+    val message: String,
+
+    @SerializedName("data")
+    val data: List<PenilaianBelumDibuatItem> = emptyList(),
+
+    @SerializedName("meta")
+    val meta: PenilaianBelumDibuatMeta? = null,
+
+    @SerializedName("error")
+    val error: PenilaianKinerjaError? = null
+)
+
+data class PenilaianBelumDibuatMeta(
+    @SerializedName("count")
+    val count: Int? = null,
+
+    @SerializedName("currentPegawaiId")
+    val currentPegawaiId: Int? = null,
+
+    @SerializedName("currentRole")
+    val currentRole: String? = null,
+
+    @SerializedName("canReviewSubordinates")
+    val canReviewSubordinates: Boolean? = null,
+
+    @SerializedName("tahun")
+    val tahun: Int? = null,
+
+    @SerializedName("bulan")
+    val bulan: Int? = null
+)
+
+data class PenilaianBelumDibuatItem(
+    @SerializedName("target_kinerja_id")
+    val targetKinerjaId: Int,
+
+    @SerializedName("pegawai_id")
+    val pegawaiId: Int,
+
+    @SerializedName("pegawai_nama")
+    val pegawaiNama: String? = null,
+
+    @SerializedName("pegawai_skpd")
+    val pegawaiSkpd: String? = null,
+
+    @SerializedName("tahun")
+    val tahun: Int,
+
+    @SerializedName("bulan")
+    val bulan: Int,
+
+    @SerializedName("status")
+    val status: String,
+
+    @SerializedName("total_item")
+    val totalItem: Int = 0,
+
+    @SerializedName("item_sudah_realisasi")
+    val itemSudahRealisasi: Int = 0,
+
+    @SerializedName("item_belum_realisasi")
+    val itemBelumRealisasi: Int = 0,
+
+    @SerializedName("total_laporan_tertaut")
+    val totalLaporanTertaut: Int = 0,
+
+    @SerializedName("persentase_progress")
+    val persentaseProgress: Double = 0.0,
+
+    @SerializedName("target_updated_at")
+    val targetUpdatedAt: String? = null
+)
+
 data class PenilaianKinerjaDetailResponse(
     @SerializedName("success")
     val success: Boolean,

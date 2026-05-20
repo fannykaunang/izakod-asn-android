@@ -136,6 +136,7 @@ fun EditLaporanScreen(
         topBar = {
             IZAKODHeaderBar(
                 title = "Edit Laporan",
+                compact = true,
                 onBack = onNavigateBack
             )
         }

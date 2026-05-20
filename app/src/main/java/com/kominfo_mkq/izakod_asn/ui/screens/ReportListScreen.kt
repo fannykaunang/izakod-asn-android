@@ -236,6 +236,7 @@ fun ReportListScreen(
         topBar = {
             IZAKODHeaderBar(
                 title = "Laporan Kegiatan",
+                compact = true,
                 onBack = if (showBackButton) onBack else null,
                 actions = {
                     // ✅ PRINT button

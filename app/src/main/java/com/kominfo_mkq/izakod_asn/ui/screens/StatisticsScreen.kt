@@ -93,7 +93,8 @@ private data class StatisticCardItem(
 
 private enum class StatisticsTab(val title: String) {
     DAILY("Harian"),
-    MONTHLY("Bulanan")
+    MONTHLY("Bulanan"),
+    SUMMARY("Ringkasan")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -106,7 +107,10 @@ fun StatisticsScreen(
 
     Scaffold(
         topBar = {
-            IZAKODHeaderBar(title = "Statistik")
+            IZAKODHeaderBar(
+                title = "Statistik",
+                compact = true
+            )
         }
     ) { paddingValues ->
         Box(
@@ -124,7 +128,10 @@ fun StatisticsScreen(
         ) {
             when {
                 uiState.isLoading -> StatisticsLoadingContent()
-                uiState.isError && uiState.dailyMetrics == null && uiState.monthlyMetrics == null -> {
+                uiState.isError &&
+                    uiState.dailyMetrics == null &&
+                    uiState.monthlyMetrics == null &&
+                    uiState.summaryMetrics == null -> {
                     ErrorContent(
                         message = uiState.errorMessage ?: "Terjadi kesalahan",
                         onRetry = { viewModel.refresh() }
@@ -169,6 +176,14 @@ fun StatisticsScreen(
                                     }
                                 }
                             }
+
+                            StatisticsTab.SUMMARY -> {
+                                item {
+                                    PerformanceSection(
+                                        metrics = uiState.summaryMetrics ?: uiState.monthlyMetrics
+                                    )
+                                }
+                            }
                         }
 
                         if (uiState.isError && uiState.errorMessage != null) {
@@ -205,7 +220,7 @@ private fun StatisticsHeroCard() {
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                 )
                 Text(
-                    text = "Pilih tab harian atau bulanan untuk melihat metrik dan grafik yang lebih fokus.",
+                    text = "Pilih tab harian, bulanan, atau ringkasan untuk melihat metrik yang lebih fokus.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

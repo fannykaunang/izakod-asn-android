@@ -2,6 +2,7 @@ package com.kominfo_mkq.izakod_asn.data.repository
 
 import com.kominfo_mkq.izakod_asn.data.model.ApiResponse
 import com.kominfo_mkq.izakod_asn.data.model.CreatePenilaianKinerjaRequest
+import com.kominfo_mkq.izakod_asn.data.model.PenilaianBelumDibuatResponse
 import com.kominfo_mkq.izakod_asn.data.model.PenilaianKinerjaDetailResponse
 import com.kominfo_mkq.izakod_asn.data.model.PenilaianKinerjaListResponse
 import com.kominfo_mkq.izakod_asn.data.model.UpdatePenilaianKinerjaRequest
@@ -35,6 +36,40 @@ class PenilaianKinerjaRepository {
                     ApiResponse(
                         success = false,
                         error = body?.message ?: "Gagal memuat penilaian kinerja"
+                    )
+                }
+            } else {
+                ApiResponse(
+                    success = false,
+                    error = "Error: ${response.code()} ${response.message()}"
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            ApiResponse(success = false, error = e.message ?: "Network error")
+        }
+    }
+
+    suspend fun getPenilaianBelumDibuat(
+        tahun: Int? = null,
+        bulan: Int? = null,
+        pegawaiId: Int? = null
+    ): ApiResponse<PenilaianBelumDibuatResponse> = withContext(Dispatchers.IO) {
+        try {
+            val response = apiService.getPenilaianBelumDibuat(
+                tahun = tahun,
+                bulan = bulan,
+                pegawaiId = pegawaiId
+            )
+
+            if (response.isSuccessful) {
+                val body = response.body()
+                if (body != null && body.success) {
+                    ApiResponse(success = true, data = body)
+                } else {
+                    ApiResponse(
+                        success = false,
+                        error = body?.message ?: "Gagal memuat penilaian belum dibuat"
                     )
                 }
             } else {

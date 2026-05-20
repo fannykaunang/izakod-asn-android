@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kominfo_mkq.izakod_asn.data.model.TppApelHarian
@@ -118,6 +119,40 @@ fun TppSayaScreen(
     }
 }
 
+@Composable
+fun TppSayaDashboardTabContent(
+    uiState: TppSayaUiState,
+    onPreviousMonth: () -> Unit,
+    onNextMonth: () -> Unit,
+    onRefresh: () -> Unit,
+    onNavigateToDetail: (Int, Int) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        when {
+            uiState.isLoading -> TppLoadingContent()
+            uiState.isError && uiState.data == null -> TppErrorContent(
+                message = uiState.errorMessage ?: "Gagal memuat TPP Saya",
+                onRetry = onRefresh
+            )
+            else -> TppSayaContent(
+                uiState = uiState,
+                onPreviousMonth = onPreviousMonth,
+                onNextMonth = onNextMonth,
+                onRefresh = onRefresh,
+                onNavigateToDetail = onNavigateToDetail,
+                contentTopPadding = 0.dp,
+                headerContent = {
+                    TppDashboardHeader()
+                }
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TppSayaDetailScreen(
@@ -179,14 +214,23 @@ private fun TppSayaContent(
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onRefresh: () -> Unit,
-    onNavigateToDetail: (Int, Int) -> Unit
+    onNavigateToDetail: (Int, Int) -> Unit,
+    contentTopPadding: Dp = 16.dp,
+    headerContent: (@Composable () -> Unit)? = null
 ) {
     val data = uiState.data
+    val header = headerContent
 
     LazyColumn(
-        contentPadding = PaddingValues(start = 20.dp, top = 16.dp, end = 20.dp, bottom = 112.dp),
+        contentPadding = PaddingValues(start = 20.dp, top = contentTopPadding, end = 20.dp, bottom = 112.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        if (header != null) {
+            item {
+                header()
+            }
+        }
+
         item {
             TppPeriodSelector(
                 label = periodLabel(uiState.tahun, uiState.bulan),
@@ -292,6 +336,26 @@ private fun TppSayaDetailContent(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TppDashboardHeader() {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = "TPP Saya",
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+        )
+        Text(
+            text = "Estimasi dan rincian TPP Anda",
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

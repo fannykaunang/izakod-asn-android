@@ -100,6 +100,7 @@ fun ReportDetailScreen(
         topBar = {
             IZAKODHeaderBar(
                 title = "Detail Laporan",
+                compact = true,
                 onBack = onNavigateBack
             )
         },

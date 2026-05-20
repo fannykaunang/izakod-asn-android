@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -76,6 +77,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.ui.unit.sp
@@ -124,15 +126,20 @@ private data class TargetDetailFormState(
 
 private fun emptyTargetDetailFormState(): TargetDetailFormState = TargetDetailFormState()
 
+private fun formatEditableNumber(value: Double?): String {
+    if (value == null) return ""
+    return java.math.BigDecimal.valueOf(value).stripTrailingZeros().toPlainString()
+}
+
 private fun TargetKinerjaDetailItem.toFormState(): TargetDetailFormState = TargetDetailFormState(
     id = id,
     uraianTarget = uraianTarget,
     indikator = indikator.orEmpty(),
     satuan = satuan.orEmpty(),
-    targetKuantitas = targetKuantitas?.toString().orEmpty(),
-    targetKualitas = targetKualitas?.toString().orEmpty(),
-    targetWaktu = targetWaktu?.toString().orEmpty(),
-    bobot = bobot?.toString().orEmpty()
+    targetKuantitas = formatEditableNumber(targetKuantitas),
+    targetKualitas = formatEditableNumber(targetKualitas),
+    targetWaktu = formatEditableNumber(targetWaktu),
+    bobot = formatEditableNumber(bobot)
 )
 
 private fun TargetDetailFormState.toPayload(): TargetKinerjaDetailPayload = TargetKinerjaDetailPayload(
@@ -169,9 +176,9 @@ private data class RealisasiFormState(
 )
 
 private fun RealisasiKinerjaItem.toFormState(): RealisasiFormState = RealisasiFormState(
-    realisasiKuantitas = realisasiKuantitas?.toString().orEmpty(),
-    realisasiKualitas = realisasiKualitas?.toString().orEmpty(),
-    realisasiWaktu = realisasiWaktu?.toString().orEmpty(),
+    realisasiKuantitas = formatEditableNumber(realisasiKuantitas),
+    realisasiKualitas = formatEditableNumber(realisasiKualitas),
+    realisasiWaktu = formatEditableNumber(realisasiWaktu),
     catatan = catatan.orEmpty()
 )
 
@@ -239,6 +246,7 @@ fun TargetKinerjaListScreen(
         topBar = {
             IZAKODHeaderBar(
                 title = "Target Kinerja",
+                compact = true,
                 onBack = onNavigateBack,
                 actions = {
                     IconButton(onClick = { viewModel.refresh() }) {
@@ -686,6 +694,7 @@ fun TargetKinerjaDetailScreen(
         topBar = {
             IZAKODHeaderBar(
                 title = "Detail Target",
+                compact = true,
                 onBack = onNavigateBack
             )
         },
@@ -1118,7 +1127,69 @@ fun TargetKinerjaFormScreen(
         mutableStateOf(initialBulan ?: java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1)
     }
     var catatanPegawai by remember { mutableStateOf("") }
+    var showPeriodDialog by remember { mutableStateOf(false) }
     val detailItems = remember { mutableStateListOf(emptyTargetDetailFormState()) }
+
+    val submitTarget: () -> Unit = {
+        val validDetails = detailItems
+            .map { it.toPayload() }
+            .filter { it.uraianTarget.isNotBlank() }
+
+        when {
+            tahun !in 2020..2100 -> {
+                scope.launch {
+                    snackbarHostState.showSnackbar("Tahun target tidak valid.")
+                }
+            }
+
+            bulan !in 1..12 -> {
+                scope.launch {
+                    snackbarHostState.showSnackbar("Bulan target tidak valid.")
+                }
+            }
+
+            validDetails.isEmpty() -> {
+                scope.launch {
+                    snackbarHostState.showSnackbar("Isi minimal 1 uraian target.")
+                }
+            }
+
+            targetId == null -> {
+                viewModel.createTarget(
+                    tahun = tahun,
+                    bulan = bulan,
+                    catatanPegawai = catatanPegawai,
+                    details = validDetails,
+                    onSuccess = { createdId ->
+                        onNavigateToDetail(createdId)
+                    },
+                    onError = { message ->
+                        scope.launch {
+                            snackbarHostState.showSnackbar(message)
+                        }
+                    }
+                )
+            }
+
+            else -> {
+                viewModel.updateTarget(
+                    targetId = targetId,
+                    tahun = tahun,
+                    bulan = bulan,
+                    catatanPegawai = catatanPegawai,
+                    details = validDetails,
+                    onSuccess = {
+                        onNavigateToDetail(targetId)
+                    },
+                    onError = { message ->
+                        scope.launch {
+                            snackbarHostState.showSnackbar(message)
+                        }
+                    }
+                )
+            }
+        }
+    }
 
     LaunchedEffect(targetId) {
         if (targetId != null) {
@@ -1144,10 +1215,20 @@ fun TargetKinerjaFormScreen(
         topBar = {
             IZAKODHeaderBar(
                 title = if (isEditMode) "Edit Target" else "Buat Target",
+                compact = true,
                 onBack = onNavigateBack
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = {
+            if (!uiState.isLoading && !uiState.isError) {
+                TargetFormBottomAction(
+                    isSaving = uiState.isSaving,
+                    label = if (isEditMode) "Simpan Perubahan" else "Simpan & Lihat Detail",
+                    onClick = submitTarget
+                )
+            }
+        }
     ) { paddingValues ->
         when {
             uiState.isLoading -> {
@@ -1176,9 +1257,25 @@ fun TargetKinerjaFormScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues),
-                    contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 32.dp),
+                    contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 24.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
+                    item {
+                        TargetFormHeroCard(
+                            title = if (isEditMode) "Edit Target ${formatPeriodeTarget(bulan, tahun)}" else "Target ${formatPeriodeTarget(bulan, tahun)}",
+                            subtitle = if (isEditMode) {
+                                "Perbarui item target sebelum diajukan atau direview."
+                            } else {
+                                "Simpan dulu, lalu ajukan ke atasan setelah semua item lengkap."
+                            },
+                            onPeriodClick = { showPeriodDialog = true }
+                        )
+                    }
+
+                    item {
+                        TargetFormGuidanceCard()
+                    }
+
                     item {
                         ElevatedCard(
                             modifier = Modifier.fillMaxWidth(),
@@ -1186,28 +1283,24 @@ fun TargetKinerjaFormScreen(
                         ) {
                             Column(
                                 modifier = Modifier.padding(18.dp),
-                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                OutlinedTextField(
-                                    value = tahun.toString(),
-                                    onValueChange = { tahun = it.toIntOrNull() ?: tahun },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Tahun") }
+                                Text(
+                                    text = "Catatan Pegawai",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold)
                                 )
-
-                                OutlinedTextField(
-                                    value = bulan.toString(),
-                                    onValueChange = { bulan = it.toIntOrNull()?.coerceIn(1, 12) ?: bulan },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Bulan") }
+                                Text(
+                                    text = "Tambahkan konteks singkat agar atasan memahami arah target bulan ini.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-
                                 OutlinedTextField(
                                     value = catatanPegawai,
                                     onValueChange = { catatanPegawai = it },
                                     modifier = Modifier.fillMaxWidth(),
                                     minLines = 4,
-                                    label = { Text("Catatan Pegawai") }
+                                    label = { Text("Catatan") },
+                                    placeholder = { Text("Contoh: Target pelayanan dan pelaporan bulan ${formatPeriodeTarget(bulan, tahun).substringBefore(' ')}.") }
                                 )
                             }
                         }
@@ -1221,14 +1314,14 @@ fun TargetKinerjaFormScreen(
                         ) {
                             Text(
                                 text = "Item Target",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold)
                             )
                             TextButton(
                                 onClick = { detailItems.add(emptyTargetDetailFormState()) }
                             ) {
                                 Icon(Icons.Default.Add, contentDescription = null)
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Tambah")
+                                Text("Tambah Item")
                             }
                         }
                     }
@@ -1238,6 +1331,7 @@ fun TargetKinerjaFormScreen(
                             index = index,
                             state = detailItems[index],
                             onChange = { detailItems[index] = it },
+                            canRemove = detailItems.size > 1,
                             onRemove = {
                                 if (detailItems.size > 1) {
                                     detailItems.removeAt(index)
@@ -1245,61 +1339,250 @@ fun TargetKinerjaFormScreen(
                             }
                         )
                     }
+                }
+            }
+        }
+    }
 
-                    item {
-                        Button(
-                            onClick = {
-                                val validDetails = detailItems
-                                    .map { it.toPayload() }
-                                    .filter { it.uraianTarget.isNotBlank() }
+    if (showPeriodDialog) {
+        TargetPeriodPickerDialog(
+            selectedTahun = tahun,
+            selectedBulan = bulan,
+            onDismiss = { showPeriodDialog = false },
+            onConfirm = { selectedTahun, selectedBulan ->
+                tahun = selectedTahun
+                bulan = selectedBulan
+                showPeriodDialog = false
+            }
+        )
+    }
+}
 
-                                if (validDetails.isEmpty()) {
-                                    return@Button
-                                }
+@Composable
+private fun TargetFormHeroCard(
+    title: String,
+    subtitle: String,
+    onPeriodClick: () -> Unit
+) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                TargetSoftPill(text = "Draft", color = StatusPending)
+            }
 
-                                if (targetId == null) {
-                                    viewModel.createTarget(
-                                        tahun = tahun,
-                                        bulan = bulan,
-                                        catatanPegawai = catatanPegawai,
-                                        details = validDetails,
-                                        onSuccess = { createdId ->
-                                            onNavigateToDetail(createdId)
-                                        },
-                                        onError = { message ->
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar(message)
-                                            }
-                                        }
+            Surface(
+                modifier = Modifier.clickable(onClick = onPeriodClick),
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarToday,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "Ubah Periode",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TargetFormGuidanceCard() {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Surface(
+                modifier = Modifier.size(42.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = StatusApproved.copy(alpha = 0.14f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.TaskAlt,
+                        contentDescription = null,
+                        tint = StatusApproved,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(9.dp)
+            ) {
+                Text(
+                    text = "Isi target yang jelas, terukur, dan mudah direalisasikan.",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold)
+                )
+                Text(
+                    text = "Gunakan angka sederhana agar atasan mudah menilai progres bulanan.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item { TargetSoftPill(text = "Kuantitas", color = MaterialTheme.colorScheme.primary) }
+                    item { TargetSoftPill(text = "Kualitas", color = StatusApproved) }
+                    item { TargetSoftPill(text = "Waktu", color = StatusPending) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TargetPeriodPickerDialog(
+    selectedTahun: Int,
+    selectedBulan: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int, Int) -> Unit
+) {
+    var draftTahun by remember(selectedTahun) { mutableStateOf(selectedTahun.toString()) }
+    var draftBulan by remember(selectedBulan) { mutableStateOf(selectedBulan.coerceIn(1, 12)) }
+    val months = listOf(
+        "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+        "Jul", "Agu", "Sep", "Okt", "Nov", "Des"
+    )
+    val rows = months.chunked(3)
+    val parsedYear = draftTahun.toIntOrNull()
+    val isYearValid = parsedYear != null && parsedYear in 2020..2100
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Pilih Periode") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                rows.forEachIndexed { rowIndex, rowMonths ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowMonths.forEachIndexed { columnIndex, label ->
+                            val monthNumber = rowIndex * 3 + columnIndex + 1
+                            FilterChip(
+                                selected = draftBulan == monthNumber,
+                                onClick = { draftBulan = monthNumber },
+                                label = {
+                                    Text(
+                                        text = label,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.Center
                                     )
-                                } else {
-                                    viewModel.updateTarget(
-                                        targetId = targetId,
-                                        tahun = tahun,
-                                        bulan = bulan,
-                                        catatanPegawai = catatanPegawai,
-                                        details = validDetails,
-                                        onSuccess = {
-                                            onNavigateToDetail(targetId)
-                                        },
-                                        onError = { message ->
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar(message)
-                                            }
-                                        }
-                                    )
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !uiState.isSaving
-                        ) {
-                            Icon(Icons.Default.Save, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(if (uiState.isSaving) "Menyimpan..." else "Simpan Target")
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
                         }
                     }
                 }
+
+                OutlinedTextField(
+                    value = draftTahun,
+                    onValueChange = { input ->
+                        draftTahun = input.filter { it.isDigit() }.take(4)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Tahun") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    isError = draftTahun.isNotBlank() && !isYearValid,
+                    supportingText = {
+                        Text(
+                            text = if (isYearValid) {
+                                "Periode akan digunakan untuk target yang dibuat."
+                            } else {
+                                "Isi tahun 2020 sampai 2100."
+                            }
+                        )
+                    }
+                )
             }
+        },
+        confirmButton = {
+            Button(
+                enabled = isYearValid,
+                onClick = { onConfirm(parsedYear ?: selectedTahun, draftBulan) }
+            ) {
+                Text("Terapkan")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Batal")
+            }
+        }
+    )
+}
+
+@Composable
+private fun TargetFormBottomAction(
+    isSaving: Boolean,
+    label: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        shadowElevation = 8.dp
+    ) {
+        Button(
+            onClick = onClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            enabled = !isSaving,
+            shape = RoundedCornerShape(18.dp)
+        ) {
+            Icon(Icons.Default.Save, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(if (isSaving) "Menyimpan..." else label)
         }
     }
 }
@@ -2761,27 +3044,40 @@ private fun TargetDetailEditorCard(
     index: Int,
     state: TargetDetailFormState,
     onChange: (TargetDetailFormState) -> Unit,
+    canRemove: Boolean,
     onRemove: () -> Unit
 ) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp)
+        shape = RoundedCornerShape(26.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
-                Text(
-                    text = "Item ${index + 1}",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                )
-                TextButton(onClick = onRemove) {
-                    Text("Hapus")
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Text(
+                        text = "Item ${index + 1}",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold)
+                    )
+                    Text(
+                        text = "Tuliskan satu target yang bisa diukur dan direalisasikan.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (canRemove) {
+                    TextButton(onClick = onRemove) {
+                        Text("Hapus")
+                    }
                 }
             }
 
@@ -2790,21 +3086,29 @@ private fun TargetDetailEditorCard(
                 onValueChange = { onChange(state.copy(uraianTarget = it)) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3,
-                label = { Text("Uraian Target") }
+                label = { Text("Uraian Target") },
+                placeholder = { Text("Contoh: Menyusun laporan kegiatan dan apel pagi") }
             )
 
             OutlinedTextField(
                 value = state.indikator,
                 onValueChange = { onChange(state.copy(indikator = it)) },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Indikator") }
+                label = { Text("Indikator") },
+                placeholder = { Text("Contoh: Jumlah laporan kegiatan selesai") }
             )
 
             OutlinedTextField(
                 value = state.satuan,
                 onValueChange = { onChange(state.copy(satuan = it)) },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Satuan") }
+                label = { Text("Satuan") },
+                placeholder = { Text("Contoh: Laporan, Dokumen, Kegiatan") }
+            )
+
+            Text(
+                text = "Target dan Bobot",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold)
             )
 
             Row(
@@ -2815,13 +3119,17 @@ private fun TargetDetailEditorCard(
                     value = state.targetKuantitas,
                     onValueChange = { onChange(state.copy(targetKuantitas = it)) },
                     modifier = Modifier.weight(1f),
-                    label = { Text("Kuantitas") }
+                    label = { Text("Kuantitas") },
+                    placeholder = { Text("30") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
                 OutlinedTextField(
                     value = state.targetKualitas,
                     onValueChange = { onChange(state.copy(targetKualitas = it)) },
                     modifier = Modifier.weight(1f),
-                    label = { Text("Kualitas") }
+                    label = { Text("Kualitas") },
+                    placeholder = { Text("100") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
             }
 
@@ -2833,13 +3141,29 @@ private fun TargetDetailEditorCard(
                     value = state.targetWaktu,
                     onValueChange = { onChange(state.copy(targetWaktu = it)) },
                     modifier = Modifier.weight(1f),
-                    label = { Text("Waktu") }
+                    label = { Text("Waktu") },
+                    placeholder = { Text("22") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
                 OutlinedTextField(
                     value = state.bobot,
                     onValueChange = { onChange(state.copy(bobot = it)) },
                     modifier = Modifier.weight(1f),
-                    label = { Text("Bobot (%)") }
+                    label = { Text("Bobot (%)") },
+                    placeholder = { Text("100") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+            }
+
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+            ) {
+                Text(
+                    text = "Contoh: 30 laporan, kualitas 100, waktu 22 hari kerja, bobot 100%.",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

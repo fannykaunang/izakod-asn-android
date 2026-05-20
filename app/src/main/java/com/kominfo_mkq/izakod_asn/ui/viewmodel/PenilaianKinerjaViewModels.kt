@@ -2,6 +2,7 @@ package com.kominfo_mkq.izakod_asn.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kominfo_mkq.izakod_asn.data.model.PenilaianBelumDibuatItem
 import com.kominfo_mkq.izakod_asn.data.model.PenilaianKinerjaAutoFill
 import com.kominfo_mkq.izakod_asn.data.model.PenilaianKinerjaItem
 import com.kominfo_mkq.izakod_asn.data.repository.PenilaianKinerjaRepository
@@ -74,6 +75,92 @@ class PenilaianKinerjaListViewModel : ViewModel() {
 
             if (response.success && response.data?.data != null) {
                 onSuccess(response.data.data.id)
+            } else {
+                onError(response.error ?: "Gagal membuat draft penilaian")
+            }
+        }
+    }
+}
+
+data class PenilaianBelumDibuatUiState(
+    val isLoading: Boolean = false,
+    val isError: Boolean = false,
+    val errorMessage: String? = null,
+    val isCreating: Boolean = false,
+    val creatingPegawaiId: Int? = null,
+    val currentPegawaiId: Int? = null,
+    val canReviewSubordinates: Boolean = false,
+    val items: List<PenilaianBelumDibuatItem> = emptyList()
+)
+
+class PenilaianBelumDibuatViewModel : ViewModel() {
+    private val repository = PenilaianKinerjaRepository()
+
+    private val _uiState = MutableStateFlow(PenilaianBelumDibuatUiState(isLoading = true))
+    val uiState: StateFlow<PenilaianBelumDibuatUiState> = _uiState.asStateFlow()
+
+    fun refresh(
+        tahun: Int? = null,
+        bulan: Int? = null
+    ) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isLoading = true,
+                isError = false,
+                errorMessage = null
+            )
+
+            val response = repository.getPenilaianBelumDibuat(
+                tahun = tahun,
+                bulan = bulan
+            )
+
+            if (response.success && response.data != null) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    isError = false,
+                    errorMessage = null,
+                    currentPegawaiId = response.data.meta?.currentPegawaiId,
+                    canReviewSubordinates = response.data.meta?.canReviewSubordinates == true,
+                    items = response.data.data
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    isError = true,
+                    errorMessage = response.error ?: "Gagal memuat penilaian belum dibuat"
+                )
+            }
+        }
+    }
+
+    fun createDraftFor(
+        item: PenilaianBelumDibuatItem,
+        onSuccess: (Int) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isCreating = true,
+                creatingPegawaiId = item.pegawaiId,
+                errorMessage = null
+            )
+
+            val response = repository.createDraftPenilaianKinerja(
+                tahun = item.tahun,
+                bulan = item.bulan,
+                pegawaiId = item.pegawaiId,
+                catatan = null
+            )
+
+            _uiState.value = _uiState.value.copy(
+                isCreating = false,
+                creatingPegawaiId = null
+            )
+
+            if (response.success && response.data?.data != null) {
+                onSuccess(response.data.data.id)
+                refresh(tahun = item.tahun, bulan = item.bulan)
             } else {
                 onError(response.error ?: "Gagal membuat draft penilaian")
             }
