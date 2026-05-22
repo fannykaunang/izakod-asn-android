@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.sp
 import com.kominfo_mkq.izakod_asn.ui.theme.*
 
 enum class StatusType {
+    DRAFT,
     PENDING,
     APPROVED,
     REJECTED,
@@ -27,6 +28,11 @@ fun StatusBadge(
     modifier: Modifier = Modifier
 ) {
     val (backgroundColor, textColor, statusText) = when (status) {
+        StatusType.DRAFT -> Triple(
+            MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f),
+            MaterialTheme.colorScheme.secondary,
+            "Draft"
+        )
         StatusType.PENDING -> Triple(
             StatusPending.copy(alpha = 0.15f),
             StatusPending,
@@ -73,6 +79,12 @@ fun StatusBadgeLarge(
     modifier: Modifier = Modifier
 ) {
     val (backgroundColor, textColor, statusText, icon) = when (status) {
+        StatusType.DRAFT -> Tuple4(
+            MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f),
+            MaterialTheme.colorScheme.secondary,
+            "Draft",
+            "D"
+        )
         StatusType.PENDING -> Tuple4(
             StatusPending.copy(alpha = 0.1f),
             StatusPending,

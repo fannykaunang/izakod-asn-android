@@ -202,6 +202,7 @@ fun DashboardScreen(
     onNavigateToPenilaianKinerja: () -> Unit,
     onNavigateToPenilaianBawahan: () -> Unit,
     onNavigateToPenilaianBelumDibuat: () -> Unit,
+    onNavigateToTertunda: () -> Unit,
     onNavigateToTppDetail: (Int, Int) -> Unit,
     onNavigateToTemplates: () -> Unit,
     onNavigateToReminder: () -> Unit,
@@ -214,13 +215,13 @@ fun DashboardScreen(
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val uiState by viewModel.uiState.collectAsState()
     val tppUiState by tppViewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
-        viewModel.refresh()
+        viewModel.refresh(context)
         tppViewModel.refresh()
     }
 
-    val context = LocalContext.current
     val userPreferences = remember { UserPreferences(context) }
     val sessionData = remember { userPreferences.getSessionData() }
 
@@ -261,7 +262,7 @@ fun DashboardScreen(
                 uiState.isError -> {
                     ErrorContent(
                         message = uiState.errorMessage ?: "Terjadi kesalahan",
-                        onRetry = { viewModel.retry() }
+                        onRetry = { viewModel.retry(context) }
                     )
                 }
                 else -> {
@@ -271,6 +272,7 @@ fun DashboardScreen(
                         assessmentSummary = uiState.assessmentSummary,
                         targetSummary = uiState.targetSummary,
                         actionAlerts = uiState.actionAlerts,
+                        tertundaCount = uiState.tertundaCount,
                         targetItems = uiState.targetItems,
                         tppUiState = tppUiState,
                         tppData = tppUiState.data,
@@ -289,6 +291,7 @@ fun DashboardScreen(
                         onPenilaianKinerja = onNavigateToPenilaianKinerja,
                         onPenilaianBawahan = onNavigateToPenilaianBawahan,
                         onPenilaianBelumDibuat = onNavigateToPenilaianBelumDibuat,
+                        onTertunda = onNavigateToTertunda,
                         onTppPreviousMonth = { tppViewModel.moveMonth(-1) },
                         onTppNextMonth = { tppViewModel.moveMonth(1) },
                         onTppRefresh = { tppViewModel.refresh() },
@@ -311,6 +314,7 @@ private fun DashboardContent(
     assessmentSummary: AssessmentSummaryData?,
     targetSummary: DashboardTargetSummaryData?,
     actionAlerts: DashboardActionAlertsData?,
+    tertundaCount: Int?,
     targetItems: List<TargetKinerjaItem>,
     tppUiState: TppSayaUiState,
     tppData: TppMeData?,
@@ -329,6 +333,7 @@ private fun DashboardContent(
     onPenilaianKinerja: () -> Unit,
     onPenilaianBawahan: () -> Unit,
     onPenilaianBelumDibuat: () -> Unit,
+    onTertunda: () -> Unit,
     onTppPreviousMonth: () -> Unit,
     onTppNextMonth: () -> Unit,
     onTppRefresh: () -> Unit,
@@ -434,21 +439,23 @@ private fun DashboardContent(
                             )
                         }
                         item {
+                            MinimalQuickActionsSection(
+                                tertundaCount = tertundaCount,
+                                onViewReports = onViewReports,
+                                onTargetKinerja = onTargetKinerja,
+                                onPenilaianKinerja = onPenilaianKinerja,
+                                onTertunda = onTertunda,
+                                onTppSaya = { viewModel.updateTabIndex(tabs.indexOf("TPP")) },
+                                onTemplates = onTemplates,
+                                onReminder = onReminder
+                            )
+                        }
+                        item {
                             MinimalSummarySection(
                                 metrics = metrics,
                                 targetSummary = targetSummary,
                                 assessmentSummary = assessmentSummary,
                                 tppData = tppData
-                            )
-                        }
-                        item {
-                            MinimalQuickActionsSection(
-                                onViewReports = onViewReports,
-                                onTargetKinerja = onTargetKinerja,
-                                onPenilaianKinerja = onPenilaianKinerja,
-                                onTppSaya = { viewModel.updateTabIndex(tabs.indexOf("TPP")) },
-                                onTemplates = onTemplates,
-                                onReminder = onReminder
                             )
                         }
                     }
@@ -1316,7 +1323,6 @@ private fun MinimalActionFocusSection(
 ) {
     val targetNeedAttention = alerts?.targetNeedAttentionCount ?: 0
     val realisasiNeedAttention = alerts?.realisasiNeedAttentionCount ?: 0
-    val laporanPending = alerts?.laporanPendingCount ?: 0
     val ownAssessmentPending = alerts?.ownAssessmentPendingCount ?: 0
     val subordinateReview = alerts?.subordinateReviewCount ?: 0
     val missingAssessment = alerts?.missingAssessmentCount ?: 0
@@ -1325,6 +1331,12 @@ private fun MinimalActionFocusSection(
         ?.equals("Final", ignoreCase = true) == true
     val hasTargetAttention = !isAssessmentPeriodFinal &&
         (targetNeedAttention > 0 || realisasiNeedAttention > 0)
+    val hasActionToShow = ownAssessmentPending > 0 ||
+        (canReviewSubordinates && missingAssessment > 0) ||
+        (canReviewSubordinates && subordinateReview > 0) ||
+        hasTargetAttention
+
+    if (!hasActionToShow) return
 
     val primaryText = when {
         ownAssessmentPending > 0 -> "Penilaian saya belum final"
@@ -1339,7 +1351,6 @@ private fun MinimalActionFocusSection(
             if (totalAttention == 1) "1 target perlu realisasi" else "$totalAttention target perlu realisasi"
         }
         isAssessmentPeriodFinal -> "Periode target sudah final"
-        laporanPending > 0 -> "$laporanPending laporan menunggu tindak lanjut"
         else -> "Tidak ada tindakan mendesak saat ini"
     }
 
@@ -1349,7 +1360,6 @@ private fun MinimalActionFocusSection(
         canReviewSubordinates && subordinateReview > 0 -> "Tidak termasuk penilaian saya"
         hasTargetAttention -> "Buat laporan kegiatan untuk bulan $targetPeriodMonth."
         isAssessmentPeriodFinal -> "Target dan realisasi bulan $targetPeriodMonth hanya bisa dilihat."
-        laporanPending > 0 -> "Buka laporan untuk detail"
         else -> "Semua ringkasan utama terlihat aman"
     }
 
@@ -1359,7 +1369,6 @@ private fun MinimalActionFocusSection(
         canReviewSubordinates && subordinateReview > 0 -> "Buka Penilaian"
         hasTargetAttention -> "Buka Target"
         isAssessmentPeriodFinal -> "Lihat Target"
-        laporanPending > 0 -> "Buka Laporan"
         else -> "Lihat Target"
     }
 
@@ -1369,7 +1378,6 @@ private fun MinimalActionFocusSection(
         canReviewSubordinates && subordinateReview > 0 -> onOpenReview
         hasTargetAttention -> onOpenTarget
         isAssessmentPeriodFinal -> onOpenTarget
-        laporanPending > 0 -> onOpenReports
         else -> onOpenTarget
     }
 
@@ -1427,26 +1435,45 @@ private fun MinimalActionFocusSection(
 
 @Composable
 private fun MinimalQuickActionsSection(
+    tertundaCount: Int?,
     onViewReports: () -> Unit,
     onTargetKinerja: () -> Unit,
     onPenilaianKinerja: () -> Unit,
+    onTertunda: () -> Unit,
     onTppSaya: () -> Unit,
     onTemplates: () -> Unit,
     onReminder: () -> Unit
 ) {
+    val tertundaBadge = when {
+        tertundaCount == null || tertundaCount <= 0 -> null
+        tertundaCount > 99 -> "99+"
+        else -> tertundaCount.toString()
+    }
+
     val actions = listOf(
         CompactQuickActionData("Laporan", Icons.AutoMirrored.Filled.List, SecondaryLight, onViewReports),
         CompactQuickActionData("Target", Icons.Default.TaskAlt, PrimaryLight, onTargetKinerja),
+        CompactQuickActionData("Template", Icons.Default.AssignmentTurnedIn, TertiaryLight, onTemplates),
+        CompactQuickActionData(
+            label = "Tertunda",
+            icon = Icons.Default.AccessTime,
+            color = StatusRevised,
+            onClick = onTertunda,
+            badgeText = tertundaBadge
+        ),
         CompactQuickActionData("Penilaian", Icons.Default.Bookmark, StatusApproved, onPenilaianKinerja),
         CompactQuickActionData("TPP", Icons.Default.PlaylistAddCheckCircle, StatusPending, onTppSaya),
-        CompactQuickActionData("Template", Icons.Default.AssignmentTurnedIn, TertiaryLight, onTemplates),
         CompactQuickActionData("Pengingat", Icons.Default.AlarmOn, StatusApproved, onReminder)
     )
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             text = "Akses Cepat",
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp,
+                lineHeight = 24.sp
+            )
         )
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
@@ -1491,18 +1518,38 @@ private fun QuickActionGridItem(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Box(
-            modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(action.color.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.TopEnd
         ) {
-            Icon(
-                imageVector = action.icon,
-                contentDescription = null,
-                tint = action.color,
-                modifier = Modifier.size(22.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(action.color.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = action.icon,
+                    contentDescription = null,
+                    tint = action.color,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            action.badgeText?.let { badgeText ->
+                Badge(
+                    modifier = Modifier.offset(x = 6.dp, y = (-6).dp),
+                    containerColor = StatusRejected,
+                    contentColor = Color.White
+                ) {
+                    Text(
+                        text = badgeText,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 9.sp
+                        )
+                    )
+                }
+            }
         }
         Text(
             text = action.label,
@@ -1578,7 +1625,11 @@ private fun MinimalSummarySection(
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             text = "Ringkasan Bulan Ini",
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp,
+                lineHeight = 24.sp
+            )
         )
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
@@ -1846,7 +1897,8 @@ private data class CompactQuickActionData(
     val label: String,
     val icon: ImageVector,
     val color: Color,
-    val onClick: () -> Unit
+    val onClick: () -> Unit,
+    val badgeText: String? = null
 )
 
 @Composable

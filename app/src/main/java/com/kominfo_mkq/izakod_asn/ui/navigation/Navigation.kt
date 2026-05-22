@@ -41,6 +41,7 @@ import com.kominfo_mkq.izakod_asn.ui.screens.TargetKinerjaFormScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.TargetKinerjaListScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.TargetKinerjaSubordinatePeriodScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.TemplateKegiatanScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.TertundaScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.TppSayaDetailScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.TppSayaScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.VerifikasiLaporanScreen
@@ -59,6 +60,7 @@ sealed class Screen(val route: String) {
     object TargetKinerjaCreate : Screen("target_kinerja_create")
     object PenilaianKinerja : Screen("penilaian_kinerja")
     object PenilaianBelumDibuat : Screen("penilaian_belum_dibuat")
+    object Tertunda : Screen("tertunda")
     object TppSaya : Screen("tpp_saya")
     object Reminders : Screen("reminders")
     object Profile : Screen("profile")
@@ -188,6 +190,7 @@ fun IZAKODNavigation(
                     onNavigateToPenilaianKinerja = { navController.navigate(penilaianKinerjaRoute("mine")) },
                     onNavigateToPenilaianBawahan = { navController.navigate(penilaianKinerjaRoute("subordinate")) },
                     onNavigateToPenilaianBelumDibuat = { navController.navigate(Screen.PenilaianBelumDibuat.route) },
+                    onNavigateToTertunda = { navController.navigate(Screen.Tertunda.route) },
                     onNavigateToTppDetail = { tahun, bulan ->
                         navController.navigate("tpp_saya_detail/$tahun/$bulan")
                     },
@@ -196,6 +199,22 @@ fun IZAKODNavigation(
                     onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) },
                     isDarkTheme = isDarkTheme,
                     onToggleTheme = onToggleTheme
+                )
+            }
+
+            composable(Screen.Tertunda.route) {
+                TertundaScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onOpenLaporan = { laporanId -> navController.navigate("laporan_detail/$laporanId") },
+                    onOpenTarget = { targetId ->
+                        navController.navigate("target_kinerja_detail/$targetId?reviewMode=false")
+                    },
+                    onOpenPenilaian = { assessmentId ->
+                        navController.navigate("penilaian_kinerja_detail/$assessmentId")
+                    },
+                    onOpenReports = { navController.navigate(Screen.ReportList.route) },
+                    onOpenTargets = { navController.navigate(Screen.TargetKinerja.route) },
+                    onOpenPenilaianList = { navController.navigate(penilaianKinerjaRoute("mine")) }
                 )
             }
 

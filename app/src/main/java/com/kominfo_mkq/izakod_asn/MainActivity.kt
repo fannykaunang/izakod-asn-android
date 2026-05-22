@@ -11,6 +11,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -69,6 +70,7 @@ fun RequestNotificationPermissionOnce(userPrefs: UserPreferences) {
 class MainActivity : ComponentActivity() {
     private lateinit var userPrefs: UserPreferences
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -90,7 +92,7 @@ class MainActivity : ComponentActivity() {
             prefs.setMobileJwtToken(null)
         }
         TokenStore.setToken(restoredMobileToken)
-        TokenStore.setRefreshToken(null)
+        TokenStore.setRefreshToken(prefs.getRefreshToken())
 
         if (prefs.isLoggedIn() && restoredMobileToken == null) {
             val session = prefs.getSessionData()
@@ -101,10 +103,14 @@ class MainActivity : ComponentActivity() {
                             pegawaiId = session.pegawaiId,
                             pin = session.pin
                         )
-                        val nextJsMobileToken = response.body()?.data?.token?.trim()
+                        val tokenData = response.body()?.data
+                        val nextJsMobileToken = tokenData?.token?.trim()
+                        val nextJsRefreshToken = tokenData?.refreshToken?.trim()
                         if (response.isSuccessful && !nextJsMobileToken.isNullOrBlank()) {
                             prefs.setMobileJwtToken(nextJsMobileToken)
+                            prefs.setRefreshToken(nextJsRefreshToken)
                             TokenStore.setToken(nextJsMobileToken)
+                            TokenStore.setRefreshToken(nextJsRefreshToken)
                             Log.d("MainActivity", "✅ Next.js mobile token refreshed on startup")
                         } else {
                             Log.w("MainActivity", "Failed refreshing mobile token on startup: ${response.code()}")

@@ -5,6 +5,7 @@ import com.kominfo_mkq.izakod_asn.data.model.AuthenticatedSession
 import com.kominfo_mkq.izakod_asn.data.model.EntagoLoginRequest
 import com.kominfo_mkq.izakod_asn.data.model.MobileTokenRequest
 import com.kominfo_mkq.izakod_asn.data.model.MobileTokenResponse
+import com.kominfo_mkq.izakod_asn.data.model.RefreshTokenRequest
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -78,6 +79,14 @@ class AuthRepository {
     ): Response<MobileTokenResponse> {
         return ApiClient.eabsenApiService.getMobileToken(
             MobileTokenRequest(pegawai_id = pegawaiId, pin = pin)
+        )
+    }
+
+    suspend fun refreshNextJsMobileToken(
+        refreshToken: String
+    ): Response<MobileTokenResponse> {
+        return ApiClient.eabsenApiService.refreshMobileToken(
+            RefreshTokenRequest(refreshToken = refreshToken)
         )
     }
 }

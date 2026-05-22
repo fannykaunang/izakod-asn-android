@@ -116,7 +116,7 @@ import java.util.Calendar
 import java.util.Locale
 import android.graphics.Color as GColor
 
-enum class FilterType { ALL, PENDING, APPROVED, REJECTED, REVISED }
+enum class FilterType { ALL, DRAFT, PENDING, APPROVED, REJECTED, REVISED }
 
 /** UI model yang dipakai list + PDF (jangan pakai API model langsung di UI) */
 private data class ReportUi(
@@ -190,6 +190,7 @@ fun ReportListScreen(
             .filter { r ->
                 when (selectedFilter) {
                     FilterType.ALL -> true
+                    FilterType.DRAFT -> r.status == StatusType.DRAFT
                     FilterType.PENDING -> r.status == StatusType.PENDING
                     FilterType.APPROVED -> r.status == StatusType.APPROVED
                     FilterType.REJECTED -> r.status == StatusType.REJECTED
@@ -200,13 +201,14 @@ fun ReportListScreen(
     }
 
     val totalCount = remember(allReports) { allReports.size }
+    val draftCount = remember(allReports) { allReports.count { it.status == StatusType.DRAFT } }
     val pendingCount = remember(allReports) { allReports.count { it.status == StatusType.PENDING } }
     val approvedCount = remember(allReports) { allReports.count { it.status == StatusType.APPROVED } }
-    val revisedCount = remember(allReports) { allReports.count { it.status == StatusType.REVISED } }
+    val attentionCount = remember(allReports) { allReports.count { it.needsEmployeeAttention() } }
 
     val actionReports = remember(filteredReports, selectedFilter) {
         if (selectedFilter == FilterType.ALL) {
-            filteredReports.filter { it.status == StatusType.REVISED || it.status == StatusType.REJECTED }
+            filteredReports.filter { it.needsEmployeeAttention() }
         } else {
             emptyList()
         }
@@ -214,7 +216,7 @@ fun ReportListScreen(
 
     val regularReports = remember(filteredReports, actionReports, selectedFilter) {
         if (selectedFilter == FilterType.ALL && actionReports.isNotEmpty()) {
-            filteredReports.filterNot { it.status == StatusType.REVISED || it.status == StatusType.REJECTED }
+            filteredReports.filterNot { it.needsEmployeeAttention() }
         } else {
             filteredReports
         }
@@ -236,6 +238,7 @@ fun ReportListScreen(
         topBar = {
             IZAKODHeaderBar(
                 title = "Laporan Kegiatan",
+                subtitle = "Pantau draft, revisi, dan riwayat laporan",
                 compact = true,
                 onBack = if (showBackButton) onBack else null,
                 actions = {
@@ -266,7 +269,7 @@ fun ReportListScreen(
                             onDismissRequest = { showOverflowMenu = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Print") },
+                                text = { Text("Cetak") },
                                 leadingIcon = {
                                     Icon(Icons.Default.Print, contentDescription = null)
                                 },
@@ -318,15 +321,22 @@ fun ReportListScreen(
                     Column(modifier = Modifier.fillMaxSize()) {
                         ReportSummaryStrip(
                             totalCount = totalCount,
+                            draftCount = draftCount,
                             pendingCount = pendingCount,
                             approvedCount = approvedCount,
-                            revisedCount = revisedCount
+                            attentionCount = attentionCount
+                        )
+
+                        ReportPeriodSelectorBar(
+                            periodLabel = activePeriodLabel ?: "Semua periode",
+                            isFiltered = activePeriodLabel != null,
+                            onOpenFilter = { showFilterDialog = true },
+                            onClearFilter = { viewModel.clearFilter(context) }
                         )
 
                         FilterChipsRow(
                             selected = selectedFilter,
-                            onSelect = { selectedFilter = it },
-                            activePeriodLabel = activePeriodLabel
+                            onSelect = { selectedFilter = it }
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -338,8 +348,15 @@ fun ReportListScreen(
                         ) {
                             if (filteredReports.isEmpty()) {
                                 EmptyState(
-                                    message = "Belum ada laporan kegiatan",
-                                    onAction = onCreateReport,
+                                    message = emptyReportMessage(
+                                        selectedFilter = selectedFilter,
+                                        activePeriodLabel = activePeriodLabel
+                                    ),
+                                    onAction = if (selectedFilter == FilterType.ALL || selectedFilter == FilterType.DRAFT) {
+                                        onCreateReport
+                                    } else {
+                                        null
+                                    },
                                     actionText = "Buat Laporan"
                                 )
                             } else {
@@ -770,40 +787,57 @@ private fun SearchHintState() {
 @Composable
 private fun ReportSummaryStrip(
     totalCount: Int,
+    draftCount: Int,
     pendingCount: Int,
     approvedCount: Int,
-    revisedCount: Int
+    attentionCount: Int
 ) {
-    Row(
+    LazyRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 20.dp, top = 10.dp, end = 20.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        SummaryStatCard(
-            modifier = Modifier.weight(1f),
-            value = totalCount.toString(),
-            label = "Total",
-            accent = MaterialTheme.colorScheme.primary
-        )
-        SummaryStatCard(
-            modifier = Modifier.weight(1f),
-            value = pendingCount.toString(),
-            label = "Diajukan",
-            accent = StatusPending
-        )
-        SummaryStatCard(
-            modifier = Modifier.weight(1f),
-            value = approvedCount.toString(),
-            label = "Disetujui",
-            accent = StatusApproved
-        )
-        SummaryStatCard(
-            modifier = Modifier.weight(1f),
-            value = revisedCount.toString(),
-            label = "Revisi",
-            accent = StatusRevised
-        )
+        item {
+            SummaryStatCard(
+                modifier = Modifier.width(92.dp),
+                value = totalCount.toString(),
+                label = "Total",
+                accent = MaterialTheme.colorScheme.primary
+            )
+        }
+        item {
+            SummaryStatCard(
+                modifier = Modifier.width(92.dp),
+                value = attentionCount.toString(),
+                label = "Perlu",
+                accent = StatusRejected
+            )
+        }
+        item {
+            SummaryStatCard(
+                modifier = Modifier.width(92.dp),
+                value = draftCount.toString(),
+                label = "Draft",
+                accent = MaterialTheme.colorScheme.secondary
+            )
+        }
+        item {
+            SummaryStatCard(
+                modifier = Modifier.width(92.dp),
+                value = pendingCount.toString(),
+                label = "Diajukan",
+                accent = StatusPending
+            )
+        }
+        item {
+            SummaryStatCard(
+                modifier = Modifier.width(100.dp),
+                value = approvedCount.toString(),
+                label = "Disetujui",
+                accent = StatusApproved
+            )
+        }
     }
 }
 
@@ -843,10 +877,83 @@ private fun SummaryStatCard(
 }
 
 @Composable
+private fun ReportPeriodSelectorBar(
+    periodLabel: String,
+    isFiltered: Boolean,
+    onOpenFilter: () -> Unit,
+    onClearFilter: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, top = 12.dp, end = 20.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CalendarToday,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = "Periode laporan",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = periodLabel,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            FilterChip(
+                selected = isFiltered,
+                onClick = onOpenFilter,
+                label = { Text(if (isFiltered) "Ubah" else "Pilih") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.FilterList,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            )
+
+            if (isFiltered) {
+                TextButton(onClick = onClearFilter) {
+                    Text("Reset")
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun FilterChipsRow(
     selected: FilterType,
-    onSelect: (FilterType) -> Unit,
-    activePeriodLabel: String? = null
+    onSelect: (FilterType) -> Unit
 ) {
     LazyRow(
         modifier = Modifier.padding(horizontal = 20.dp),
@@ -857,6 +964,16 @@ private fun FilterChipsRow(
                 selected = selected == FilterType.ALL,
                 onClick = { onSelect(FilterType.ALL) },
                 label = { Text("Semua") }
+            )
+        }
+        item {
+            FilterChip(
+                selected = selected == FilterType.DRAFT,
+                onClick = { onSelect(FilterType.DRAFT) },
+                label = { Text("Draft") },
+                leadingIcon = {
+                    Dot(MaterialTheme.colorScheme.secondary)
+                }
             )
         }
         item {
@@ -898,16 +1015,6 @@ private fun FilterChipsRow(
                     Dot(StatusRevised)
                 }
             )
-        }
-        if (!activePeriodLabel.isNullOrBlank()) {
-            item {
-                FilterChip(
-                    selected = false,
-                    onClick = {},
-                    enabled = false,
-                    label = { Text(activePeriodLabel) }
-                )
-            }
         }
     }
 }
@@ -974,8 +1081,9 @@ private fun ReportCard(
     report: ReportUi,
     onClick: () -> Unit
 ) {
-    val needsAttention = report.status == StatusType.REJECTED || report.status == StatusType.REVISED
+    val needsAttention = report.needsEmployeeAttention()
     val accentColor = when (report.status) {
+        StatusType.DRAFT -> MaterialTheme.colorScheme.secondary
         StatusType.REJECTED -> StatusRejected
         StatusType.REVISED -> StatusRevised
         StatusType.PENDING -> StatusPending
@@ -999,7 +1107,7 @@ private fun ReportCard(
                             .background(accentColor)
                     )
                     Text(
-                        text = "Perlu tindakan",
+                        text = report.attentionLabel(),
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = accentColor
                     )
@@ -1229,7 +1337,7 @@ private fun PrintPreviewDialog(
             ) {
                 Icon(Icons.Default.Print, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Print")
+                Text("Cetak")
             }
         },
         dismissButton = {
@@ -1701,6 +1809,36 @@ private fun LaporanKegiatan.toUi(): ReportUi {
     )
 }
 
+private fun ReportUi.needsEmployeeAttention(): Boolean {
+    return status == StatusType.DRAFT ||
+        status == StatusType.REJECTED ||
+        status == StatusType.REVISED
+}
+
+private fun ReportUi.attentionLabel(): String {
+    return when (status) {
+        StatusType.DRAFT -> "Belum diajukan"
+        StatusType.REVISED -> "Perlu revisi"
+        StatusType.REJECTED -> "Ditolak"
+        else -> "Perlu tindakan"
+    }
+}
+
+private fun emptyReportMessage(
+    selectedFilter: FilterType,
+    activePeriodLabel: String?
+): String {
+    val periodSuffix = activePeriodLabel?.let { " pada $it" }.orEmpty()
+    return when (selectedFilter) {
+        FilterType.ALL -> "Belum ada laporan kegiatan$periodSuffix"
+        FilterType.DRAFT -> "Belum ada laporan draft$periodSuffix"
+        FilterType.PENDING -> "Belum ada laporan yang sedang diajukan$periodSuffix"
+        FilterType.APPROVED -> "Belum ada laporan yang sudah disetujui$periodSuffix"
+        FilterType.REJECTED -> "Belum ada laporan yang ditolak$periodSuffix"
+        FilterType.REVISED -> "Belum ada laporan yang perlu revisi$periodSuffix"
+    }
+}
+
 private fun formatDateId(dateString: String): String {
     return try {
         val datePart = dateString.split("T")[0]
@@ -1715,7 +1853,8 @@ private fun formatDateId(dateString: String): String {
 
 private fun mapStatusToEnum(status: String): StatusType {
     return when (status.lowercase()) {
-        "pending", "diajukan", "draft" -> StatusType.PENDING
+        "draft" -> StatusType.DRAFT
+        "pending", "diajukan" -> StatusType.PENDING
         "diverifikasi", "approved", "verified" -> StatusType.APPROVED
         "ditolak", "rejected" -> StatusType.REJECTED
         "revisi", "perlu revisi", "revised", "revision" -> StatusType.REVISED

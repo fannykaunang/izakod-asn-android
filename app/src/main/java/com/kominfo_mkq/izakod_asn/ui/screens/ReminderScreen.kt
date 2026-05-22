@@ -16,23 +16,28 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.kominfo_mkq.izakod_asn.ui.theme.*
 import com.kominfo_mkq.izakod_asn.data.model.CreateReminderRequest
 import com.kominfo_mkq.izakod_asn.data.model.Reminder
 import com.kominfo_mkq.izakod_asn.data.model.ReminderStats
 import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
+import com.kominfo_mkq.izakod_asn.ui.theme.PrimaryLight
+import com.kominfo_mkq.izakod_asn.ui.theme.SecondaryLight
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusApproved
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusPending
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusRejected
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusRevised
+import com.kominfo_mkq.izakod_asn.ui.theme.TertiaryLight
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.ReminderViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-/**
- * ✅ MAIN REMINDER SCREEN - Complete with list, stats, and FAB
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReminderScreen(
@@ -42,12 +47,10 @@ fun ReminderScreen(
     val uiState by viewModel.uiState.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
 
-    // Load reminders when screen opens
     LaunchedEffect(Unit) {
         viewModel.loadReminders()
     }
 
-    // Handle create success
     LaunchedEffect(uiState.createSuccess) {
         if (uiState.createSuccess) {
             showCreateDialog = false
@@ -59,216 +62,324 @@ fun ReminderScreen(
         topBar = {
             IZAKODHeaderBar(
                 title = "Pengingat",
+                subtitle = "Atur alarm kecil agar laporan tidak terlewat",
                 compact = true,
-                onBack = onNavigateBack
+                onBack = onNavigateBack,
+                actions = {
+                    IconButton(
+                        onClick = { viewModel.loadReminders() },
+                        enabled = !uiState.isLoading
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Muat ulang")
+                    }
+                }
             )
         },
         floatingActionButton = {
             if (!uiState.isLoading && !uiState.isError) {
-                FloatingActionButton(
+                ExtendedFloatingActionButton(
                     onClick = { showCreateDialog = true },
-                    containerColor = PrimaryLight
-                ) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = "Tambah Reminder",
-                        tint = Color.White
-                    )
-                }
+                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    text = { Text("Tambah") },
+                    containerColor = PrimaryLight,
+                    contentColor = Color.White
+                )
             }
         }
     ) { paddingValues ->
-        when {
-            uiState.isLoading -> {
-                RemindersLoadingContent()
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            when {
+                uiState.isLoading -> {
+                    RemindersLoadingContent()
+                }
+
+                uiState.isError -> {
+                    RemindersErrorContent(
+                        message = uiState.errorMessage ?: "Terjadi kesalahan",
+                        onRetry = { viewModel.loadReminders() }
+                    )
+                }
+
+                else -> {
+                    ReminderContent(
+                        reminders = uiState.reminders,
+                        stats = uiState.stats,
+                        onCreate = { showCreateDialog = true },
+                        onDelete = { reminderId -> viewModel.deleteReminder(reminderId) }
+                    )
+                }
             }
-            uiState.isError -> {
-                RemindersErrorContent(
-                    message = uiState.errorMessage ?: "Terjadi kesalahan",
-                    onRetry = { viewModel.loadReminders() }
+
+            if (showCreateDialog) {
+                CreateReminderDialog(
+                    onDismiss = { showCreateDialog = false },
+                    onConfirm = { request ->
+                        viewModel.createReminder(request)
+                    }
                 )
             }
-            uiState.reminders.isEmpty() -> {
-                EmptyReminders()
-            }
-            else -> {
-                LazyColumn(
+
+            if (uiState.isCreating || uiState.isDeleting) {
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(paddingValues),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .background(Color.Black.copy(alpha = 0.26f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // Stats section
-                    item {
-                        ReminderStatsSection(stats = uiState.stats)
-                    }
-
-                    // Reminder list
-                    items(uiState.reminders, key = { it.reminderId }) { reminder ->
-                        ReminderCard(
-                            reminder = reminder,
-                            onDelete = { reminderId ->
-                                viewModel.deleteReminder(reminderId)  // ✅ Call delete
-                            }
-                        )
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        tonalElevation = 6.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.5.dp)
+                            Text(if (uiState.isCreating) "Menyimpan pengingat..." else "Menghapus pengingat...")
+                        }
                     }
                 }
-            }
-        }
-
-        // Create dialog
-        if (showCreateDialog) {
-            CreateReminderDialog(
-                onDismiss = { showCreateDialog = false },
-                onConfirm = { request ->
-                    viewModel.createReminder(request)
-                }
-            )
-        }
-
-        // Show loading overlay when creating
-        if (uiState.isCreating) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.3f)),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
             }
         }
     }
 }
 
-/**
- * ✅ STATS SECTION
- */
 @Composable
-fun ReminderStatsSection(stats: ReminderStats?) {
-    stats ?: return
+private fun ReminderContent(
+    reminders: List<Reminder>,
+    stats: ReminderStats?,
+    onCreate: () -> Unit,
+    onDelete: (Int) -> Unit
+) {
+    val nextReminder = reminders.firstOrNull { it.isActive == 1 } ?: reminders.firstOrNull()
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            "Statistik",
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontWeight = FontWeight.Bold
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 112.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item {
+            ReminderHeroCard(
+                nextReminder = nextReminder,
+                total = reminders.size,
+                onCreate = onCreate
             )
+        }
+
+        item {
+            ReminderStatsSection(stats = stats, fallbackTotal = reminders.size)
+        }
+
+        if (reminders.isEmpty()) {
+            item {
+                EmptyReminders(onCreate = onCreate)
+            }
+        } else {
+            item {
+                SectionHeader(
+                    title = "Daftar Pengingat",
+                    subtitle = "${reminders.size} pengingat tersimpan"
+                )
+            }
+
+            items(reminders, key = { it.reminderId }) { reminder ->
+                ReminderCard(
+                    reminder = reminder,
+                    onDelete = onDelete
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReminderHeroCard(
+    nextReminder: Reminder?,
+    total: Int,
+    onCreate: () -> Unit
+) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.58f)
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconBubble(
+                    icon = Icons.Default.NotificationsActive,
+                    color = PrimaryLight,
+                    size = 54.dp
+                )
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = if (total > 0) "Pengingat sudah siap" else "Belum ada pengingat",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold)
+                    )
+                    Text(
+                        text = if (total > 0) {
+                            "Aplikasi akan membantu mengingatkan rutinitas kerja penting."
+                        } else {
+                            "Buat pengingat untuk laporan harian, target, atau agenda pribadi."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconBubble(
+                        icon = if (nextReminder != null) Icons.Default.AccessTime else Icons.Default.AddAlarm,
+                        color = if (nextReminder != null) reminderAccentColor(nextReminder.tipeReminder) else StatusPending,
+                        size = 42.dp
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(
+                            text = nextReminder?.judulReminder ?: "Buat pengingat pertama",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = nextReminder?.let { reminderScheduleLabel(it) }
+                                ?: "Pilih jam dan pola pengingat yang mudah diikuti.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    FilledTonalButton(
+                        onClick = onCreate,
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text("Tambah")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReminderStatsSection(
+    stats: ReminderStats?,
+    fallbackTotal: Int
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SectionHeader(
+            title = "Ringkasan",
+            subtitle = "Status pengingat yang sudah dibuat"
         )
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            ReminderStatCard("Total", stats.total.toString(), PrimaryLight, Modifier.weight(1f))
-            ReminderStatCard("Aktif", stats.active, StatusApproved, Modifier.weight(1f))
-            ReminderStatCard("Harian", stats.harian, SecondaryLight, Modifier.weight(1f))
+            ReminderStatCard(
+                title = "Total",
+                value = (stats?.total ?: fallbackTotal).toString(),
+                icon = Icons.Default.Alarm,
+                color = PrimaryLight,
+                modifier = Modifier.weight(1f)
+            )
+            ReminderStatCard(
+                title = "Aktif",
+                value = stats?.active ?: "0",
+                icon = Icons.Default.ToggleOn,
+                color = StatusApproved,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            ReminderStatCard(
+                title = "Harian",
+                value = stats?.harian ?: "0",
+                icon = Icons.Default.Today,
+                color = SecondaryLight,
+                modifier = Modifier.weight(1f)
+            )
+            ReminderStatCard(
+                title = "Bulanan",
+                value = stats?.bulanan ?: "0",
+                icon = Icons.Default.CalendarMonth,
+                color = TertiaryLight,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
 
 @Composable
-fun ReminderStatCard(
+private fun ReminderStatCard(
     title: String,
     value: String,
+    icon: ImageVector,
     color: Color,
     modifier: Modifier = Modifier
 ) {
     ElevatedCard(
         modifier = modifier,
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 0.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Row(
+            modifier = Modifier.padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = value,
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    fontWeight = FontWeight.Bold
-                ),
-                color = color
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-private fun RemindersLoadingContent() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            CircularProgressIndicator()
-            Text("Memuat pengingat...")
-        }
-    }
-}
-
-@Composable
-private fun RemindersErrorContent(message: String, onRetry: () -> Unit) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.padding(32.dp)
-        ) {
-            Icon(
-                Icons.Default.Error,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.error
-            )
-            Text(message, style = MaterialTheme.typography.bodyLarge)
-            Button(onClick = onRetry) {
-                Icon(Icons.Default.Refresh, null)
-                Spacer(Modifier.width(8.dp))
-                Text("Coba Lagi")
+            IconBubble(icon = icon, color = color, size = 38.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                    color = color
+                )
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-        }
-    }
-}
-
-@Composable
-private fun EmptyReminders() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(32.dp)
-        ) {
-            Icon(
-                Icons.Default.AlarmOff,
-                contentDescription = null,
-                modifier = Modifier.size(120.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-            )
-            Spacer(Modifier.height(16.dp))
-            Text(
-                "Belum ada pengingat",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                "Tambahkan pengingat dengan tombol + di bawah",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-            )
         }
     }
 }
@@ -277,87 +388,103 @@ private fun EmptyReminders() {
 @Composable
 fun ReminderCard(reminder: Reminder, onDelete: (Int) -> Unit) {
     var showDeleteDialog by remember { mutableStateOf(false) }
+    val accent = reminderAccentColor(reminder.tipeReminder)
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top
             ) {
-                // Type badge
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = when (reminder.tipeReminder) {
-                        "Harian" -> PrimaryLight.copy(alpha = 0.2f)
-                        "Mingguan" -> SecondaryLight.copy(alpha = 0.2f)
-                        "Bulanan" -> TertiaryLight.copy(alpha = 0.2f)
-                        else -> MaterialTheme.colorScheme.surfaceVariant
-                    }
+                IconBubble(
+                    icon = reminderTypeIcon(reminder.tipeReminder),
+                    color = accent,
+                    size = 48.dp
+                )
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        ReminderBadge(text = reminder.tipeReminder, color = accent)
+                        ReminderBadge(
+                            text = if (reminder.isActive == 1) "Aktif" else "Nonaktif",
+                            color = if (reminder.isActive == 1) StatusApproved else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
                     Text(
-                        reminder.tipeReminder,
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        text = reminder.judulReminder,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
+
+                    if (!reminder.pesanReminder.isNullOrBlank()) {
+                        Text(
+                            text = reminder.pesanReminder,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
 
-                // ✅ Delete button
-                IconButton(
+                FilledTonalIconButton(
                     onClick = { showDeleteDialog = true },
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(42.dp)
                 ) {
                     Icon(
-                        Icons.Default.Delete,
+                        Icons.Default.DeleteOutline,
                         contentDescription = "Hapus",
-                        tint = MaterialTheme.colorScheme.error
+                        tint = StatusRejected
                     )
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-            // Title
-            Text(
-                reminder.judulReminder,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                ReminderInfoPill(
+                    icon = Icons.Default.AccessTime,
+                    label = "Jam",
+                    value = reminder.waktuReminder.take(5),
+                    modifier = Modifier.weight(1f)
                 )
-            )
-
-            // Time
-            Row {
-                Icon(Icons.Default.AccessTime, null, Modifier.size(16.dp))
-                Text(reminder.waktuReminder.take(5))  // "HH:MM"
+                ReminderInfoPill(
+                    icon = Icons.Default.EventRepeat,
+                    label = "Pola",
+                    value = reminderShortSchedule(reminder),
+                    modifier = Modifier.weight(1f)
+                )
             }
 
-            // Days (for Mingguan)
-            if (reminder.tipeReminder == "Mingguan") {
+            if (reminder.tipeReminder == "Mingguan" && !reminder.hariDalamMinggu.isNullOrEmpty()) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    reminder.hariDalamMinggu.orEmpty().forEach { hari ->
-                        AssistChip(
-                            onClick = { /* kosongin kalau hanya label */ },
-                            label = { Text(hari) },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        )
+                    reminder.hariDalamMinggu.forEach { hari ->
+                        ReminderBadge(text = hari.take(3), color = accent)
                     }
                 }
             }
-
-            // Toggle active
-            Switch(
-                checked = reminder.isActive == 1,
-                onCheckedChange = { /* TODO: Update reminder */ }
-            )
         }
     }
 
@@ -366,23 +493,21 @@ fun ReminderCard(reminder: Reminder, onDelete: (Int) -> Unit) {
             onDismissRequest = { showDeleteDialog = false },
             icon = {
                 Icon(
-                    Icons.Default.Delete,
+                    Icons.Default.DeleteOutline,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(32.dp)
+                    tint = StatusRejected,
+                    modifier = Modifier.size(34.dp)
                 )
             },
             title = {
                 Text(
-                    "Hapus Reminder?",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold
-                    )
+                    "Hapus Pengingat?",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                 )
             },
             text = {
                 Text(
-                    "Apakah Anda yakin ingin menghapus reminder \"${reminder.judulReminder}\"? Tindakan ini tidak dapat dibatalkan.",
+                    "Pengingat \"${reminder.judulReminder}\" akan dihapus permanen.",
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
@@ -392,9 +517,7 @@ fun ReminderCard(reminder: Reminder, onDelete: (Int) -> Unit) {
                         showDeleteDialog = false
                         onDelete(reminder.reminderId)
                     },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    )
+                    colors = ButtonDefaults.buttonColors(containerColor = StatusRejected)
                 ) {
                     Text("Hapus")
                 }
@@ -408,7 +531,101 @@ fun ReminderCard(reminder: Reminder, onDelete: (Int) -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RemindersLoadingContent() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 2.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                CircularProgressIndicator()
+                Text(
+                    text = "Memuat pengingat...",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RemindersErrorContent(message: String, onRetry: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(26.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                IconBubble(icon = Icons.Default.ErrorOutline, color = StatusRejected, size = 62.dp)
+                Text(
+                    text = "Pengingat gagal dimuat",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold)
+                )
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Button(onClick = onRetry, shape = RoundedCornerShape(16.dp)) {
+                    Icon(Icons.Default.Refresh, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Coba Lagi")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyReminders(onCreate: () -> Unit) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            IconBubble(icon = Icons.Default.AlarmOff, color = StatusPending, size = 72.dp)
+            Text(
+                text = "Belum ada pengingat",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold)
+            )
+            Text(
+                text = "Buat pengingat untuk membantu rutinitas laporan, target, atau pekerjaan berkala.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Button(onClick = onCreate, shape = RoundedCornerShape(18.dp)) {
+                Icon(Icons.Default.Add, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Buat Pengingat")
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CreateReminderDialog(
     onDismiss: () -> Unit,
@@ -425,71 +642,83 @@ fun CreateReminderDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(
-                "Tambah Reminder",
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    "Buat Pengingat",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold)
                 )
-            )
+                Text(
+                    "Isi judul, pola, dan jam pengingat.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 500.dp)
+                    .heightIn(max = 520.dp)
                     .verticalScroll(scrollState)
             ) {
-                // ✅ Judul
                 OutlinedTextField(
                     value = judul,
                     onValueChange = { judul = it },
-                    label = { Text("Judul Reminder *") },
-                    placeholder = { Text("Buat Laporan Kegiatan") },
+                    label = { Text("Judul pengingat") },
+                    placeholder = { Text("Contoh: Buat laporan kegiatan") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     isError = judul.isNotBlank() && judul.length < 3
                 )
 
-                // ✅ Pesan
                 OutlinedTextField(
                     value = pesan,
                     onValueChange = { pesan = it },
-                    label = { Text("Pesan Reminder (Opsional)") },
-                    placeholder = { Text("Jangan lupa buat laporan hari ini...") },
+                    label = { Text("Catatan tambahan") },
+                    placeholder = { Text("Contoh: Jangan lupa tautkan ke target bulan ini") },
                     modifier = Modifier.fillMaxWidth(),
-                    minLines = 3,
-                    maxLines = 5
+                    minLines = 2,
+                    maxLines = 4
                 )
 
-                // ✅ Tipe Reminder
-                TipeReminderSelector(
-                    selectedTipe = tipe,
-                    onTipeSelected = {
-                        tipe = it
-                        // Reset fields when type changes
-                        if (it != "Mingguan") selectedDays = emptySet()
-                        if (it != "Sekali") tanggal = ""
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Pola pengingat",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("Harian", "Mingguan", "Bulanan", "Sekali").forEach { option ->
+                            FilterChip(
+                                selected = tipe == option,
+                                onClick = {
+                                    tipe = option
+                                    if (option != "Mingguan") selectedDays = emptySet()
+                                    if (option != "Sekali") tanggal = ""
+                                },
+                                label = { Text(option) },
+                                leadingIcon = if (tipe == option) {
+                                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                } else null
+                            )
+                        }
                     }
-                )
+                }
 
-                // ✅ Waktu Reminder
                 WaktuReminderPicker(
                     selectedTime = waktu,
                     onTimeSelected = { waktu = it }
                 )
 
-                // ✅ Hari dalam Minggu (only for Mingguan)
                 if (tipe == "Mingguan") {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            "Pilih Hari *",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = if (selectedDays.isEmpty()) {
-                                MaterialTheme.colorScheme.error
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            }
+                            "Pilih hari",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                            color = if (selectedDays.isEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
                         )
                         DaySelector(
                             selectedDays = selectedDays,
@@ -503,7 +732,7 @@ fun CreateReminderDialog(
                         )
                         if (selectedDays.isEmpty()) {
                             Text(
-                                "Pilih minimal 1 hari",
+                                "Pilih minimal 1 hari.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error
                             )
@@ -511,7 +740,6 @@ fun CreateReminderDialog(
                     }
                 }
 
-                // ✅ Tanggal Spesifik (only for Sekali)
                 if (tipe == "Sekali") {
                     TanggalSpesifikPicker(
                         selectedDate = tanggal,
@@ -524,21 +752,20 @@ fun CreateReminderDialog(
             Button(
                 onClick = {
                     val request = CreateReminderRequest(
-                        judulReminder = judul,
-                        pesanReminder = pesan.ifEmpty { null },
+                        judulReminder = judul.trim(),
+                        pesanReminder = pesan.trim().ifEmpty { null },
                         tipeReminder = tipe,
                         waktuReminder = waktu,
-                        hariDalamMinggu = if (tipe == "Mingguan") {
-                            selectedDays.toList()
-                        } else null,
+                        hariDalamMinggu = if (tipe == "Mingguan") selectedDays.toList() else null,
                         tanggalSpesifik = if (tipe == "Sekali") tanggal else null,
                         isActive = true
                     )
                     onConfirm(request)
                 },
-                enabled = isFormValid(judul, tipe, waktu, selectedDays, tanggal)
+                enabled = isFormValid(judul, tipe, waktu, selectedDays, tanggal),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Icon(Icons.Default.Check, null, Modifier.size(18.dp))
+                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("Simpan")
             }
@@ -548,11 +775,10 @@ fun CreateReminderDialog(
                 Text("Batal")
             }
         },
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(24.dp)
     )
 }
 
-// ✅ Form validation
 private fun isFormValid(
     judul: String,
     tipe: String,
@@ -560,7 +786,7 @@ private fun isFormValid(
     selectedDays: Set<String>,
     tanggal: String
 ): Boolean {
-    if (judul.length < 3) return false
+    if (judul.trim().length < 3) return false
     if (!waktu.matches(Regex("^([01]\\d|2[0-3]):[0-5]\\d$"))) return false
     if (tipe == "Mingguan" && selectedDays.isEmpty()) return false
     if (tipe == "Sekali" && tanggal.isEmpty()) return false
@@ -577,13 +803,14 @@ fun DaySelector(
 
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         days.forEach { day ->
             FilterChip(
                 selected = selectedDays.contains(day),
                 onClick = { onDayToggle(day) },
-                label = { Text(day.take(3)) }  // Sen, Sel, Rab, ...
+                label = { Text(day.take(3)) }
             )
         }
     }
@@ -599,14 +826,6 @@ fun TipeReminderSelector(
     var expanded by remember { mutableStateOf(false) }
     val tipeOptions = listOf("Harian", "Mingguan", "Bulanan", "Sekali")
 
-    // ✅ Color mapping - Define inside composable
-    val tipeColors = mapOf(
-        "Harian" to PrimaryLight,
-        "Mingguan" to SecondaryLight,
-        "Bulanan" to TertiaryLight,
-        "Sekali" to StatusRevised
-    )
-
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = !expanded },
@@ -616,11 +835,10 @@ fun TipeReminderSelector(
             value = selectedTipe,
             onValueChange = {},
             readOnly = true,
-            label = { Text("Tipe Reminder *") },
+            label = { Text("Pola pengingat") },
             trailingIcon = {
                 ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
             },
-            colors = OutlinedTextFieldDefaults.colors(),
             modifier = Modifier
                 .menuAnchor()
                 .fillMaxWidth()
@@ -637,12 +855,11 @@ fun TipeReminderSelector(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Color indicator
                             Box(
                                 modifier = Modifier
                                     .size(12.dp)
                                     .clip(CircleShape)
-                                    .background(tipeColors[tipe] ?: Color.Gray)
+                                    .background(reminderAccentColor(tipe))
                             )
                             Text(tipe)
                         }
@@ -660,7 +877,7 @@ fun TipeReminderSelector(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TanggalSpesifikPicker(
-    selectedDate: String,  // Format: "YYYY-MM-DD"
+    selectedDate: String,
     onDateSelected: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -670,14 +887,13 @@ fun TanggalSpesifikPicker(
         value = selectedDate.ifEmpty { "Pilih tanggal" },
         onValueChange = {},
         readOnly = true,
-        label = { Text("Tanggal Spesifik *") },
+        label = { Text("Tanggal pengingat") },
         trailingIcon = {
             IconButton(onClick = { showDialog = true }) {
-                Icon(Icons.Default.CalendarToday, "Pilih tanggal")
+                Icon(Icons.Default.CalendarToday, contentDescription = "Pilih tanggal")
             }
         },
-        modifier = modifier.fillMaxWidth(),
-        colors = OutlinedTextFieldDefaults.colors()
+        modifier = modifier.fillMaxWidth()
     )
 
     if (showDialog) {
@@ -695,8 +911,7 @@ fun TanggalSpesifikPicker(
                 TextButton(
                     onClick = {
                         datePickerState.selectedDateMillis?.let { millis ->
-                            val formattedDate = formatMillisToDate(millis)
-                            onDateSelected(formattedDate)
+                            onDateSelected(formatMillisToDate(millis))
                         }
                         showDialog = false
                     }
@@ -715,27 +930,10 @@ fun TanggalSpesifikPicker(
     }
 }
 
-// Helper functions
-private fun parseDateToMillis(dateString: String): Long {
-    return try {
-        val format = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        format.timeZone = TimeZone.getTimeZone("UTC")
-        format.parse(dateString)?.time ?: System.currentTimeMillis()
-    } catch (e: Exception) {
-        System.currentTimeMillis()
-    }
-}
-
-private fun formatMillisToDate(millis: Long): String {
-    val format = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    format.timeZone = TimeZone.getTimeZone("UTC")
-    return format.format(Date(millis))
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WaktuReminderPicker(
-    selectedTime: String,  // Format: "HH:MM"
+    selectedTime: String,
     onTimeSelected: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -745,14 +943,13 @@ fun WaktuReminderPicker(
         value = selectedTime.ifEmpty { "Pilih waktu" },
         onValueChange = {},
         readOnly = true,
-        label = { Text("Waktu Reminder *") },
+        label = { Text("Jam pengingat") },
         trailingIcon = {
             IconButton(onClick = { showDialog = true }) {
-                Icon(Icons.Default.AccessTime, "Pilih waktu")
+                Icon(Icons.Default.AccessTime, contentDescription = "Pilih waktu")
             }
         },
-        modifier = modifier.fillMaxWidth(),
-        colors = OutlinedTextFieldDefaults.colors()
+        modifier = modifier.fillMaxWidth()
     )
 
     if (showDialog) {
@@ -769,6 +966,7 @@ fun WaktuReminderPicker(
                 TextButton(
                     onClick = {
                         val formattedTime = String.format(
+                            Locale.getDefault(),
                             "%02d:%02d",
                             timePickerState.hour,
                             timePickerState.minute
@@ -792,14 +990,157 @@ fun WaktuReminderPicker(
     }
 }
 
-// Helper function
+@Composable
+private fun SectionHeader(title: String, subtitle: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold)
+        )
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun IconBubble(icon: ImageVector, color: Color, size: androidx.compose.ui.unit.Dp) {
+    Surface(
+        modifier = Modifier.size(size),
+        shape = RoundedCornerShape(size / 3),
+        color = color.copy(alpha = 0.14f),
+        contentColor = color
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(size * 0.52f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReminderBadge(text: String, color: Color) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = color.copy(alpha = 0.14f),
+        contentColor = color
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun ReminderInfoPill(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+    ) {
+        Row(
+            modifier = Modifier.padding(11.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(17.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Column {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+private fun reminderAccentColor(type: String): Color {
+    return when (type) {
+        "Harian" -> PrimaryLight
+        "Mingguan" -> SecondaryLight
+        "Bulanan" -> TertiaryLight
+        "Sekali" -> StatusRevised
+        else -> StatusPending
+    }
+}
+
+private fun reminderTypeIcon(type: String): ImageVector {
+    return when (type) {
+        "Harian" -> Icons.Default.Today
+        "Mingguan" -> Icons.Default.DateRange
+        "Bulanan" -> Icons.Default.CalendarMonth
+        "Sekali" -> Icons.Default.Event
+        else -> Icons.Default.Alarm
+    }
+}
+
+private fun reminderShortSchedule(reminder: Reminder): String {
+    return when (reminder.tipeReminder) {
+        "Mingguan" -> reminder.hariDalamMinggu?.joinToString(", ") { it.take(3) } ?: "Mingguan"
+        "Sekali" -> reminder.tanggalSpesifik ?: "Sekali"
+        else -> reminder.tipeReminder
+    }
+}
+
+private fun reminderScheduleLabel(reminder: Reminder): String {
+    val time = reminder.waktuReminder.take(5)
+    return when (reminder.tipeReminder) {
+        "Harian" -> "Setiap hari pukul $time"
+        "Mingguan" -> "Setiap ${reminder.hariDalamMinggu?.joinToString(", ") ?: "minggu"} pukul $time"
+        "Bulanan" -> "Setiap bulan pukul $time"
+        "Sekali" -> "Tanggal ${reminder.tanggalSpesifik ?: "-"} pukul $time"
+        else -> "$time - ${reminder.tipeReminder}"
+    }
+}
+
+private fun parseDateToMillis(dateString: String): Long {
+    return try {
+        val format = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        format.timeZone = TimeZone.getTimeZone("UTC")
+        format.parse(dateString)?.time ?: System.currentTimeMillis()
+    } catch (e: Exception) {
+        System.currentTimeMillis()
+    }
+}
+
+private fun formatMillisToDate(millis: Long): String {
+    val format = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    format.timeZone = TimeZone.getTimeZone("UTC")
+    return format.format(Date(millis))
+}
+
 private fun parseTime(timeString: String): Pair<Int, Int> {
     return try {
         if (timeString.contains(":")) {
             val parts = timeString.split(":")
             Pair(parts[0].toInt(), parts[1].toInt())
         } else {
-            Pair(8, 0)  // Default 08:00
+            Pair(8, 0)
         }
     } catch (e: Exception) {
         Pair(8, 0)

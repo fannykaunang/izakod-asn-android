@@ -1,5 +1,6 @@
 package com.kominfo_mkq.izakod_asn.ui.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kominfo_mkq.izakod_asn.data.model.AssessmentSummaryData
@@ -36,6 +37,7 @@ data class DashboardUiState(
     val assessmentSummary: AssessmentSummaryData? = null,
     val targetSummary: DashboardTargetSummaryData? = null,
     val actionAlerts: DashboardActionAlertsData? = null,
+    val tertundaCount: Int? = null,
     val targetItems: List<TargetKinerjaItem> = emptyList(),
     val currentPegawaiId: Int? = null,
     val targetPeriodYear: Int? = null,
@@ -49,6 +51,7 @@ data class DashboardUiState(
 class DashboardViewModel : ViewModel() {
 
     private val repository = StatistikRepository()
+    private val tertundaLoader = TertundaDataLoader()
     private val initialCalendar = Calendar.getInstance()
     private var selectedTargetYear: Int = initialCalendar.get(Calendar.YEAR)
     private var selectedTargetMonth: Int = initialCalendar.get(Calendar.MONTH) + 1
@@ -138,7 +141,7 @@ class DashboardViewModel : ViewModel() {
      * ✅ PUBLIC refresh function
      * Call this when returning to Dashboard to reload data
      */
-    fun refresh() {
+    fun refresh(context: Context? = null) {
         loadStatistik()
         loadNotificationCount()
         loadAssessmentSummary(
@@ -149,6 +152,7 @@ class DashboardViewModel : ViewModel() {
             tahun = selectedTargetYear,
             bulan = selectedTargetMonth
         )
+        context?.let { loadTertundaCount(it.applicationContext) }
     }
 
     /**
@@ -214,7 +218,7 @@ class DashboardViewModel : ViewModel() {
     /**
      * Retry load statistik
      */
-    fun retry() {
+    fun retry(context: Context? = null) {
         loadStatistik()
         loadAssessmentSummary(
             tahun = selectedTargetYear,
@@ -224,6 +228,23 @@ class DashboardViewModel : ViewModel() {
             tahun = selectedTargetYear,
             bulan = selectedTargetMonth
         )
+        context?.let { loadTertundaCount(it.applicationContext) }
+    }
+
+    fun loadTertundaCount(context: Context) {
+        viewModelScope.launch {
+            try {
+                val snapshot = tertundaLoader.load(context.applicationContext)
+                _uiState.update {
+                    it.copy(tertundaCount = snapshot.total)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e(
+                    "DashboardViewModel",
+                    "Error loading tertunda count: ${e.message}"
+                )
+            }
+        }
     }
 
     fun selectTargetPeriod(tahun: Int, bulan: Int) {

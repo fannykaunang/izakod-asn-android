@@ -468,33 +468,28 @@ class CreateLaporanViewModel : ViewModel() {
      * ✅ Load form data from template
      */
     fun loadFromTemplate(template: TemplateKegiatan) {
-        val currentKategoris = _uiState.value.kategoris
-        val currentTargetKinerjaList = _uiState.value.targetKinerjaList
+        val currentState = _uiState.value
+        val fallbackDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 
-        _uiState.value = CreateLaporanUiState(
+        _uiState.value = currentState.copy(
             kategoriId = template.kategoriId.toString(),
             namaKegiatan = template.namaTemplate,
             deskripsiKegiatan = template.deskripsi ?: "",
             targetOutput = template.targetOutputDefault ?: "",
             lokasiKegiatan = template.lokasiDefault ?: "",
-            tanggalKegiatan = "",
-            waktuMulai = "",
-            waktuSelesai = "",
-            hasilOutput = "",
-            pesertaKegiatan = "",
-            jumlahPeserta = "",
-            latitude = null,
-            longitude = null,
-            kendala = "",
-            solusi = "",
-            linkReferensi = "",
+            tanggalKegiatan = currentState.tanggalKegiatan.ifBlank { fallbackDate },
             isSuccess = false,
             isLoading = false,
             errorMessage = null,
-            kategoris = currentKategoris,
-            targetKinerjaList = currentTargetKinerjaList
+            errors = currentState.errors
+                .minus("kategori_id")
+                .minus("nama_kegiatan")
+                .minus("deskripsi_kegiatan")
         )
-        loadTargetKinerjaOptions(clearSelection = true)
+
+        if (currentState.tanggalKegiatan.isBlank()) {
+            loadTargetKinerjaOptions(clearSelection = false)
+        }
     }
 
     /**

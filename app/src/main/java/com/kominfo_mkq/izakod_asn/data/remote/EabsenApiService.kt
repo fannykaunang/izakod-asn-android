@@ -17,6 +17,7 @@ import com.kominfo_mkq.izakod_asn.data.model.LaporanDetailResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanListResponse
 import com.kominfo_mkq.izakod_asn.data.model.MobileTokenRequest
 import com.kominfo_mkq.izakod_asn.data.model.MobileTokenResponse
+import com.kominfo_mkq.izakod_asn.data.model.RefreshTokenRequest
 import com.kominfo_mkq.izakod_asn.data.model.NotifikasiResponse
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiData
 import com.kominfo_mkq.izakod_asn.data.model.CreatePenilaianKinerjaRequest
@@ -267,6 +268,11 @@ interface EabsenApiService {
     @POST("api/mobile/token")
     suspend fun getMobileToken(
         @Body request: MobileTokenRequest
+    ): Response<MobileTokenResponse>
+
+    @POST("api/mobile/refresh")
+    suspend fun refreshMobileToken(
+        @Body request: RefreshTokenRequest
     ): Response<MobileTokenResponse>
 
     @POST("api/mobile/fcm/register")

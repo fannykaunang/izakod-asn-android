@@ -55,7 +55,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         if (!jwt.isNullOrBlank()) {
             TokenStore.setToken(jwt)
         }
-        TokenStore.setRefreshToken(null)
+        TokenStore.setRefreshToken(userPrefs.getRefreshToken())
 
         if (jwt.isNullOrBlank()) {
             sessionData?.let { session ->
@@ -214,7 +214,9 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         return try {
             val response = repository.fetchNextJsMobileToken(pegawaiId, pin)
             val body: MobileTokenResponse? = response.body()
-            val token = body?.data?.token?.trim()
+            val data = body?.data
+            val token = data?.token?.trim()
+            val refreshToken = data?.refreshToken?.trim()
 
             if (!response.isSuccessful || body?.success != true || token.isNullOrBlank()) {
                 android.util.Log.e(
@@ -224,9 +226,9 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                 null
             } else {
                 userPrefs.setMobileJwtToken(token)
-                userPrefs.setRefreshToken(null)
+                userPrefs.setRefreshToken(refreshToken)
                 TokenStore.setToken(token)
-                TokenStore.setRefreshToken(null)
+                TokenStore.setRefreshToken(refreshToken)
                 token
             }
         } catch (e: Exception) {

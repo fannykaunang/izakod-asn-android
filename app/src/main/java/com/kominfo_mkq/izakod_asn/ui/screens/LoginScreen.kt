@@ -399,7 +399,7 @@ fun LoginScreen(
 
             // Footer
             Text(
-                text = "© 2025 Kabupaten Merauke",
+                text = "© 2025 Kominfo Merauke",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.White.copy(alpha = 0.7f)
             )

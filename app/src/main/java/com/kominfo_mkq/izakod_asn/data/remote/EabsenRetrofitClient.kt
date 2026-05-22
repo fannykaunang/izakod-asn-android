@@ -19,7 +19,10 @@ object EabsenRetrofitClient {
     private val refreshLock = Any()
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+        level = HttpLoggingInterceptor.Level.BASIC
+        redactHeader("Authorization")
+        redactHeader("Cookie")
+        redactHeader("Set-Cookie")
     }
 
     private val headerInterceptor = Interceptor { chain ->

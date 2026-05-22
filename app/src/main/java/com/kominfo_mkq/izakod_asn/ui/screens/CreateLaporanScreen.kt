@@ -9,7 +9,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,6 +42,8 @@ import coil.compose.AsyncImage
 import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.CreateLaporanViewModel
 import com.kominfo_mkq.izakod_asn.data.model.KategoriKegiatan
+import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatan
+import com.kominfo_mkq.izakod_asn.ui.viewmodel.TemplateKegiatanViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -50,9 +54,11 @@ import java.util.*
 @Composable
 fun CreateLaporanScreen(
     onNavigateBack: () -> Unit,
-    viewModel: CreateLaporanViewModel = viewModel()
+    viewModel: CreateLaporanViewModel = viewModel(),
+    templateViewModel: TemplateKegiatanViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val templateUiState by templateViewModel.uiState.collectAsState()
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
@@ -71,10 +77,12 @@ fun CreateLaporanScreen(
     var hasNavigated by remember { mutableStateOf(false) }
     var showAdditionalDetails by rememberSaveable { mutableStateOf(false) }
     var showSupportingDetails by rememberSaveable { mutableStateOf(false) }
+    var showTemplatePicker by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         android.util.Log.d("CreateLaporanScreen", "🆕 Screen opened, resetting success")
         viewModel.resetSuccess()
+        templateViewModel.loadTemplates()
         hasNavigated = false
     }
 
@@ -129,6 +137,17 @@ fun CreateLaporanScreen(
             )
 
             // Form Sections
+            Spacer(modifier = Modifier.height(16.dp))
+
+            TemplateQuickFillSection(
+                templates = templateUiState.templates,
+                isLoading = templateUiState.isLoading,
+                isError = templateUiState.isError,
+                errorMessage = templateUiState.errorMessage,
+                onOpenPicker = { showTemplatePicker = true },
+                onRetry = { templateViewModel.loadTemplates() }
+            )
+
             Spacer(modifier = Modifier.height(16.dp))
 
             // Basic Information Section
@@ -260,6 +279,25 @@ fun CreateLaporanScreen(
         }
     }
 
+    if (showTemplatePicker) {
+        TemplatePickerDialog(
+            templates = templateUiState.templates,
+            isLoading = templateUiState.isLoading,
+            isError = templateUiState.isError,
+            errorMessage = templateUiState.errorMessage,
+            onRetry = { templateViewModel.loadTemplates() },
+            onDismiss = { showTemplatePicker = false },
+            onSelect = { template ->
+                viewModel.loadFromTemplate(template)
+                showTemplatePicker = false
+                if (!template.targetOutputDefault.isNullOrBlank() || !template.lokasiDefault.isNullOrBlank()) {
+                    showAdditionalDetails = true
+                }
+                Toast.makeText(context, "Template diterapkan ke laporan", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
     // Date Picker Dialog
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(
@@ -301,6 +339,422 @@ fun CreateLaporanScreen(
         ) {
             DatePicker(state = datePickerState)
         }
+    }
+}
+
+@Composable
+private fun TemplateQuickFillSection(
+    templates: List<TemplateKegiatan>,
+    isLoading: Boolean,
+    isError: Boolean,
+    errorMessage: String?,
+    onOpenPicker: () -> Unit,
+    onRetry: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.75f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.AssignmentTurnedIn,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.tertiary
+                    )
+                }
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Text(
+                        text = "Pakai Template Kegiatan",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Text(
+                        text = when {
+                            isLoading -> "Memuat template yang tersedia..."
+                            isError -> errorMessage ?: "Template belum bisa dimuat."
+                            templates.isEmpty() -> "Belum ada template yang bisa dipakai."
+                            else -> "${templates.size} template siap mengisi form lebih cepat."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            if (isLoading) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onRetry,
+                    modifier = Modifier.weight(1f),
+                    enabled = !isLoading,
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Muat Ulang",
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1
+                    )
+                }
+
+                Button(
+                    onClick = onOpenPicker,
+                    modifier = Modifier.weight(1f),
+                    enabled = !isLoading && templates.isNotEmpty(),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+                ) {
+                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Pilih Template",
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TemplatePickerDialog(
+    templates: List<TemplateKegiatan>,
+    isLoading: Boolean,
+    isError: Boolean,
+    errorMessage: String?,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit,
+    onSelect: (TemplateKegiatan) -> Unit
+) {
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val filteredTemplates = remember(templates, searchQuery) {
+        val keyword = searchQuery.trim().lowercase(Locale.getDefault())
+        if (keyword.isBlank()) {
+            templates
+        } else {
+            templates.filter { template ->
+                listOfNotNull(
+                    template.namaTemplate,
+                    template.deskripsi,
+                    template.kategoriNama,
+                    template.targetOutputDefault,
+                    template.lokasiDefault,
+                    template.unitKerja
+                ).any { it.lowercase(Locale.getDefault()).contains(keyword) }
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Pilih Template",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+                Text(
+                    text = "Data template akan mengisi kategori, nama kegiatan, deskripsi, target, dan lokasi.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Cari template") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = null)
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotBlank()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Bersihkan pencarian")
+                            }
+                        }
+                    },
+                    singleLine = true
+                )
+
+                when {
+                    isLoading -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 18.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            CircularProgressIndicator()
+                            Text(
+                                "Memuat template...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    isError -> {
+                        TemplatePickerMessage(
+                            icon = Icons.Default.Warning,
+                            title = "Template gagal dimuat",
+                            message = errorMessage ?: "Coba muat ulang daftar template.",
+                            actionLabel = "Muat Ulang",
+                            onAction = onRetry
+                        )
+                    }
+
+                    filteredTemplates.isEmpty() -> {
+                        TemplatePickerMessage(
+                            icon = Icons.Default.SearchOff,
+                            title = if (searchQuery.isBlank()) "Belum ada template" else "Template tidak ditemukan",
+                            message = if (searchQuery.isBlank()) {
+                                "Buat template kegiatan terlebih dahulu dari menu Template."
+                            } else {
+                                "Coba gunakan kata kunci lain."
+                            }
+                        )
+                    }
+
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier.heightIn(max = 420.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            items(filteredTemplates, key = { it.templateId }) { template ->
+                                TemplatePickerItem(
+                                    template = template,
+                                    onClick = { onSelect(template) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Tutup")
+            }
+        }
+    )
+}
+
+@Composable
+private fun TemplatePickerMessage(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    message: String,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(28.dp)
+        )
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+        )
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (actionLabel != null && onAction != null) {
+            OutlinedButton(onClick = onAction) {
+                Text(actionLabel)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TemplatePickerItem(
+    template: TemplateKegiatan,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = template.namaTemplate,
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    if (!template.deskripsi.isNullOrBlank()) {
+                        Text(
+                            text = template.deskripsi,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2
+                        )
+                    }
+                }
+
+                TemplateMiniChip(
+                    text = if (template.isPublic == 1) "Umum" else "Pribadi",
+                    icon = if (template.isPublic == 1) Icons.Default.Public else Icons.Default.Lock
+                )
+            }
+
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                item {
+                    TemplateMiniChip(
+                        text = template.kategoriNama ?: "Tanpa kategori",
+                        icon = Icons.Default.Category
+                    )
+                }
+                if (template.estimasiDurasi != null) {
+                    item {
+                        TemplateMiniChip(
+                            text = "${template.estimasiDurasi} mnt",
+                            icon = Icons.Default.AccessTime
+                        )
+                    }
+                }
+            }
+
+            if (!template.targetOutputDefault.isNullOrBlank()) {
+                TemplatePreviewLine(
+                    icon = Icons.Default.TaskAlt,
+                    text = template.targetOutputDefault
+                )
+            }
+
+            if (!template.lokasiDefault.isNullOrBlank()) {
+                TemplatePreviewLine(
+                    icon = Icons.Default.Place,
+                    text = template.lokasiDefault
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TemplateMiniChip(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(14.dp)
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun TemplatePreviewLine(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .padding(top = 2.dp)
+                .size(16.dp)
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2
+        )
     }
 }
 
