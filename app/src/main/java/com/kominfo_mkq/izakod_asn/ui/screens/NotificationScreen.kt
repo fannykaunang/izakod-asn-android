@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -46,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -64,7 +66,7 @@ import java.util.TimeZone
 @Composable
 fun NotificationScreen(
     onNavigateBack: () -> Unit,
-    onNotificationClick: (Int) -> Unit,  // Navigate to laporan detail
+    onNotificationClick: (Int) -> Unit,
     viewModel: NotificationViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -113,15 +115,91 @@ fun NotificationScreen(
                     items(uiState.notifications, key = { it.notifikasiId }) { notif ->
                         NotificationCard(
                             notification = notif,
-                            onClick = {
-                                // Extract laporan_id from link_tujuan
-                                notif.laporanId?.let { laporanId ->
-                                    onNotificationClick(laporanId)
-                                }
-                            }
+                            onClick = { onNotificationClick(notif.notifikasiId) }
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun NotificationDetailScreen(
+    notificationId: Int,
+    onNavigateBack: () -> Unit,
+    onOpenLaporan: (Int) -> Unit,
+    viewModel: NotificationViewModel = viewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.loadNotifications()
+    }
+
+    val notification = uiState.notifications.firstOrNull { it.notifikasiId == notificationId }
+
+    LaunchedEffect(notification?.notifikasiId, notification?.isRead) {
+        if (notification != null && notification.isRead == 0) {
+            viewModel.markAsRead(notification.notifikasiId)
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            IZAKODHeaderBar(
+                title = "Detail Notifikasi",
+                subtitle = notification?.tipeNotifikasi,
+                onBack = onNavigateBack,
+                actions = {
+                    IconButton(onClick = { viewModel.loadNotifications() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        when {
+            uiState.isLoading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center
+                ) {
+                    NotificationLoadingContent()
+                }
+            }
+
+            uiState.isError -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center
+                ) {
+                    NotificationErrorContent(
+                        message = uiState.errorMessage ?: "Terjadi kesalahan",
+                        onRetry = { viewModel.loadNotifications() }
+                    )
+                }
+            }
+
+            notification == null -> {
+                NotificationNotFoundContent(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    onRetry = { viewModel.loadNotifications() }
+                )
+            }
+
+            else -> {
+                NotificationDetailContent(
+                    modifier = Modifier.padding(paddingValues),
+                    notification = notification,
+                    onOpenLaporan = onOpenLaporan
+                )
             }
         }
     }
@@ -132,28 +210,7 @@ private fun NotificationCard(
     notification: Notifikasi,
     onClick: () -> Unit
 ) {
-    val (icon, iconColor, bgColor) = when (notification.tipeNotifikasi) {
-        "Verifikasi" -> Triple(
-            Icons.Default.CheckCircle,
-            StatusApproved,
-            StatusApproved.copy(alpha = 0.1f)
-        )
-        "Penolakan" -> Triple(
-            Icons.Default.Cancel,
-            StatusRejected,
-            StatusRejected.copy(alpha = 0.1f)
-        )
-        "Komentar" -> Triple(
-            Icons.Default.Edit,
-            StatusRevised,
-            StatusRevised.copy(alpha = 0.1f)
-        )
-        else -> Triple(
-            Icons.Default.Notifications,
-            MaterialTheme.colorScheme.primary,
-            MaterialTheme.colorScheme.primaryContainer
-        )
-    }
+    val (icon, iconColor, bgColor) = notificationVisuals(notification.tipeNotifikasi)
 
     Card(
         modifier = Modifier
@@ -237,7 +294,7 @@ private fun NotificationCard(
                     .joinToString(" • ")
 
                 Text(
-                    text = cleanMessage,
+                    text = notification.cleanMessage(),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -276,6 +333,245 @@ private fun NotificationCard(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationDetailContent(
+    modifier: Modifier = Modifier,
+    notification: Notifikasi,
+    onOpenLaporan: (Int) -> Unit
+) {
+    val (icon, iconColor, bgColor) = notificationVisuals(notification.tipeNotifikasi)
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentPadding = PaddingValues(start = 20.dp, top = 16.dp, end = 20.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(22.dp),
+                    verticalArrangement = Arrangement.spacedBy(18.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(54.dp)
+                                .clip(CircleShape)
+                                .background(bgColor),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                icon,
+                                contentDescription = null,
+                                tint = iconColor,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = notification.judul,
+                                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold)
+                            )
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                NotificationStatusChip(notification = notification)
+                                if (notification.actionRequired == 1) {
+                                    NotificationActionChip()
+                                }
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = notification.cleanMessage(),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    NotificationInfoRow(
+                        label = "Jenis",
+                        value = notification.tipeNotifikasi.ifBlank { "Notifikasi" }
+                    )
+                    NotificationInfoRow(
+                        label = "Waktu",
+                        value = formatNotificationDateTime(notification.createdAt)
+                    )
+                    NotificationInfoRow(
+                        label = "Status",
+                        value = if (notification.isRead == 0) "Belum dibaca" else "Sudah dibaca"
+                    )
+                    if (notification.isRead == 1 && !notification.tanggalDibaca.isNullOrBlank()) {
+                        NotificationInfoRow(
+                            label = "Dibaca",
+                            value = formatNotificationDateTime(notification.tanggalDibaca)
+                        )
+                    }
+                    if (!notification.linkTujuan.isNullOrBlank()) {
+                        NotificationInfoRow(
+                            label = "Tujuan",
+                            value = notification.linkTujuan
+                        )
+                    }
+                }
+            }
+        }
+
+        if (notification.laporanId != null) {
+            item {
+                Button(
+                    onClick = { onOpenLaporan(notification.laporanId) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text("Buka Laporan Terkait")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationStatusChip(notification: Notifikasi) {
+    val color = if (notification.isRead == 0) PrimaryLight else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = color.copy(alpha = 0.14f)
+    ) {
+        Text(
+            text = if (notification.isRead == 0) "Baru" else "Dibaca",
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+            color = color
+        )
+    }
+}
+
+@Composable
+private fun NotificationActionChip() {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = StatusRevised.copy(alpha = 0.16f)
+    ) {
+        Text(
+            text = "Perlu tindakan",
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+            color = StatusRevised
+        )
+    }
+}
+
+@Composable
+private fun NotificationInfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Schedule,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun NotificationNotFoundContent(
+    modifier: Modifier = Modifier,
+    onRetry: () -> Unit
+) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier.padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Icon(
+                Icons.Default.NotificationsNone,
+                contentDescription = null,
+                modifier = Modifier.size(96.dp),
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+            )
+            Text(
+                text = "Notifikasi tidak ditemukan",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = "Coba muat ulang daftar notifikasi.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Button(onClick = onRetry, shape = RoundedCornerShape(12.dp)) {
+                Icon(Icons.Default.Refresh, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Coba Lagi")
             }
         }
     }
@@ -382,4 +678,74 @@ private fun formatRelativeTime(dateString: String): String {
     } catch (_: Exception) {
         dateString
     }
+}
+
+@Composable
+private fun notificationVisuals(
+    tipeNotifikasi: String
+): Triple<androidx.compose.ui.graphics.vector.ImageVector, androidx.compose.ui.graphics.Color, androidx.compose.ui.graphics.Color> {
+    return when (tipeNotifikasi) {
+        "Verifikasi" -> Triple(
+            Icons.Default.CheckCircle,
+            StatusApproved,
+            StatusApproved.copy(alpha = 0.1f)
+        )
+        "Penolakan" -> Triple(
+            Icons.Default.Cancel,
+            StatusRejected,
+            StatusRejected.copy(alpha = 0.1f)
+        )
+        "Komentar" -> Triple(
+            Icons.Default.Edit,
+            StatusRevised,
+            StatusRevised.copy(alpha = 0.1f)
+        )
+        else -> Triple(
+            Icons.Default.Notifications,
+            MaterialTheme.colorScheme.primary,
+            MaterialTheme.colorScheme.primaryContainer
+        )
+    }
+}
+
+private fun Notifikasi.cleanMessage(): String {
+    return pesan
+        .replace("*NOTIFIKASI VERIFIKASI LAPORAN*", "")
+        .replace("*", "")
+        .replace("_", "")
+        .trim()
+        .split("\n")
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .joinToString("\n")
+        .ifBlank { pesan.trim().ifBlank { "-" } }
+}
+
+private fun formatNotificationDateTime(dateString: String): String {
+    val parsed = parseNotificationDate(dateString) ?: return dateString
+    return SimpleDateFormat("dd MMMM yyyy, HH:mm", Locale("id", "ID")).format(parsed)
+}
+
+private fun parseNotificationDate(dateString: String): java.util.Date? {
+    val patterns = listOf(
+        "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss'Z'",
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd'T'HH:mm:ss.SSS",
+        "yyyy-MM-dd'T'HH:mm:ss"
+    )
+
+    for (pattern in patterns) {
+        try {
+            val formatter = SimpleDateFormat(pattern, Locale.getDefault())
+            if (pattern.endsWith("'Z'")) {
+                formatter.timeZone = TimeZone.getTimeZone("UTC")
+            }
+            return formatter.parse(dateString)
+        } catch (_: Exception) {
+            // Try the next known server timestamp shape.
+        }
+    }
+
+    return null
 }

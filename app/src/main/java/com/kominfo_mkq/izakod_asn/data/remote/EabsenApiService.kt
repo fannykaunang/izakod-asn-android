@@ -204,6 +204,11 @@ interface EabsenApiService {
         @Query("pegawai_id") pegawai_id: Int?,
     ): Response<NotifikasiResponse>
 
+    @PATCH("api/notifikasi/{id}/read")
+    suspend fun markNotificationAsRead(
+        @Path("id") notificationId: Int
+    ): Response<BasicActionResponse>
+
     /**
      * Get reminder list
      * GET /api/reminder

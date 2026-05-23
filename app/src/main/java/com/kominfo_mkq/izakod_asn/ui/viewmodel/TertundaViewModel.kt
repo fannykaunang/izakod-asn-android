@@ -132,7 +132,7 @@ class TertundaDataLoader {
 
         return coroutineScope {
             myTargets.map { target ->
-                async { target.toTertundaTargetOrNull() }
+                async { target.withDetailsForTertunda().toTertundaTargetOrNull() }
             }.awaitAll().filterNotNull()
                 .sortedWith(
                     compareByDescending<TertundaTargetItem> {
@@ -142,10 +142,27 @@ class TertundaDataLoader {
         }
     }
 
+    private suspend fun TargetKinerjaItem.withDetailsForTertunda(): TargetKinerjaItem {
+        val currentDetails = details.orEmpty()
+        if (currentDetails.isNotEmpty() || (detailCount ?: 0) <= 0) return this
+
+        val detailResponse = targetRepository.getTargetKinerjaDetail(id)
+        return if (detailResponse.success) {
+            detailResponse.data?.data ?: this
+        } else {
+            this
+        }
+    }
+
     private suspend fun TargetKinerjaItem.toTertundaTargetOrNull(): TertundaTargetItem? {
-        val statusKey = status.lowercase()
+        val statusKey = status.trim().replace('_', ' ').lowercase()
         val periodLabel = formatPeriodLabel(tahun, bulan)
         val detailItems = details.orEmpty()
+        val expectedTotalItems = when {
+            detailItems.isNotEmpty() -> detailItems.size
+            (detailCount ?: 0) > 0 -> detailCount ?: 0
+            else -> 0
+        }
 
         if (statusKey == "draft" || statusKey == "revisi") {
             return TertundaTargetItem(
@@ -155,9 +172,9 @@ class TertundaDataLoader {
                 tahun = tahun,
                 bulan = bulan,
                 status = status,
-                totalItems = detailItems.size,
+                totalItems = expectedTotalItems,
                 filledItems = 0,
-                missingItems = detailItems.size,
+                missingItems = expectedTotalItems,
                 kind = TertundaTargetKind.TARGET_STATUS
             )
         }
@@ -166,7 +183,7 @@ class TertundaDataLoader {
             return null
         }
 
-        val totalItems = detailItems.size
+        val totalItems = expectedTotalItems
         if (totalItems <= 0) return null
 
         val realisasiResponse = targetRepository.getRealisasiKinerjaList(id)
@@ -179,8 +196,12 @@ class TertundaDataLoader {
             .filter { it.hasFilledRealisasi() }
             .map { it.targetKinerjaDetailId }
             .toSet()
-        val filledItems = detailItems.count { detail ->
-            detail.id != null && filledDetailIds.contains(detail.id)
+        val filledItems = if (detailItems.isNotEmpty()) {
+            detailItems.count { detail ->
+                detail.id != null && filledDetailIds.contains(detail.id)
+            }
+        } else {
+            filledDetailIds.size.coerceAtMost(totalItems)
         }
         val missingItems = (totalItems - filledItems).coerceAtLeast(0)
 

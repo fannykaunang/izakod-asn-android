@@ -152,6 +152,8 @@ private fun StickyActionButtons(
     onEdit: () -> Unit,
     onVerify: () -> Unit
 ) {
+    val normalizedStatus = statusLaporan.normalizedReportStatus()
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shadowElevation = 8.dp,
@@ -164,7 +166,7 @@ private fun StickyActionButtons(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // ✅ Verify Button (Primary - if can verify)
-            if (canVerify && statusLaporan == "Diajukan") {
+            if (canVerify && normalizedStatus == "diajukan") {
                 Button(
                     onClick = onVerify,
                     modifier = Modifier.fillMaxWidth(),
@@ -199,14 +201,14 @@ private fun StickyActionButtons(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Edit Laporan")
+                    Text(statusLaporan.editActionLabel())
                 }
             }
 
             // ✅ Info text if no actions available
             if (!canEdit && !canVerify) {
                 Text(
-                    "Tidak ada aksi yang tersedia",
+                    statusLaporan.noActionMessage(),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 8.dp)
@@ -222,6 +224,8 @@ private fun LaporanDetailContent(
     canEdit: Boolean,
     canVerify: Boolean
 ) {
+    val showSupervisorActionNote = laporan.shouldShowSupervisorActionNote()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -230,6 +234,10 @@ private fun LaporanDetailContent(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         StatusHeroCard(laporan = laporan)
+
+        if (showSupervisorActionNote) {
+            SupervisorActionNoteSection(laporan = laporan)
+        }
 
         MainReportSection(laporan = laporan)
 
@@ -251,12 +259,16 @@ private fun LaporanDetailContent(
 
         // Verification Section
         if (
-            laporan.statusLaporan == "Diverifikasi" ||
+            laporan.statusLaporan.normalizedReportStatus() == "disetujui" ||
             laporan.verifikatorNama != null ||
             laporan.tanggalVerifikasi != null ||
-            laporan.catatanVerifikator != null
+            laporan.rating != null ||
+            (!showSupervisorActionNote && laporan.catatanVerifikator != null)
         ) {
-            VerificationSection(laporan = laporan)
+            VerificationSection(
+                laporan = laporan,
+                showNote = !showSupervisorActionNote
+            )
         }
 
         // Links Section
@@ -475,53 +487,67 @@ private data class StatusPresentation(
     val foreground: Color,
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
     val title: String,
-    val subtitle: String
+    val subtitle: String,
+    val actionTitle: String,
+    val actionText: String
 )
 
 @Composable
 private fun statusPresentation(status: String): StatusPresentation {
-    return when (status) {
-        "Draft" -> StatusPresentation(
+    return when (status.normalizedReportStatus()) {
+        "draft" -> StatusPresentation(
             background = MaterialTheme.colorScheme.surfaceVariant,
             foreground = MaterialTheme.colorScheme.onSurfaceVariant,
             icon = Icons.Default.Edit,
             title = "Draft",
-            subtitle = "Laporan masih bisa dilengkapi sebelum diajukan"
+            subtitle = "Laporan masih draft dan belum dikirim ke atasan.",
+            actionTitle = "Belum dikirim ke atasan",
+            actionText = "Lengkapi data laporan, lalu ajukan agar bisa diverifikasi."
         )
-        "Diajukan", "Pending" -> StatusPresentation(
+        "diajukan" -> StatusPresentation(
             background = StatusPending.copy(alpha = 0.14f),
             foreground = StatusPending,
             icon = Icons.Default.Schedule,
             title = "Menunggu Verifikasi",
-            subtitle = "Laporan sudah diajukan dan menunggu penilaian atasan"
+            subtitle = "Laporan sudah dikirim dan sedang menunggu atasan.",
+            actionTitle = "Menunggu atasan",
+            actionText = "Tidak ada yang perlu diubah sekarang. Tunggu verifikasi dari atasan."
         )
-        "Diverifikasi", "Approved" -> StatusPresentation(
+        "disetujui" -> StatusPresentation(
             background = StatusApproved.copy(alpha = 0.14f),
             foreground = StatusApproved,
             icon = Icons.Default.CheckCircle,
-            title = "Diverifikasi",
-            subtitle = "Laporan telah diverifikasi dan tidak memerlukan tindakan lanjutan"
+            title = "Disetujui",
+            subtitle = "Laporan sudah disetujui oleh atasan.",
+            actionTitle = "Sudah selesai",
+            actionText = "Tidak ada aksi lanjutan. Laporan ini sudah aman."
         )
-        "Ditolak", "Rejected" -> StatusPresentation(
+        "ditolak" -> StatusPresentation(
             background = StatusRejected.copy(alpha = 0.14f),
             foreground = StatusRejected,
             icon = Icons.Default.Cancel,
             title = "Ditolak",
-            subtitle = "Laporan ditolak dan perlu ditinjau ulang sebelum diajukan kembali"
+            subtitle = "Laporan ditolak. Baca catatan atasan sebelum membuat tindak lanjut.",
+            actionTitle = "Perlu tindak lanjut",
+            actionText = "Buka catatan atasan, pahami alasan penolakan, lalu perbaiki jika tersedia tombol edit."
         )
-        "Revisi", "Revised" -> StatusPresentation(
+        "revisi" -> StatusPresentation(
             background = StatusRevised.copy(alpha = 0.14f),
             foreground = StatusRevised,
             icon = Icons.Default.Edit,
             title = "Perlu Revisi",
-            subtitle = "Ada catatan atasan yang perlu diperbaiki pada laporan ini"
+            subtitle = "Atasan meminta perbaikan pada laporan ini.",
+            actionTitle = "Perlu diperbaiki",
+            actionText = "Baca catatan atasan, perbaiki laporan, lalu ajukan kembali."
         )
         else -> StatusPresentation(
             background = MaterialTheme.colorScheme.surfaceVariant,
             foreground = MaterialTheme.colorScheme.onSurfaceVariant,
             icon = Icons.Default.Info,
             title = status,
-            subtitle = "Status laporan saat ini"
+            subtitle = "Status laporan saat ini.",
+            actionTitle = "Periksa status",
+            actionText = "Buka informasi laporan dan ikuti arahan yang tersedia."
         )
     }
 }
@@ -561,6 +587,10 @@ private fun StatusHeroCard(laporan: LaporanDetail) {
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f)
             )
 
+            StatusActionGuidance(
+                presentation = statusUi
+            )
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -592,6 +622,106 @@ private fun StatusHeroCard(laporan: LaporanDetail) {
                     icon = Icons.Default.Category,
                     text = laporan.kategoriNama ?: "-",
                     modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusActionGuidance(
+    presentation: StatusPresentation
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(presentation.foreground.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = presentation.icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(17.dp),
+                    tint = presentation.foreground
+                )
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Text(
+                    text = presentation.actionTitle,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = presentation.foreground
+                )
+                Text(
+                    text = presentation.actionText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SupervisorActionNoteSection(laporan: LaporanDetail) {
+    val statusUi = statusPresentation(laporan.statusLaporan)
+    val note = laporan.catatanVerifikator?.takeIf { it.isNotBlank() } ?: return
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = statusUi.foreground.copy(alpha = 0.1f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(statusUi.foreground.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = statusUi.foreground
+                )
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = laporan.supervisorNoteTitle(),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = statusUi.foreground
+                )
+                Text(
+                    text = note,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.86f)
                 )
             }
         }
@@ -837,7 +967,10 @@ private fun LampiranCard(lampiran: LampiranKegiatan) {
 }
 
 @Composable
-private fun VerificationSection(laporan: LaporanDetail) {
+private fun VerificationSection(
+    laporan: LaporanDetail,
+    showNote: Boolean = true
+) {
     SectionCard(
         title = "Verifikasi",
         icon = Icons.Default.VerifiedUser
@@ -866,19 +999,21 @@ private fun VerificationSection(laporan: LaporanDetail) {
             )
         }
 
-        Divider()
+        if (showNote) {
+            Divider()
 
-        Column {
-            Text(
-                "Catatan Verifikasi",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                laporan.catatanVerifikator?.takeIf { it.isNotBlank() } ?: "-",
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Column {
+                Text(
+                    laporan.supervisorNoteTitle(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    laporan.catatanVerifikator?.takeIf { it.isNotBlank() } ?: "-",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
         }
     }
 }
@@ -1117,6 +1252,50 @@ private fun DetailErrorContent(
 }
 
 // Helper functions
+private fun String.normalizedReportStatus(): String {
+    return when (trim().lowercase(Locale.getDefault())) {
+        "draft" -> "draft"
+        "pending", "diajukan" -> "diajukan"
+        "diverifikasi", "disetujui", "approved", "verified" -> "disetujui"
+        "ditolak", "rejected" -> "ditolak"
+        "revisi", "perlu revisi", "revised", "revision" -> "revisi"
+        else -> trim().lowercase(Locale.getDefault())
+    }
+}
+
+private fun String.editActionLabel(): String {
+    return when (normalizedReportStatus()) {
+        "draft" -> "Edit & Ajukan Laporan"
+        "revisi" -> "Perbaiki Laporan"
+        "ditolak" -> "Tinjau Laporan"
+        else -> "Edit Laporan"
+    }
+}
+
+private fun String.noActionMessage(): String {
+    return when (normalizedReportStatus()) {
+        "diajukan" -> "Menunggu verifikasi atasan."
+        "disetujui" -> "Laporan sudah disetujui. Tidak ada aksi lanjutan."
+        "draft" -> "Laporan draft belum bisa diedit saat ini."
+        "revisi" -> "Laporan perlu revisi, tetapi aksi edit belum tersedia untuk akun ini."
+        "ditolak" -> "Laporan ditolak. Baca catatan atasan pada detail laporan."
+        else -> "Tidak ada aksi yang tersedia."
+    }
+}
+
+private fun LaporanDetail.shouldShowSupervisorActionNote(): Boolean {
+    val hasNote = !catatanVerifikator.isNullOrBlank()
+    return hasNote && statusLaporan.normalizedReportStatus() in setOf("revisi", "ditolak")
+}
+
+private fun LaporanDetail.supervisorNoteTitle(): String {
+    return when (statusLaporan.normalizedReportStatus()) {
+        "ditolak" -> "Alasan penolakan dari atasan"
+        "revisi" -> "Catatan revisi dari atasan"
+        else -> "Catatan atasan"
+    }
+}
+
 private fun formatDate(dateString: String): String {
     return try {
         // ✅ FIX: Extract date part only, ignore timezone

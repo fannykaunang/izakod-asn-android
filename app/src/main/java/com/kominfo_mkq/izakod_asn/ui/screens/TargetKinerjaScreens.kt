@@ -343,23 +343,18 @@ fun TargetKinerjaListScreen(
                 }
 
                 filteredTargets.isEmpty() -> {
-                    SimpleStateCard(
+                    TargetEmptyState(
                         icon = if (listMode == TargetListMode.MINE) Icons.Outlined.Description else Icons.Default.Groups,
-                        title = if (listMode == TargetListMode.MINE) {
+                        message = if (listMode == TargetListMode.MINE) {
                             "Belum ada target"
                         } else {
                             "Belum ada target bawahan"
                         },
-                        message = if (listMode == TargetListMode.MINE) {
-                            "Mulai buat target kinerja bulanan Anda."
-                        } else {
-                            "Target pegawai bawahan aktif akan muncul di sini."
-                        },
-                        actionText = if (listMode == TargetListMode.MINE) "Buat Target" else "Refresh",
+                        actionText = if (listMode == TargetListMode.MINE) "Buat Target" else null,
                         onAction = if (listMode == TargetListMode.MINE) {
                             onNavigateToCreate
                         } else {
-                            { viewModel.refresh() }
+                            null
                         }
                     )
                 }
@@ -501,20 +496,15 @@ fun TargetKinerjaSubordinatePeriodScreen(
                 }
 
                 filteredTargets.isEmpty() -> {
-                    SimpleStateCard(
+                    TargetEmptyState(
                         icon = Icons.Default.Groups,
-                        title = if (subordinateTargets.isEmpty()) {
+                        message = if (subordinateTargets.isEmpty()) {
                             "Belum ada target bawahan"
                         } else {
                             "Tidak ada hasil"
                         },
-                        message = if (subordinateTargets.isEmpty()) {
-                            "Belum ada bawahan yang menginput target pada periode $periodLabel."
-                        } else {
-                            "Coba ubah kata kunci pencarian atau filter status."
-                        },
-                        actionText = "Refresh",
-                        onAction = { viewModel.refresh(tahun = tahun, bulan = bulan) }
+                        actionText = null,
+                        onAction = null
                     )
                 }
 
@@ -1701,7 +1691,7 @@ private fun TargetDetailHeroCard(
                     item {
                         InfoMiniChip(
                             icon = Icons.Default.TaskAlt,
-                            text = "Review: ${target.approverNama}"
+                            text = "Reviewer: ${target.approverNama}"
                         )
                     }
                 }
@@ -3267,6 +3257,50 @@ private fun DetailCardSection(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+private fun TargetEmptyState(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    message: String,
+    actionText: String? = null,
+    onAction: (() -> Unit)? = null
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp, vertical = 72.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(120.dp),
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+            textAlign = TextAlign.Center
+        )
+
+        if (actionText != null && onAction != null) {
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = onAction,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(imageVector = Icons.Default.Add, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(actionText)
+            }
         }
     }
 }

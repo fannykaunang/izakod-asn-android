@@ -11,6 +11,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 data class NotificationUiState(
     val isLoading: Boolean = false,
@@ -82,10 +85,66 @@ class NotificationViewModel : ViewModel() {
         }
     }
 
+    fun markAsRead(notificationId: Int) {
+        val currentNotification = _uiState.value.notifications
+            .firstOrNull { it.notifikasiId == notificationId }
+            ?: return
+
+        if (currentNotification.isRead == 1) return
+
+        viewModelScope.launch {
+            try {
+                val response = ApiClient.eabsenApiService.markNotificationAsRead(notificationId)
+                val body = response.body()
+
+                if (response.isSuccessful && body?.success != false) {
+                    val readAt = currentServerTimestamp()
+                    val currentState = _uiState.value
+                    val wasUnread = currentState.notifications.any {
+                        it.notifikasiId == notificationId && it.isRead == 0
+                    }
+
+                    _uiState.value = currentState.copy(
+                        notifications = currentState.notifications.map { notification ->
+                            if (notification.notifikasiId == notificationId) {
+                                notification.copy(
+                                    isRead = 1,
+                                    tanggalDibaca = notification.tanggalDibaca ?: readAt
+                                )
+                            } else {
+                                notification
+                            }
+                        },
+                        unreadCount = if (wasUnread) {
+                            (currentState.unreadCount - 1).coerceAtLeast(0)
+                        } else {
+                            currentState.unreadCount
+                        }
+                    )
+                } else {
+                    android.util.Log.e(
+                        "NotificationViewModel",
+                        "Gagal menandai notifikasi dibaca: ${response.code()} ${body?.message.orEmpty()}"
+                    )
+                }
+            } catch (e: Exception) {
+                android.util.Log.e(
+                    "NotificationViewModel",
+                    "Error menandai notifikasi dibaca: ${e.message}",
+                    e
+                )
+            }
+        }
+    }
+
     /**
      * Get unread count (for badge)
      */
     fun getUnreadCount(): Int {
         return _uiState.value.unreadCount
+    }
+
+    private fun currentServerTimestamp(): String {
+        return SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
     }
 }

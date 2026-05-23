@@ -426,13 +426,19 @@ private fun DashboardContent(
                             )
                         }
                         item {
-                            MinimalActionFocusSection(
+                            DashboardFocusSection(
                                 alerts = actionAlerts,
                                 targetSummary = targetSummary,
                                 assessmentSummary = assessmentSummary,
+                                targetItems = targetItems,
+                                currentPegawaiId = currentPegawaiId,
+                                targetPeriodYear = targetPeriodYear,
+                                targetPeriodMonth = targetPeriodMonth,
                                 canReviewSubordinates = canReviewSubordinates,
                                 onOpenReports = onViewReports,
                                 onOpenTarget = onTargetKinerja,
+                                onCreateTarget = onTargetCreate,
+                                onOpenSubordinateTargetPeriod = onSubordinateTargetPeriod,
                                 onOpenPenilaian = onPenilaianKinerja,
                                 onOpenReview = onPenilaianBawahan,
                                 onOpenPenilaianBelumDibuat = onPenilaianBelumDibuat
@@ -497,9 +503,11 @@ private fun DashboardContent(
                         item {
                             AssessmentSummarySection(
                                 summary = assessmentSummary,
+                                targetSummary = targetSummary,
                                 targetPeriodYear = targetPeriodYear,
                                 targetPeriodMonth = targetPeriodMonth,
                                 onPeriodSelected = onTargetPeriodSelected,
+                                onOpenTarget = onTargetKinerja,
                                 onOpenPenilaian = onPenilaianKinerja,
                                 onOpenReviewBawahan = onPenilaianBawahan,
                                 onOpenBelumDibuat = onPenilaianBelumDibuat
@@ -1309,6 +1317,351 @@ private fun HeroPlayStatusChipV2(
     }
 }
 
+private fun hasDashboardActionToShow(
+    alerts: DashboardActionAlertsData?,
+    targetSummary: DashboardTargetSummaryData?,
+    assessmentSummary: AssessmentSummaryData?,
+    canReviewSubordinates: Boolean
+): Boolean {
+    val targetNeedAttention = alerts?.targetNeedAttentionCount ?: 0
+    val realisasiNeedAttention = alerts?.realisasiNeedAttentionCount ?: 0
+    val subordinateReview = alerts?.subordinateReviewCount ?: 0
+    val missingAssessment = alerts?.missingAssessmentCount ?: 0
+    val hasOwnAssessmentAction = assessmentSummary.hasOwnAssessmentAction(alerts)
+    val isAssessmentPeriodFinal = assessmentSummary?.activePeriodStatus
+        ?.equals("Final", ignoreCase = true) == true
+    val hasTargetStatusAttention = targetSummary.hasTargetStatusAttention()
+    val hasTargetAttention = !isAssessmentPeriodFinal &&
+        (targetNeedAttention > 0 || realisasiNeedAttention > 0)
+
+    return hasTargetStatusAttention ||
+        hasOwnAssessmentAction ||
+        (canReviewSubordinates && missingAssessment > 0) ||
+        (canReviewSubordinates && subordinateReview > 0) ||
+        hasTargetAttention
+}
+
+private fun AssessmentSummaryData?.hasOwnAssessmentAction(
+    alerts: DashboardActionAlertsData?
+): Boolean {
+    val pendingCount = alerts?.ownAssessmentPendingCount ?: this?.pendingOwnAssessment ?: 0
+    val activeStatus = this?.activePeriodStatus
+        .orEmpty()
+        .trim()
+        .replace('_', ' ')
+        .lowercase(Locale.getDefault())
+
+    return pendingCount > 0 && activeStatus in setOf("draft", "review")
+}
+
+private fun DashboardTargetSummaryData?.hasTargetStatusAttention(): Boolean {
+    val status = this?.status
+        .orEmpty()
+        .trim()
+        .replace('_', ' ')
+        .lowercase(Locale.getDefault())
+
+    return status == "draft" || status == "revisi"
+}
+
+private fun shouldShowStartTargetGuidance(
+    targetSummary: DashboardTargetSummaryData?,
+    assessmentSummary: AssessmentSummaryData?
+): Boolean {
+    if (targetSummary == null) return false
+    val isAssessmentPeriodFinal = assessmentSummary?.activePeriodStatus
+        ?.equals("Final", ignoreCase = true) == true
+    if (isAssessmentPeriodFinal) return false
+
+    val targetStatus = targetSummary.status
+        .orEmpty()
+        .trim()
+        .replace('_', ' ')
+        .lowercase(Locale.getDefault())
+    val statusMeansTargetExists = targetStatus in setOf(
+        "draft",
+        "diajukan",
+        "disetujui",
+        "final",
+        "revisi",
+        "ditolak"
+    )
+
+    return !statusMeansTargetExists &&
+        (targetSummary.totalTargets ?: 0) <= 0 &&
+        (targetSummary.totalItems ?: 0) <= 0
+}
+
+private data class PendingSubordinateTargetReview(
+    val count: Int,
+    val tahun: Int,
+    val bulan: Int,
+    val periodLabel: String
+)
+
+private fun pendingSubordinateTargetReview(
+    targetItems: List<TargetKinerjaItem>,
+    currentPegawaiId: Int?,
+    targetPeriodYear: Int?,
+    targetPeriodMonth: Int?,
+    canReviewSubordinates: Boolean
+): PendingSubordinateTargetReview? {
+    if (!canReviewSubordinates) return null
+
+    val pendingTargets = targetItems.filter { target ->
+        val isSubmitted = target.status
+            .trim()
+            .replace('_', ' ')
+            .equals("diajukan", ignoreCase = true)
+        val isSubordinate = currentPegawaiId == null || target.pegawaiId != currentPegawaiId
+        val isSelectedPeriod = (targetPeriodYear == null || target.tahun == targetPeriodYear) &&
+            (targetPeriodMonth == null || target.bulan == targetPeriodMonth)
+
+        isSubmitted && isSubordinate && isSelectedPeriod
+    }
+
+    if (pendingTargets.isEmpty()) return null
+
+    val sample = pendingTargets.first()
+    return PendingSubordinateTargetReview(
+        count = pendingTargets.size,
+        tahun = sample.tahun,
+        bulan = sample.bulan,
+        periodLabel = monthYearLabel(sample.tahun, sample.bulan)
+    )
+}
+
+@Composable
+private fun DashboardFocusSection(
+    alerts: DashboardActionAlertsData?,
+    targetSummary: DashboardTargetSummaryData?,
+    assessmentSummary: AssessmentSummaryData?,
+    targetItems: List<TargetKinerjaItem>,
+    currentPegawaiId: Int?,
+    targetPeriodYear: Int?,
+    targetPeriodMonth: Int?,
+    canReviewSubordinates: Boolean,
+    onOpenReports: () -> Unit,
+    onOpenTarget: () -> Unit,
+    onCreateTarget: (Int?, Int?) -> Unit,
+    onOpenSubordinateTargetPeriod: (Int, Int) -> Unit,
+    onOpenPenilaian: () -> Unit,
+    onOpenReview: () -> Unit,
+    onOpenPenilaianBelumDibuat: () -> Unit
+) {
+    val showStarter = shouldShowStartTargetGuidance(targetSummary, assessmentSummary)
+    val pendingSubordinateTargetReview = pendingSubordinateTargetReview(
+        targetItems = targetItems,
+        currentPegawaiId = currentPegawaiId,
+        targetPeriodYear = targetPeriodYear,
+        targetPeriodMonth = targetPeriodMonth,
+        canReviewSubordinates = canReviewSubordinates
+    )
+    val showGeneralAction = hasDashboardActionToShow(
+        alerts = alerts,
+        targetSummary = targetSummary,
+        assessmentSummary = assessmentSummary,
+        canReviewSubordinates = canReviewSubordinates
+    )
+
+    if (!showStarter && pendingSubordinateTargetReview == null && !showGeneralAction) return
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        if (showStarter) {
+            StarterGuidanceSection(
+                targetSummary = targetSummary,
+                assessmentSummary = assessmentSummary,
+                targetPeriodYear = targetPeriodYear,
+                targetPeriodMonth = targetPeriodMonth,
+                onCreateTarget = onCreateTarget
+            )
+        }
+
+        if (pendingSubordinateTargetReview != null) {
+            SubordinateTargetReviewActionSection(
+                review = pendingSubordinateTargetReview,
+                onOpenReview = {
+                    onOpenSubordinateTargetPeriod(
+                        pendingSubordinateTargetReview.tahun,
+                        pendingSubordinateTargetReview.bulan
+                    )
+                }
+            )
+        } else if (showGeneralAction) {
+            MinimalActionFocusSection(
+                alerts = alerts,
+                targetSummary = targetSummary,
+                assessmentSummary = assessmentSummary,
+                canReviewSubordinates = canReviewSubordinates,
+                onOpenReports = onOpenReports,
+                onOpenTarget = onOpenTarget,
+                onOpenPenilaian = onOpenPenilaian,
+                onOpenReview = onOpenReview,
+                onOpenPenilaianBelumDibuat = onOpenPenilaianBelumDibuat
+            )
+        }
+    }
+}
+
+@Composable
+private fun SubordinateTargetReviewActionSection(
+    review: PendingSubordinateTargetReview,
+    onOpenReview: () -> Unit
+) {
+    val title = if (review.count == 1) {
+        "1 target bawahan menunggu review"
+    } else {
+        "${review.count} target bawahan menunggu review"
+    }
+
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = 1.dp,
+        cornerRadius = 24.dp
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 15.sp
+                    ),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "Tinjau target bawahan periode ${review.periodLabel}.",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Surface(
+                modifier = Modifier.clickable(onClick = onOpenReview),
+                shape = RoundedCornerShape(16.dp),
+                color = StatusPending.copy(alpha = 0.14f)
+            ) {
+                Text(
+                    text = "Review Target",
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
+                    color = StatusPending,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StarterGuidanceSection(
+    targetSummary: DashboardTargetSummaryData?,
+    assessmentSummary: AssessmentSummaryData?,
+    targetPeriodYear: Int?,
+    targetPeriodMonth: Int?,
+    onCreateTarget: (Int?, Int?) -> Unit
+) {
+    if (!shouldShowStartTargetGuidance(targetSummary, assessmentSummary)) return
+
+    val periodLabel = targetSummary?.activePeriodLabel
+        ?.takeIf { it.isNotBlank() }
+        ?: if (targetPeriodYear != null && targetPeriodMonth != null) {
+            monthYearLabel(targetPeriodYear, targetPeriodMonth)
+        } else {
+            "periode aktif"
+        }
+
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = 1.dp,
+        cornerRadius = 24.dp
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = StatusApproved.copy(alpha = 0.14f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.PlaylistAddCheckCircle,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .size(26.dp),
+                        tint = StatusApproved
+                    )
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "Mulai dari Sini",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 15.sp
+                        )
+                    )
+                    Text(
+                        text = "Buat target kerja untuk $periodLabel terlebih dahulu.",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Text(
+                text = "Setelah target dibuat, laporan kegiatan dan penilaian periode ini akan lebih mudah dipantau.",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onCreateTarget(targetPeriodYear, targetPeriodMonth) },
+                shape = RoundedCornerShape(18.dp),
+                color = PrimaryLight.copy(alpha = 0.14f),
+                border = BorderStroke(1.dp, PrimaryLight.copy(alpha = 0.28f))
+            ) {
+                Text(
+                    text = "Buat Target",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.ExtraBold
+                    ),
+                    color = PrimaryLight,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun MinimalActionFocusSection(
     alerts: DashboardActionAlertsData?,
@@ -1323,23 +1676,34 @@ private fun MinimalActionFocusSection(
 ) {
     val targetNeedAttention = alerts?.targetNeedAttentionCount ?: 0
     val realisasiNeedAttention = alerts?.realisasiNeedAttentionCount ?: 0
-    val ownAssessmentPending = alerts?.ownAssessmentPendingCount ?: 0
     val subordinateReview = alerts?.subordinateReviewCount ?: 0
     val missingAssessment = alerts?.missingAssessmentCount ?: 0
+    val hasOwnAssessmentAction = assessmentSummary.hasOwnAssessmentAction(alerts)
     val targetPeriodMonth = targetSummary?.activePeriodLabel.periodMonthOnly() ?: "bulan ini"
+    val targetStatus = targetSummary?.status
+        .orEmpty()
+        .trim()
+        .replace('_', ' ')
+        .lowercase(Locale.getDefault())
+    val hasTargetStatusAttention = targetSummary.hasTargetStatusAttention()
     val isAssessmentPeriodFinal = assessmentSummary?.activePeriodStatus
         ?.equals("Final", ignoreCase = true) == true
     val hasTargetAttention = !isAssessmentPeriodFinal &&
         (targetNeedAttention > 0 || realisasiNeedAttention > 0)
-    val hasActionToShow = ownAssessmentPending > 0 ||
-        (canReviewSubordinates && missingAssessment > 0) ||
-        (canReviewSubordinates && subordinateReview > 0) ||
-        hasTargetAttention
+    val hasActionToShow = hasDashboardActionToShow(
+        alerts = alerts,
+        targetSummary = targetSummary,
+        assessmentSummary = assessmentSummary,
+        canReviewSubordinates = canReviewSubordinates
+    )
 
     if (!hasActionToShow) return
 
     val primaryText = when {
-        ownAssessmentPending > 0 -> "Penilaian saya belum final"
+        hasTargetStatusAttention -> {
+            if (targetStatus == "revisi") "Target perlu revisi" else "Target masih draft"
+        }
+        hasOwnAssessmentAction -> "Penilaian saya belum final"
         canReviewSubordinates && missingAssessment > 0 -> {
             if (missingAssessment == 1) "1 penilaian belum dibuat" else "$missingAssessment penilaian belum dibuat"
         }
@@ -1348,23 +1712,54 @@ private fun MinimalActionFocusSection(
         }
         hasTargetAttention -> {
             val totalAttention = targetNeedAttention + realisasiNeedAttention
-            if (totalAttention == 1) "1 target perlu realisasi" else "$totalAttention target perlu realisasi"
+            when {
+                realisasiNeedAttention > 0 && targetNeedAttention <= 0 -> {
+                    if (realisasiNeedAttention == 1) {
+                        "1 item perlu realisasi"
+                    } else {
+                        "$realisasiNeedAttention item perlu realisasi"
+                    }
+                }
+                targetNeedAttention > 0 && realisasiNeedAttention <= 0 -> {
+                    if (targetNeedAttention == 1) {
+                        "1 target perlu perhatian"
+                    } else {
+                        "$targetNeedAttention target perlu perhatian"
+                    }
+                }
+                totalAttention == 1 -> "1 pekerjaan target perlu perhatian"
+                else -> "$totalAttention pekerjaan target perlu perhatian"
+            }
         }
         isAssessmentPeriodFinal -> "Periode target sudah final"
         else -> "Tidak ada tindakan mendesak saat ini"
     }
 
     val secondaryText = when {
-        ownAssessmentPending > 0 -> "Lengkapi atau finalkan penilaian periode aktif."
+        hasTargetStatusAttention -> {
+            if (targetStatus == "revisi") {
+                "Perbaiki target bulan $targetPeriodMonth sesuai catatan review."
+            } else {
+                "Ajukan target bulan $targetPeriodMonth agar bisa diproses atasan."
+            }
+        }
+        hasOwnAssessmentAction -> "Lengkapi atau finalkan penilaian periode aktif."
         canReviewSubordinates && missingAssessment > 0 -> "Target siap dinilai, draft penilaian belum ada."
         canReviewSubordinates && subordinateReview > 0 -> "Tidak termasuk penilaian saya"
-        hasTargetAttention -> "Buat laporan kegiatan untuk bulan $targetPeriodMonth."
+        hasTargetAttention -> {
+            if (realisasiNeedAttention > 0) {
+                "Isi realisasi atau tautkan laporan kegiatan untuk bulan $targetPeriodMonth."
+            } else {
+                "Buka target bulan $targetPeriodMonth untuk melanjutkan."
+            }
+        }
         isAssessmentPeriodFinal -> "Target dan realisasi bulan $targetPeriodMonth hanya bisa dilihat."
         else -> "Semua ringkasan utama terlihat aman"
     }
 
     val actionLabel = when {
-        ownAssessmentPending > 0 -> "Buka Penilaian"
+        hasTargetStatusAttention -> "Buka Target"
+        hasOwnAssessmentAction -> "Buka Penilaian"
         canReviewSubordinates && missingAssessment > 0 -> "Lihat Daftar"
         canReviewSubordinates && subordinateReview > 0 -> "Buka Penilaian"
         hasTargetAttention -> "Buka Target"
@@ -1373,7 +1768,8 @@ private fun MinimalActionFocusSection(
     }
 
     val actionHandler = when {
-        ownAssessmentPending > 0 -> onOpenPenilaian
+        hasTargetStatusAttention -> onOpenTarget
+        hasOwnAssessmentAction -> onOpenPenilaian
         canReviewSubordinates && missingAssessment > 0 -> onOpenPenilaianBelumDibuat
         canReviewSubordinates && subordinateReview > 0 -> onOpenReview
         hasTargetAttention -> onOpenTarget
@@ -2001,7 +2397,7 @@ fun TargetProgressSection(
     val displayStatus = status.toTargetDisplayText()
     val periodMonth = periodLabel.periodMonthOnly() ?: "periode ini"
     val totalItemsFromTargets = myTargets.sumOf { target ->
-        target.detailCount ?: target.details.size
+        target.detailCount ?: target.details.orEmpty().size
     }
     val totalItems = maxOf(summaryTotalItems, totalItemsFromTargets)
     val totalTargets = maxOf(
@@ -2665,7 +3061,7 @@ private fun TargetPeriodGroupCard(
 ) {
     val employeeCount = group.targets.map { it.pegawaiId }.distinct().size
     val targetCount = group.targets.size
-    val itemCount = group.targets.sumOf { it.detailCount ?: it.details.size }
+    val itemCount = group.targets.sumOf { it.detailCount ?: it.details.orEmpty().size }
     val finalCount = group.targets.count { it.isAssessmentFinalized == true || it.status.equals("final", ignoreCase = true) }
     val pendingCount = group.targets.count { it.status.equals("diajukan", ignoreCase = true) || it.status.equals("draft", ignoreCase = true) }
 
@@ -2739,7 +3135,7 @@ private fun TargetSubordinateEmployeeCard(
     reviewMode: Boolean,
     onClick: () -> Unit
 ) {
-    val detailCount = item.detailCount ?: item.details.size
+    val detailCount = item.detailCount ?: item.details.orEmpty().size
     val statusColor = targetStatusColor(item.status)
     val displayStatus = item.status.toTargetDisplayText()
 
@@ -3081,17 +3477,24 @@ fun QuickActionButton(
 @Composable
 fun AssessmentSummarySection(
     summary: AssessmentSummaryData?,
+    targetSummary: DashboardTargetSummaryData?,
     targetPeriodYear: Int?,
     targetPeriodMonth: Int?,
     onPeriodSelected: (Int, Int) -> Unit,
+    onOpenTarget: () -> Unit,
     onOpenPenilaian: () -> Unit,
     onOpenReviewBawahan: () -> Unit,
     onOpenBelumDibuat: () -> Unit
 ) {
     val activeStatus = summary?.activePeriodStatus.displayOrDash()
     val activeLabel = summary?.activePeriodLabel.displayOrDash()
+    val normalizedActiveStatus = activeStatus.lowercase(Locale.getDefault())
     val selectedScore = formatNullableScore(summary?.selectedPeriodScore)
     val selectedPredicate = summary?.selectedPeriodPredicate.displayOrDash()
+    val pendingOwnAssessment = summary?.pendingOwnAssessment ?: 0
+    val pendingSubordinates = summary?.pendingSubordinateAssessments ?: 0
+    val missingSubordinates = summary?.missingSubordinateAssessments ?: 0
+    val canReviewSubordinates = summary?.canReviewSubordinates == true
     val periodStatusSubtitle = listOf(activeStatus, activeLabel)
         .filter { it.isNotBlank() && it != "-" }
         .joinToString(" ")
@@ -3100,18 +3503,59 @@ fun AssessmentSummarySection(
         .takeIf { it.isNotBlank() && it != "-" }
         ?.let { "Periode $it" }
         ?: "Periode dipilih"
-    val assessmentHeroTitle = when (activeStatus.lowercase(Locale.getDefault())) {
-        "final" -> "Penilaian sudah final"
-        "review" -> "Penilaian sedang review"
-        "draft" -> "Penilaian masih draft"
-        "belum dibuat" -> "Penilaian belum dibuat"
-        "-" -> "Penilaian belum tersedia"
+    val targetBlocksAssessment = targetSummary.hasTargetStatusAttention()
+    val targetStatus = targetSummary?.status
+        .orEmpty()
+        .trim()
+        .replace('_', ' ')
+        .lowercase(Locale.getDefault())
+    val assessmentHeroTitle = when {
+        targetBlocksAssessment -> "Penilaian menunggu target"
+        normalizedActiveStatus == "final" -> "Penilaian sudah final"
+        normalizedActiveStatus == "review" -> "Penilaian sedang review"
+        normalizedActiveStatus == "draft" -> "Penilaian masih draft"
+        normalizedActiveStatus == "belum dibuat" -> "Penilaian belum dibuat"
+        activeStatus == "-" -> "Penilaian belum tersedia"
         else -> "Penilaian $activeStatus"
     }
-    val pendingOwnAssessment = summary?.pendingOwnAssessment ?: 0
-    val pendingSubordinates = summary?.pendingSubordinateAssessments ?: 0
-    val missingSubordinates = summary?.missingSubordinateAssessments ?: 0
-    val canReviewSubordinates = summary?.canReviewSubordinates == true
+    val hasOwnAssessmentDraft = normalizedActiveStatus in setOf("draft", "review")
+    val primaryAssessmentActionLabel = when {
+        targetBlocksAssessment -> "Buka Target"
+        normalizedActiveStatus == "belum dibuat" -> "Lihat Penilaian Saya"
+        else -> "Buka Penilaian Saya"
+    }
+    val primaryAssessmentAction = when {
+        targetBlocksAssessment -> onOpenTarget
+        else -> onOpenPenilaian
+    }
+    val primaryAssessmentIcon = when {
+        targetBlocksAssessment -> Icons.Default.TaskAlt
+        else -> Icons.Default.AssignmentTurnedIn
+    }
+    val primaryAssessmentIconColor = when {
+        targetBlocksAssessment -> PrimaryLight
+        else -> StatusApproved
+    }
+    val passiveAssessmentMessage = when {
+        targetBlocksAssessment -> {
+            if (targetStatus == "revisi") {
+                "Perbaiki target periode ini terlebih dahulu sebelum penilaian bisa diproses."
+            } else {
+                "Ajukan target periode ini terlebih dahulu sebelum penilaian bisa dibuat."
+            }
+        }
+        normalizedActiveStatus == "belum dibuat" ->
+            "Belum ada draft penilaian untuk periode ini."
+        else -> null
+    }
+    val pendingOwnDisplay = if (hasOwnAssessmentDraft) pendingOwnAssessment else 0
+    val assessmentStatusColor = when {
+        targetBlocksAssessment -> StatusPending
+        normalizedActiveStatus == "final" -> StatusApproved
+        normalizedActiveStatus == "review" -> StatusPending
+        normalizedActiveStatus == "draft" -> PrimaryLight
+        else -> StatusRevised
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
@@ -3179,12 +3623,7 @@ fun AssessmentSummarySection(
                     }
                     StatusChip(
                         text = activeStatus,
-                        color = when (activeStatus.lowercase(Locale.getDefault())) {
-                            "final" -> StatusApproved
-                            "review" -> StatusPending
-                            "draft" -> PrimaryLight
-                            else -> StatusRevised
-                        }
+                        color = assessmentStatusColor
                     )
                 }
 
@@ -3216,12 +3655,23 @@ fun AssessmentSummarySection(
                     cornerRadius = 20.dp
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        PendingAssessmentSummaryRow(
-                            title = "Penilaian saya belum final",
-                            subtitle = "Status penilaian periode dipilih milik saya",
-                            value = pendingOwnAssessment,
-                            highlightWhenPositive = true
-                        )
+                        if (passiveAssessmentMessage != null) {
+                            AssessmentPassiveInfoRow(
+                                title = if (targetBlocksAssessment) {
+                                    if (targetStatus == "revisi") "Target perlu revisi" else "Target masih draft"
+                                } else {
+                                    "Penilaian belum dibuat"
+                                },
+                                subtitle = passiveAssessmentMessage
+                            )
+                        } else {
+                            PendingAssessmentSummaryRow(
+                                title = "Penilaian saya belum final",
+                                subtitle = "Status penilaian periode dipilih milik saya",
+                                value = pendingOwnDisplay,
+                                highlightWhenPositive = true
+                            )
+                        }
 
                         if (canReviewSubordinates) {
                             PendingAssessmentSummaryRow(
@@ -3246,7 +3696,7 @@ fun AssessmentSummarySection(
                 ) {
                     ElevatedCard(
                         modifier = Modifier.weight(1f),
-                        onClick = onOpenPenilaian,
+                        onClick = primaryAssessmentAction,
                         elevation = 0.dp,
                         cornerRadius = 18.dp
                     ) {
@@ -3258,13 +3708,13 @@ fun AssessmentSummarySection(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.AssignmentTurnedIn,
+                                imageVector = primaryAssessmentIcon,
                                 contentDescription = null,
-                                tint = StatusApproved
+                                tint = primaryAssessmentIconColor
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Buka Penilaian Saya",
+                                text = primaryAssessmentActionLabel,
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                             )
                         }
@@ -3329,6 +3779,46 @@ fun AssessmentSummarySection(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AssessmentPassiveInfoRow(
+    title: String,
+    subtitle: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = StatusPending.copy(alpha = 0.14f)
+        ) {
+            Icon(
+                imageVector = Icons.Default.AccessTime,
+                contentDescription = null,
+                modifier = Modifier
+                    .padding(10.dp)
+                    .size(22.dp),
+                tint = StatusPending
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold)
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

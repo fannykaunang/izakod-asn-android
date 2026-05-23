@@ -25,6 +25,7 @@ import com.kominfo_mkq.izakod_asn.ui.screens.DashboardScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.DeveloperScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.EditLaporanScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.LoginScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.NotificationDetailScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.NotificationScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.PenilaianBelumDibuatScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.PenilaianKinerjaDetailScreen
@@ -68,6 +69,7 @@ sealed class Screen(val route: String) {
     object Developer : Screen("developer")
     object CreateReport : Screen("create_report")
     object Notifications : Screen("notifications")
+    object NotificationDetail : Screen("notification_detail")
 }
 
 private fun penilaianKinerjaRoute(mode: String = "mine"): String {
@@ -501,7 +503,20 @@ fun IZAKODNavigation(
             composable(Screen.Notifications.route) {
                 NotificationScreen(
                     onNavigateBack = { navController.popBackStack() },
-                    onNotificationClick = { laporanId ->
+                    onNotificationClick = { notificationId ->
+                        navController.navigate("${Screen.NotificationDetail.route}/$notificationId")
+                    }
+                )
+            }
+            composable(
+                route = "${Screen.NotificationDetail.route}/{notificationId}",
+                arguments = listOf(navArgument("notificationId") { type = NavType.IntType })
+            ) { backStackEntry ->
+                val notificationId = backStackEntry.arguments?.getInt("notificationId") ?: 0
+                NotificationDetailScreen(
+                    notificationId = notificationId,
+                    onNavigateBack = { navController.popBackStack() },
+                    onOpenLaporan = { laporanId ->
                         navController.navigate("laporan_detail/$laporanId")
                     }
                 )

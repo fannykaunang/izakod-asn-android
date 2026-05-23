@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.MoreVert
@@ -327,19 +328,17 @@ fun ReportListScreen(
                             attentionCount = attentionCount
                         )
 
-                        ReportPeriodSelectorBar(
-                            periodLabel = activePeriodLabel ?: "Semua periode",
-                            isFiltered = activePeriodLabel != null,
-                            onOpenFilter = { showFilterDialog = true },
-                            onClearFilter = { viewModel.clearFilter(context) }
-                        )
-
                         FilterChipsRow(
                             selected = selectedFilter,
                             onSelect = { selectedFilter = it }
                         )
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        ReportListHeaderBar(
+                            totalDisplayed = filteredReports.size,
+                            periodLabel = activePeriodLabel ?: "Periode",
+                            isFiltered = activePeriodLabel != null,
+                            onOpenFilter = { showFilterDialog = true }
+                        )
 
                         Box(
                             modifier = Modifier
@@ -364,29 +363,25 @@ fun ReportListScreen(
                                     contentPadding = PaddingValues(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 112.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    item {
-                                        SectionHeading(
-                                            title = if (actionReports.isNotEmpty()) "Perlu Tindakan" else "Semua Laporan",
-                                            subtitle = if (actionReports.isNotEmpty()) {
-                                                "${actionReports.size} laporan perlu perhatian"
-                                            } else {
-                                                "${filteredReports.size} laporan ditampilkan"
-                                            }
-                                        )
-                                    }
-
-                                    items(if (actionReports.isNotEmpty()) actionReports else regularReports, key = { it.id }) { report ->
-                                        ReportCard(
-                                            report = report,
-                                            onClick = { onReportClick(report.id.toString()) }
-                                        )
-                                    }
-
                                     if (actionReports.isNotEmpty()) {
+                                        item {
+                                            SectionHeading(
+                                                title = "Perlu Tindakan",
+                                                subtitle = "${actionReports.size} laporan perlu perhatian"
+                                            )
+                                        }
+
+                                        items(actionReports, key = { it.id }) { report ->
+                                            ReportCard(
+                                                report = report,
+                                                onClick = { onReportClick(report.id.toString()) }
+                                            )
+                                        }
+
                                         item {
                                             Spacer(modifier = Modifier.height(4.dp))
                                             SectionHeading(
-                                                title = "Semua Laporan",
+                                                title = "Laporan Lainnya",
                                                 subtitle = if (regularReports.isNotEmpty()) {
                                                     "${regularReports.size} laporan lainnya"
                                                 } else {
@@ -396,6 +391,13 @@ fun ReportListScreen(
                                         }
 
                                         items(regularReports, key = { "regular-${it.id}" }) { report ->
+                                            ReportCard(
+                                                report = report,
+                                                onClick = { onReportClick(report.id.toString()) }
+                                            )
+                                        }
+                                    } else {
+                                        items(regularReports, key = { it.id }) { report ->
                                             ReportCard(
                                                 report = report,
                                                 onClick = { onReportClick(report.id.toString()) }
@@ -877,76 +879,52 @@ private fun SummaryStatCard(
 }
 
 @Composable
-private fun ReportPeriodSelectorBar(
+private fun ReportListHeaderBar(
+    totalDisplayed: Int,
     periodLabel: String,
     isFiltered: Boolean,
-    onOpenFilter: () -> Unit,
-    onClearFilter: () -> Unit
+    onOpenFilter: () -> Unit
 ) {
-    Surface(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, top = 12.dp, end = 20.dp),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f)
+            .padding(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.CalendarToday,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+            Text(
+                text = "Semua Laporan",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+            )
+            Text(
+                text = "$totalDisplayed laporan ditampilkan",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
 
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Text(
-                    text = "Periode laporan",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        FilterChip(
+            selected = isFiltered,
+            onClick = onOpenFilter,
+            label = {
                 Text(
                     text = periodLabel,
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+            },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.CalendarToday,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
             }
-
-            FilterChip(
-                selected = isFiltered,
-                onClick = onOpenFilter,
-                label = { Text(if (isFiltered) "Ubah" else "Pilih") },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.FilterList,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            )
-
-            if (isFiltered) {
-                TextButton(onClick = onClearFilter) {
-                    Text("Reset")
-                }
-            }
-        }
+        )
     }
 }
 
@@ -1146,7 +1124,15 @@ private fun ReportCard(
                 }
 
                 Spacer(modifier = Modifier.width(12.dp))
-                StatusBadge(status = report.status)
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "Status",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    StatusBadge(status = report.status)
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -1163,42 +1149,111 @@ private fun ReportCard(
                 )
             }
 
+            Spacer(modifier = Modifier.height(12.dp))
+
+            NextActionHint(
+                report = report,
+                accentColor = accentColor
+            )
+
             if (needsAttention && !report.catatanAtasan.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(12.dp))
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(accentColor.copy(alpha = 0.1f))
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Comment,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = accentColor
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            text = "Catatan atasan",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = accentColor
-                        )
-                        Text(
-                            text = report.catatanAtasan,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
+                SupervisorNoteBlock(
+                    title = report.supervisorNoteTitle(),
+                    note = report.catatanAtasan,
+                    accentColor = accentColor
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun NextActionHint(
+    report: ReportUi,
+    accentColor: Color
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = accentColor.copy(alpha = 0.08f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(accentColor.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = report.nextActionIcon(),
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(17.dp)
+                )
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = report.nextActionTitle(),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = accentColor
+                )
+                Text(
+                    text = report.nextActionText(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SupervisorNoteBlock(
+    title: String,
+    note: String,
+    accentColor: Color
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(accentColor.copy(alpha = 0.12f))
+            .padding(12.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.Comment,
+            contentDescription = null,
+            modifier = Modifier.size(17.dp),
+            tint = accentColor
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = accentColor
+            )
+            Text(
+                text = note,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.84f),
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -1821,6 +1876,44 @@ private fun ReportUi.attentionLabel(): String {
         StatusType.REVISED -> "Perlu revisi"
         StatusType.REJECTED -> "Ditolak"
         else -> "Perlu tindakan"
+    }
+}
+
+private fun ReportUi.nextActionText(): String {
+    return when (status) {
+        StatusType.DRAFT -> "Laporan masih draft. Buka detail, lengkapi data, lalu ajukan."
+        StatusType.PENDING -> "Laporan sudah dikirim ke atasan. Tunggu verifikasi."
+        StatusType.APPROVED -> "Laporan sudah disetujui. Tidak ada aksi lanjutan."
+        StatusType.REJECTED -> "Laporan ditolak. Buka detail untuk membaca alasan penolakan."
+        StatusType.REVISED -> "Atasan meminta perbaikan. Buka detail, ikuti catatan, lalu ajukan kembali."
+    }
+}
+
+private fun ReportUi.nextActionTitle(): String {
+    return when (status) {
+        StatusType.DRAFT -> "Belum dikirim ke atasan"
+        StatusType.PENDING -> "Menunggu verifikasi"
+        StatusType.APPROVED -> "Sudah selesai"
+        StatusType.REJECTED -> "Perlu tindak lanjut"
+        StatusType.REVISED -> "Perlu diperbaiki"
+    }
+}
+
+private fun ReportUi.nextActionIcon(): androidx.compose.ui.graphics.vector.ImageVector {
+    return when (status) {
+        StatusType.DRAFT -> Icons.Default.Edit
+        StatusType.PENDING -> Icons.Default.AccessTime
+        StatusType.APPROVED -> Icons.Default.Description
+        StatusType.REJECTED -> Icons.Default.Error
+        StatusType.REVISED -> Icons.AutoMirrored.Filled.Comment
+    }
+}
+
+private fun ReportUi.supervisorNoteTitle(): String {
+    return when (status) {
+        StatusType.REJECTED -> "Alasan penolakan dari atasan"
+        StatusType.REVISED -> "Catatan revisi dari atasan"
+        else -> "Catatan atasan untuk diperhatikan"
     }
 }
 

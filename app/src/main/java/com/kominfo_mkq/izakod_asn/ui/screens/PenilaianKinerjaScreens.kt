@@ -56,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -342,29 +343,24 @@ fun PenilaianKinerjaListScreen(
                 }
 
                 activeSource.isEmpty() -> {
-                    PenilaianStateCard(
+                    PenilaianEmptyState(
                         icon = if (listMode == PenilaianListMode.MINE) {
                             Icons.Default.AssignmentTurnedIn
                         } else {
                             Icons.Default.Groups
                         },
-                        title = if (listMode == PenilaianListMode.MINE) {
+                        message = if (listMode == PenilaianListMode.MINE) {
                             "Belum ada draft penilaian"
                         } else {
                             "Belum ada penilaian bawahan"
                         },
-                        message = if (listMode == PenilaianListMode.MINE) {
-                            "Buat draft penilaian untuk periode ini."
-                        } else {
-                            "Penilaian bawahan aktif akan muncul di sini."
-                        },
                         actionText = if (listMode == PenilaianListMode.MINE) {
                             "Buat Draft"
                         } else {
-                            "Refresh"
+                            null
                         },
-                        onAction = {
-                            if (listMode == PenilaianListMode.MINE) {
+                        onAction = if (listMode == PenilaianListMode.MINE) {
+                            {
                                 viewModel.createDraft(
                                     tahun = selectedYear,
                                     bulan = selectedMonth,
@@ -373,13 +369,9 @@ fun PenilaianKinerjaListScreen(
                                         scope.launch { snackbarHostState.showSnackbar(message) }
                                     }
                                 )
-                            } else {
-                                viewModel.refresh(
-                                    tahun = selectedYear,
-                                    bulan = selectedMonth,
-                                    statusFinalisasi = statusFilter.raw
-                                )
                             }
+                        } else {
+                            null
                         }
                     )
                 }
@@ -1128,6 +1120,50 @@ private fun PenilaianMetricBox(
                 text = value,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
             )
+        }
+    }
+}
+
+@Composable
+private fun PenilaianEmptyState(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    message: String,
+    actionText: String? = null,
+    onAction: (() -> Unit)? = null
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp, vertical = 72.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(120.dp),
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+            textAlign = TextAlign.Center
+        )
+
+        if (actionText != null && onAction != null) {
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = onAction,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(imageVector = Icons.Default.Add, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(actionText)
+            }
         }
     }
 }

@@ -430,7 +430,7 @@ private fun EditFormHeroCard(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        "Perbarui laporan dengan lebih cepat",
+                        "Perbarui laporan lebih cepat",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold
                         )
