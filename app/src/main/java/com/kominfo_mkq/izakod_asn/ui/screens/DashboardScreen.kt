@@ -1321,7 +1321,8 @@ private fun hasDashboardActionToShow(
     alerts: DashboardActionAlertsData?,
     targetSummary: DashboardTargetSummaryData?,
     assessmentSummary: AssessmentSummaryData?,
-    canReviewSubordinates: Boolean
+    canReviewSubordinates: Boolean,
+    isTargetPeriodLocked: Boolean = false
 ): Boolean {
     val targetNeedAttention = alerts?.targetNeedAttentionCount ?: 0
     val realisasiNeedAttention = alerts?.realisasiNeedAttentionCount ?: 0
@@ -1330,8 +1331,11 @@ private fun hasDashboardActionToShow(
     val hasOwnAssessmentAction = assessmentSummary.hasOwnAssessmentAction(alerts)
     val isAssessmentPeriodFinal = assessmentSummary?.activePeriodStatus
         ?.equals("Final", ignoreCase = true) == true
-    val hasTargetStatusAttention = targetSummary.hasTargetStatusAttention()
-    val hasTargetAttention = !isAssessmentPeriodFinal &&
+    val targetActionLocked = isAssessmentPeriodFinal || isTargetPeriodLocked
+    val hasTargetStatusAttention = targetSummary.hasTargetStatusAttention(
+        isTargetPeriodLocked = targetActionLocked
+    )
+    val hasTargetAttention = !targetActionLocked &&
         (targetNeedAttention > 0 || realisasiNeedAttention > 0)
 
     return hasTargetStatusAttention ||
@@ -1354,7 +1358,11 @@ private fun AssessmentSummaryData?.hasOwnAssessmentAction(
     return pendingCount > 0 && activeStatus in setOf("draft", "review")
 }
 
-private fun DashboardTargetSummaryData?.hasTargetStatusAttention(): Boolean {
+private fun DashboardTargetSummaryData?.hasTargetStatusAttention(
+    isTargetPeriodLocked: Boolean = false
+): Boolean {
+    if (isTargetPeriodLocked) return false
+
     val status = this?.status
         .orEmpty()
         .trim()
@@ -1362,6 +1370,27 @@ private fun DashboardTargetSummaryData?.hasTargetStatusAttention(): Boolean {
         .lowercase(Locale.getDefault())
 
     return status == "draft" || status == "revisi"
+}
+
+private fun isOwnTargetPeriodLocked(
+    assessmentSummary: AssessmentSummaryData?,
+    targetItems: List<TargetKinerjaItem>,
+    currentPegawaiId: Int?,
+    targetPeriodYear: Int?,
+    targetPeriodMonth: Int?
+): Boolean {
+    val isAssessmentPeriodFinal = assessmentSummary?.activePeriodStatus
+        ?.equals("Final", ignoreCase = true) == true
+
+    if (isAssessmentPeriodFinal) return true
+
+    return targetItems.any { target ->
+        val isOwnTarget = currentPegawaiId == null || target.pegawaiId == currentPegawaiId
+        val isSelectedPeriod = (targetPeriodYear == null || target.tahun == targetPeriodYear) &&
+            (targetPeriodMonth == null || target.bulan == targetPeriodMonth)
+
+        isOwnTarget && isSelectedPeriod && target.isAssessmentFinalized == true
+    }
 }
 
 private fun shouldShowStartTargetGuidance(
@@ -1457,20 +1486,62 @@ private fun DashboardFocusSection(
         targetPeriodMonth = targetPeriodMonth,
         canReviewSubordinates = canReviewSubordinates
     )
+    val isTargetPeriodLocked = isOwnTargetPeriodLocked(
+        assessmentSummary = assessmentSummary,
+        targetItems = targetItems,
+        currentPegawaiId = currentPegawaiId,
+        targetPeriodYear = targetPeriodYear,
+        targetPeriodMonth = targetPeriodMonth
+    )
     val showGeneralAction = hasDashboardActionToShow(
         alerts = alerts,
         targetSummary = targetSummary,
         assessmentSummary = assessmentSummary,
-        canReviewSubordinates = canReviewSubordinates
+        canReviewSubordinates = canReviewSubordinates,
+        isTargetPeriodLocked = isTargetPeriodLocked
     )
+    val showAction = pendingSubordinateTargetReview != null || showGeneralAction
 
-    if (!showStarter && pendingSubordinateTargetReview == null && !showGeneralAction) return
+    if (!showAction && !showStarter) return
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        if (showStarter) {
+        if (showAction) {
+            DashboardFocusHeader(
+                title = "Perlu Tindakan",
+                subtitle = "Prioritas yang perlu diproses sekarang."
+            )
+            if (pendingSubordinateTargetReview != null) {
+                SubordinateTargetReviewActionSection(
+                    review = pendingSubordinateTargetReview,
+                    onOpenReview = {
+                        onOpenSubordinateTargetPeriod(
+                            pendingSubordinateTargetReview.tahun,
+                            pendingSubordinateTargetReview.bulan
+                        )
+                    }
+                )
+            } else {
+                MinimalActionFocusSection(
+                    alerts = alerts,
+                    targetSummary = targetSummary,
+                    assessmentSummary = assessmentSummary,
+                    canReviewSubordinates = canReviewSubordinates,
+                    isTargetPeriodLocked = isTargetPeriodLocked,
+                    onOpenReports = onOpenReports,
+                    onOpenTarget = onOpenTarget,
+                    onOpenPenilaian = onOpenPenilaian,
+                    onOpenReview = onOpenReview,
+                    onOpenPenilaianBelumDibuat = onOpenPenilaianBelumDibuat
+                )
+            }
+        } else {
+            DashboardFocusHeader(
+                title = "Pegawai Baru",
+                subtitle = "Mulai alur kerja periode aktif dari target kerja."
+            )
             StarterGuidanceSection(
                 targetSummary = targetSummary,
                 assessmentSummary = assessmentSummary,
@@ -1479,30 +1550,36 @@ private fun DashboardFocusSection(
                 onCreateTarget = onCreateTarget
             )
         }
+    }
+}
 
-        if (pendingSubordinateTargetReview != null) {
-            SubordinateTargetReviewActionSection(
-                review = pendingSubordinateTargetReview,
-                onOpenReview = {
-                    onOpenSubordinateTargetPeriod(
-                        pendingSubordinateTargetReview.tahun,
-                        pendingSubordinateTargetReview.bulan
-                    )
-                }
-            )
-        } else if (showGeneralAction) {
-            MinimalActionFocusSection(
-                alerts = alerts,
-                targetSummary = targetSummary,
-                assessmentSummary = assessmentSummary,
-                canReviewSubordinates = canReviewSubordinates,
-                onOpenReports = onOpenReports,
-                onOpenTarget = onOpenTarget,
-                onOpenPenilaian = onOpenPenilaian,
-                onOpenReview = onOpenReview,
-                onOpenPenilaianBelumDibuat = onOpenPenilaianBelumDibuat
-            )
-        }
+@Composable
+private fun DashboardFocusHeader(
+    title: String,
+    subtitle: String
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall.copy(
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 15.sp
+            ),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -1668,6 +1745,7 @@ private fun MinimalActionFocusSection(
     targetSummary: DashboardTargetSummaryData?,
     assessmentSummary: AssessmentSummaryData?,
     canReviewSubordinates: Boolean,
+    isTargetPeriodLocked: Boolean,
     onOpenReports: () -> Unit,
     onOpenTarget: () -> Unit,
     onOpenPenilaian: () -> Unit,
@@ -1685,16 +1763,20 @@ private fun MinimalActionFocusSection(
         .trim()
         .replace('_', ' ')
         .lowercase(Locale.getDefault())
-    val hasTargetStatusAttention = targetSummary.hasTargetStatusAttention()
     val isAssessmentPeriodFinal = assessmentSummary?.activePeriodStatus
         ?.equals("Final", ignoreCase = true) == true
-    val hasTargetAttention = !isAssessmentPeriodFinal &&
+    val targetActionLocked = isAssessmentPeriodFinal || isTargetPeriodLocked
+    val hasTargetStatusAttention = targetSummary.hasTargetStatusAttention(
+        isTargetPeriodLocked = targetActionLocked
+    )
+    val hasTargetAttention = !targetActionLocked &&
         (targetNeedAttention > 0 || realisasiNeedAttention > 0)
     val hasActionToShow = hasDashboardActionToShow(
         alerts = alerts,
         targetSummary = targetSummary,
         assessmentSummary = assessmentSummary,
-        canReviewSubordinates = canReviewSubordinates
+        canReviewSubordinates = canReviewSubordinates,
+        isTargetPeriodLocked = isTargetPeriodLocked
     )
 
     if (!hasActionToShow) return
@@ -3503,7 +3585,10 @@ fun AssessmentSummarySection(
         .takeIf { it.isNotBlank() && it != "-" }
         ?.let { "Periode $it" }
         ?: "Periode dipilih"
-    val targetBlocksAssessment = targetSummary.hasTargetStatusAttention()
+    val isAssessmentFinal = normalizedActiveStatus == "final"
+    val targetBlocksAssessment = targetSummary.hasTargetStatusAttention(
+        isTargetPeriodLocked = isAssessmentFinal
+    )
     val targetStatus = targetSummary?.status
         .orEmpty()
         .trim()
@@ -3511,7 +3596,7 @@ fun AssessmentSummarySection(
         .lowercase(Locale.getDefault())
     val assessmentHeroTitle = when {
         targetBlocksAssessment -> "Penilaian menunggu target"
-        normalizedActiveStatus == "final" -> "Penilaian sudah final"
+        isAssessmentFinal -> "Penilaian sudah final"
         normalizedActiveStatus == "review" -> "Penilaian sedang review"
         normalizedActiveStatus == "draft" -> "Penilaian masih draft"
         normalizedActiveStatus == "belum dibuat" -> "Penilaian belum dibuat"

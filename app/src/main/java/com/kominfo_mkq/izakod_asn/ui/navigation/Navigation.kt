@@ -254,7 +254,9 @@ fun IZAKODNavigation(
                     onNavigateToDetail = { targetId, reviewMode ->
                         navController.navigate("target_kinerja_detail/$targetId?reviewMode=$reviewMode")
                     },
-                    onNavigateToCreate = { navController.navigate(Screen.TargetKinerjaCreate.route) }
+                    onNavigateToCreate = { tahun, bulan ->
+                        navController.navigate("${Screen.TargetKinerjaCreate.route}?tahun=$tahun&bulan=$bulan")
+                    }
                 )
             }
 

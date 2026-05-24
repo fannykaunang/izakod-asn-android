@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
@@ -59,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kominfo_mkq.izakod_asn.data.model.PenilaianBelumDibuatItem
 import com.kominfo_mkq.izakod_asn.data.model.PenilaianKinerjaAutoFill
@@ -67,6 +70,7 @@ import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
 import com.kominfo_mkq.izakod_asn.ui.theme.PrimaryLight
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusApproved
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusPending
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusRejected
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.PenilaianKinerjaDetailViewModel
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.PenilaianBelumDibuatViewModel
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.PenilaianKinerjaListViewModel
@@ -83,6 +87,10 @@ private enum class PenilaianStatusFilter(val label: String, val raw: String?) {
     DRAFT("Draft", "draft"),
     REVIEW("Review", "review"),
     FINAL("Final", "final")
+}
+
+private fun PenilaianKinerjaItem.isPendingReview(): Boolean {
+    return statusFinalisasi.trim().lowercase(Locale.getDefault()) in setOf("draft", "review")
 }
 
 private fun formatPenilaianPeriode(bulan: Int, tahun: Int): String {
@@ -153,11 +161,10 @@ fun PenilaianKinerjaListScreen(
     }
     var statusFilter by remember { mutableStateOf(PenilaianStatusFilter.ALL) }
 
-    LaunchedEffect(selectedMonth, selectedYear, statusFilter) {
+    LaunchedEffect(selectedMonth, selectedYear) {
         viewModel.refresh(
             tahun = selectedYear,
-            bulan = selectedMonth,
-            statusFinalisasi = statusFilter.raw
+            bulan = selectedMonth
         )
     }
 
@@ -166,6 +173,9 @@ fun PenilaianKinerjaListScreen(
     }
     val subordinateAssessments = remember(uiState.assessments, uiState.currentPegawaiId) {
         uiState.assessments.filter { it.pegawaiId != uiState.currentPegawaiId }
+    }
+    val pendingSubordinateReviewCount = remember(subordinateAssessments) {
+        subordinateAssessments.count { it.isPendingReview() }
     }
 
     LaunchedEffect(uiState.canReviewSubordinates, uiState.isLoading) {
@@ -179,6 +189,11 @@ fun PenilaianKinerjaListScreen(
     } else {
         subordinateAssessments
     }
+    val filteredAssessments = activeSource.filter { assessment ->
+        statusFilter.raw == null ||
+            assessment.statusFinalisasi.equals(statusFilter.raw, ignoreCase = true)
+    }
+    val hasActiveAssessments = activeSource.isNotEmpty()
 
     Scaffold(
         topBar = {
@@ -191,8 +206,7 @@ fun PenilaianKinerjaListScreen(
                         onClick = {
                             viewModel.refresh(
                                 tahun = selectedYear,
-                                bulan = selectedMonth,
-                                statusFinalisasi = statusFilter.raw
+                                bulan = selectedMonth
                             )
                         }
                     ) {
@@ -260,10 +274,10 @@ fun PenilaianKinerjaListScreen(
                                 onClick = { listMode = PenilaianListMode.MINE },
                                 label = { Text("Penilaian Saya") }
                             )
-                            FilterChip(
+                            PenilaianReviewBawahanFilterChip(
                                 selected = listMode == PenilaianListMode.SUBORDINATE,
                                 onClick = { listMode = PenilaianListMode.SUBORDINATE },
-                                label = { Text("Review Bawahan") }
+                                count = pendingSubordinateReviewCount
                             )
                         }
                     }
@@ -335,31 +349,36 @@ fun PenilaianKinerjaListScreen(
                         onAction = {
                             viewModel.refresh(
                                 tahun = selectedYear,
-                                bulan = selectedMonth,
-                                statusFinalisasi = statusFilter.raw
+                                bulan = selectedMonth
                             )
                         }
                     )
                 }
 
-                activeSource.isEmpty() -> {
+                filteredAssessments.isEmpty() -> {
                     PenilaianEmptyState(
                         icon = if (listMode == PenilaianListMode.MINE) {
                             Icons.Default.AssignmentTurnedIn
                         } else {
                             Icons.Default.Groups
                         },
-                        message = if (listMode == PenilaianListMode.MINE) {
-                            "Belum ada draft penilaian"
-                        } else {
-                            "Belum ada penilaian bawahan"
+                        message = when {
+                            !hasActiveAssessments && listMode == PenilaianListMode.MINE -> {
+                                "Belum ada draft penilaian"
+                            }
+                            !hasActiveAssessments -> "Belum ada penilaian bawahan"
+                            statusFilter != PenilaianStatusFilter.ALL -> {
+                                "Belum ada penilaian ${statusFilter.label.lowercase(Locale.getDefault())}"
+                            }
+                            listMode == PenilaianListMode.MINE -> "Belum ada draft penilaian"
+                            else -> "Belum ada penilaian bawahan"
                         },
-                        actionText = if (listMode == PenilaianListMode.MINE) {
+                        actionText = if (listMode == PenilaianListMode.MINE && !hasActiveAssessments) {
                             "Buat Draft"
                         } else {
                             null
                         },
-                        onAction = if (listMode == PenilaianListMode.MINE) {
+                        onAction = if (listMode == PenilaianListMode.MINE && !hasActiveAssessments) {
                             {
                                 viewModel.createDraft(
                                     tahun = selectedYear,
@@ -382,7 +401,7 @@ fun PenilaianKinerjaListScreen(
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 112.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(activeSource, key = { it.id }) { assessment ->
+                        items(filteredAssessments, key = { it.id }) { assessment ->
                             PenilaianKinerjaCard(
                                 assessment = assessment,
                                 showPegawaiName = listMode == PenilaianListMode.SUBORDINATE,
@@ -393,6 +412,43 @@ fun PenilaianKinerjaListScreen(
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PenilaianReviewBawahanFilterChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    count: Int
+) {
+    Box(contentAlignment = Alignment.TopEnd) {
+        FilterChip(
+            selected = selected,
+            onClick = onClick,
+            label = { Text("Review Bawahan") }
+        )
+        PenilaianReviewBawahanBadge(count = count)
+    }
+}
+
+@Composable
+private fun PenilaianReviewBawahanBadge(count: Int) {
+    if (count <= 0) return
+
+    Badge(
+        modifier = Modifier.offset(x = 6.dp, y = (-6).dp),
+        containerColor = StatusRejected,
+        contentColor = Color.White
+    ) {
+        Text(
+            text = if (count > 99) "99+" else count.toString(),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.sp
+            ),
+            maxLines = 1
+        )
     }
 }
 

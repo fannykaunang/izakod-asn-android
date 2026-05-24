@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
@@ -41,6 +43,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
@@ -95,6 +98,7 @@ import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
 import com.kominfo_mkq.izakod_asn.ui.theme.PrimaryLight
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusApproved
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusPending
+import com.kominfo_mkq.izakod_asn.ui.theme.StatusRejected
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusRevised
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.TargetKinerjaDetailViewModel
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.TargetKinerjaFormViewModel
@@ -112,6 +116,9 @@ private enum class TargetStatusFilter(val label: String, val raw: String?) {
     REVISI("Revisi", "revisi"),
     FINAL("Final", "final")
 }
+
+private fun TargetKinerjaItem.isSubmittedForReview(): Boolean =
+    status.trim().equals("diajukan", ignoreCase = true)
 
 private data class TargetDetailFormState(
     val id: Int? = null,
@@ -160,6 +167,16 @@ private fun formatPeriodeTarget(bulan: Int, tahun: Int): String {
             set(java.util.Calendar.MONTH, bulan - 1)
             set(java.util.Calendar.DAY_OF_MONTH, 1)
         }.time)
+}
+
+private fun shiftTargetMonth(month: Int, year: Int, delta: Int): Pair<Int, Int> {
+    val calendar = java.util.Calendar.getInstance().apply {
+        set(java.util.Calendar.YEAR, year)
+        set(java.util.Calendar.MONTH, month - 1)
+        add(java.util.Calendar.MONTH, delta)
+    }
+
+    return (calendar.get(java.util.Calendar.MONTH) + 1) to calendar.get(java.util.Calendar.YEAR)
 }
 
 private fun formatNullableDouble(value: Double?): String {
@@ -219,15 +236,18 @@ private fun formatTargetRentangWaktu(waktuMulai: String?, waktuSelesai: String?)
 fun TargetKinerjaListScreen(
     onNavigateBack: () -> Unit,
     onNavigateToDetail: (Int, Boolean) -> Unit,
-    onNavigateToCreate: () -> Unit,
+    onNavigateToCreate: (Int, Int) -> Unit,
     viewModel: TargetKinerjaListViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val now = remember { java.util.Calendar.getInstance() }
+    var selectedMonth by remember { mutableStateOf(now.get(java.util.Calendar.MONTH) + 1) }
+    var selectedYear by remember { mutableStateOf(now.get(java.util.Calendar.YEAR)) }
     var listMode by remember { mutableStateOf(TargetListMode.MINE) }
     var statusFilter by remember { mutableStateOf(TargetStatusFilter.ALL) }
 
-    LaunchedEffect(Unit) {
-        viewModel.refresh()
+    LaunchedEffect(selectedMonth, selectedYear) {
+        viewModel.refresh(tahun = selectedYear, bulan = selectedMonth)
     }
 
     val mineTargets = remember(uiState.targets, uiState.currentPegawaiId) {
@@ -235,6 +255,9 @@ fun TargetKinerjaListScreen(
     }
     val subordinateTargets = remember(uiState.targets, uiState.currentPegawaiId) {
         uiState.targets.filter { it.pegawaiId != uiState.currentPegawaiId }
+    }
+    val submittedSubordinateCount = remember(subordinateTargets) {
+        subordinateTargets.count { it.isSubmittedForReview() }
     }
 
     val activeSource = if (listMode == TargetListMode.MINE) mineTargets else subordinateTargets
@@ -249,7 +272,7 @@ fun TargetKinerjaListScreen(
                 compact = true,
                 onBack = onNavigateBack,
                 actions = {
-                    IconButton(onClick = { viewModel.refresh() }) {
+                    IconButton(onClick = { viewModel.refresh(tahun = selectedYear, bulan = selectedMonth) }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
                 }
@@ -258,7 +281,7 @@ fun TargetKinerjaListScreen(
         floatingActionButton = {
             if (listMode == TargetListMode.MINE) {
                 FloatingActionButton(
-                    onClick = onNavigateToCreate,
+                    onClick = { onNavigateToCreate(selectedYear, selectedMonth) },
                     containerColor = PrimaryLight,
                     contentColor = Color.White
                 ) {
@@ -282,7 +305,7 @@ fun TargetKinerjaListScreen(
             ) {
                 Column(
                     modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
                         text = "Kelola target bulanan dan pantau status persetujuannya.",
@@ -297,10 +320,47 @@ fun TargetKinerjaListScreen(
                                 onClick = { listMode = TargetListMode.MINE },
                                 label = { Text("Target Saya") }
                             )
-                            FilterChip(
+                            ReviewBawahanFilterChip(
                                 selected = listMode == TargetListMode.SUBORDINATE,
                                 onClick = { listMode = TargetListMode.SUBORDINATE },
-                                label = { Text("Review Bawahan") }
+                                count = submittedSubordinateCount
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = {
+                                val (month, year) = shiftTargetMonth(selectedMonth, selectedYear, -1)
+                                selectedMonth = month
+                                selectedYear = year
+                            }
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                                contentDescription = "Periode sebelumnya"
+                            )
+                        }
+
+                        Text(
+                            text = formatPeriodeTarget(selectedMonth, selectedYear),
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+
+                        IconButton(
+                            onClick = {
+                                val (month, year) = shiftTargetMonth(selectedMonth, selectedYear, 1)
+                                selectedMonth = month
+                                selectedYear = year
+                            }
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = "Periode berikutnya"
                             )
                         }
                     }
@@ -338,7 +398,7 @@ fun TargetKinerjaListScreen(
                         title = "Gagal memuat target",
                         message = uiState.errorMessage ?: "Terjadi kesalahan",
                         actionText = "Coba Lagi",
-                        onAction = { viewModel.refresh() }
+                        onAction = { viewModel.refresh(tahun = selectedYear, bulan = selectedMonth) }
                     )
                 }
 
@@ -352,7 +412,7 @@ fun TargetKinerjaListScreen(
                         },
                         actionText = if (listMode == TargetListMode.MINE) "Buat Target" else null,
                         onAction = if (listMode == TargetListMode.MINE) {
-                            onNavigateToCreate
+                            { onNavigateToCreate(selectedYear, selectedMonth) }
                         } else {
                             null
                         }
@@ -378,6 +438,43 @@ fun TargetKinerjaListScreen(
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReviewBawahanFilterChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    count: Int
+) {
+    Box(contentAlignment = Alignment.TopEnd) {
+        FilterChip(
+            selected = selected,
+            onClick = onClick,
+            label = { Text("Review Bawahan") }
+        )
+        ReviewBawahanBadge(count = count)
+    }
+}
+
+@Composable
+private fun ReviewBawahanBadge(count: Int) {
+    if (count <= 0) return
+
+    Badge(
+        modifier = Modifier.offset(x = 6.dp, y = (-6).dp),
+        containerColor = StatusRejected,
+        contentColor = Color.White
+    ) {
+        Text(
+            text = if (count > 99) "99+" else count.toString(),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.sp
+            ),
+            maxLines = 1
+        )
     }
 }
 
