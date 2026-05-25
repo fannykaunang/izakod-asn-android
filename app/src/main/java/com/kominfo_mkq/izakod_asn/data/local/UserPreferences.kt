@@ -37,6 +37,7 @@ class UserPreferences(context: Context) {
         private const val KEY_ENTAGO_REFRESH_TOKEN = "entago_refresh_token"
         private const val KEY_MOBILE_FCM_TOKEN = "mobile_fcm_token"
         private const val KEY_NOTIF_PERMISSION_ASKED = "notif_permission_asked"
+        private const val KEY_DASHBOARD_COACHMARK_DISMISSED_PREFIX = "dashboard_coachmark_dismissed_"
     }
 
     fun isDarkTheme(): Boolean =
@@ -60,6 +61,16 @@ class UserPreferences(context: Context) {
     fun setAskedNotificationPermission(asked: Boolean) {
         prefs.edit { putBoolean(KEY_NOTIF_PERMISSION_ASKED, asked) }
     }
+
+    fun isDashboardCoachmarkDismissed(key: String): Boolean =
+        prefs.getBoolean(KEY_DASHBOARD_COACHMARK_DISMISSED_PREFIX + key, false)
+
+    fun setDashboardCoachmarkDismissed(key: String, dismissed: Boolean = true) {
+        prefs.edit {
+            putBoolean(KEY_DASHBOARD_COACHMARK_DISMISSED_PREFIX + key, dismissed)
+        }
+    }
+
     /**
      * Save user session after successful login
      */

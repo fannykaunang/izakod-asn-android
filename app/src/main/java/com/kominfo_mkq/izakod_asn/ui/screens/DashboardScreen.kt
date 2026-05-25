@@ -3,8 +3,10 @@ package com.kominfo_mkq.izakod_asn.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -24,6 +26,11 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
@@ -71,16 +78,28 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
@@ -111,6 +130,7 @@ import com.kominfo_mkq.izakod_asn.ui.viewmodel.TppSayaViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlin.math.roundToInt
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -191,6 +211,14 @@ private data class TargetPeriodGroup(
     val targets: List<TargetKinerjaItem>
 )
 
+private data class DashboardCoachmarkPrompt(
+    val key: String,
+    val title: String,
+    val message: String,
+    val actionLabel: String,
+    val accentColor: Color
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
@@ -224,12 +252,34 @@ fun DashboardScreen(
 
     val userPreferences = remember { UserPreferences(context) }
     val sessionData = remember { userPreferences.getSessionData() }
+    val activePegawaiId = uiState.currentPegawaiId ?: uiState.pegawaiProfile?.pegawaiId ?: sessionData?.pegawaiId
+    var focusSectionBounds by remember { mutableStateOf<Rect?>(null) }
+    var dismissedCoachmarkKey by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         val pin = sessionData?.pin
         if (!pin.isNullOrEmpty()) {
             viewModel.loadPegawaiProfile(pin)
         }
+    }
+
+    val coachmarkPrompt = if (!uiState.isLoading && !uiState.isError) {
+        buildDashboardCoachmarkPrompt(
+            alerts = uiState.actionAlerts,
+            targetSummary = uiState.targetSummary,
+            assessmentSummary = uiState.assessmentSummary,
+            targetItems = uiState.targetItems,
+            currentPegawaiId = activePegawaiId,
+            targetPeriodYear = uiState.targetPeriodYear,
+            targetPeriodMonth = uiState.targetPeriodMonth,
+            canReviewSubordinates = uiState.assessmentSummary?.canReviewSubordinates == true
+        )
+    } else {
+        null
+    }
+    val visibleCoachmarkPrompt = coachmarkPrompt?.takeIf { prompt ->
+        prompt.key != dismissedCoachmarkKey &&
+            !userPreferences.isDashboardCoachmarkDismissed(prompt.key)
     }
 
     Scaffold(
@@ -276,7 +326,7 @@ fun DashboardScreen(
                         targetItems = uiState.targetItems,
                         tppUiState = tppUiState,
                         tppData = tppUiState.data,
-                        currentPegawaiId = uiState.currentPegawaiId ?: uiState.pegawaiProfile?.pegawaiId,
+                        currentPegawaiId = activePegawaiId,
                         targetPeriodYear = uiState.targetPeriodYear,
                         targetPeriodMonth = uiState.targetPeriodMonth,
                         pegawaiProfile = uiState.pegawaiProfile,
@@ -299,8 +349,21 @@ fun DashboardScreen(
                         onTargetPeriodSelected = viewModel::selectTargetPeriod,
                         onTemplates = onNavigateToTemplates,
                         onReminder = onNavigateToReminder,
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        onFocusBoundsChanged = { focusSectionBounds = it }
                     )
+
+                    val bounds = focusSectionBounds
+                    if (visibleCoachmarkPrompt != null && bounds != null) {
+                        DashboardCoachmarkOverlay(
+                            prompt = visibleCoachmarkPrompt,
+                            focusBounds = bounds,
+                            onDismiss = {
+                                userPreferences.setDashboardCoachmarkDismissed(visibleCoachmarkPrompt.key)
+                                dismissedCoachmarkKey = visibleCoachmarkPrompt.key
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -341,7 +404,8 @@ private fun DashboardContent(
     onTargetPeriodSelected: (Int, Int) -> Unit,
     onTemplates: () -> Unit,
     onReminder: () -> Unit,
-    viewModel: DashboardViewModel
+    viewModel: DashboardViewModel,
+    onFocusBoundsChanged: (Rect?) -> Unit = {}
 ) {
     val tabs = listOf("Utama", "Target", "Penilaian", "TPP")
 
@@ -426,23 +490,42 @@ private fun DashboardContent(
                             )
                         }
                         item {
-                            DashboardFocusSection(
-                                alerts = actionAlerts,
-                                targetSummary = targetSummary,
-                                assessmentSummary = assessmentSummary,
-                                targetItems = targetItems,
-                                currentPegawaiId = currentPegawaiId,
-                                targetPeriodYear = targetPeriodYear,
-                                targetPeriodMonth = targetPeriodMonth,
-                                canReviewSubordinates = canReviewSubordinates,
-                                onOpenReports = onViewReports,
-                                onOpenTarget = onTargetKinerja,
-                                onCreateTarget = onTargetCreate,
-                                onOpenSubordinateTargetPeriod = onSubordinateTargetPeriod,
-                                onOpenPenilaian = onPenilaianKinerja,
-                                onOpenReview = onPenilaianBawahan,
-                                onOpenPenilaianBelumDibuat = onPenilaianBelumDibuat
-                            )
+                            Box(
+                                modifier = Modifier.onGloballyPositioned { coordinates ->
+                                    val size = coordinates.size
+                                    if (size.height > 0 && size.width > 0) {
+                                        val position = coordinates.positionInRoot()
+                                        onFocusBoundsChanged(
+                                            Rect(
+                                                left = position.x,
+                                                top = position.y,
+                                                right = position.x + size.width,
+                                                bottom = position.y + size.height
+                                            )
+                                        )
+                                    } else {
+                                        onFocusBoundsChanged(null)
+                                    }
+                                }
+                            ) {
+                                DashboardFocusSection(
+                                    alerts = actionAlerts,
+                                    targetSummary = targetSummary,
+                                    assessmentSummary = assessmentSummary,
+                                    targetItems = targetItems,
+                                    currentPegawaiId = currentPegawaiId,
+                                    targetPeriodYear = targetPeriodYear,
+                                    targetPeriodMonth = targetPeriodMonth,
+                                    canReviewSubordinates = canReviewSubordinates,
+                                    onOpenReports = onViewReports,
+                                    onOpenTarget = onTargetKinerja,
+                                    onCreateTarget = onTargetCreate,
+                                    onOpenSubordinateTargetPeriod = onSubordinateTargetPeriod,
+                                    onOpenPenilaian = onPenilaianKinerja,
+                                    onOpenReview = onPenilaianBawahan,
+                                    onOpenPenilaianBelumDibuat = onPenilaianBelumDibuat
+                                )
+                            }
                         }
                         item {
                             MinimalQuickActionsSection(
@@ -1393,6 +1476,150 @@ private fun isOwnTargetPeriodLocked(
     }
 }
 
+private fun buildDashboardCoachmarkPrompt(
+    alerts: DashboardActionAlertsData?,
+    targetSummary: DashboardTargetSummaryData?,
+    assessmentSummary: AssessmentSummaryData?,
+    targetItems: List<TargetKinerjaItem>,
+    currentPegawaiId: Int?,
+    targetPeriodYear: Int?,
+    targetPeriodMonth: Int?,
+    canReviewSubordinates: Boolean
+): DashboardCoachmarkPrompt? {
+    val periodLabel = targetSummary?.activePeriodLabel
+        ?.takeIf { it.isNotBlank() }
+        ?: assessmentSummary?.activePeriodLabel?.takeIf { it.isNotBlank() }
+        ?: if (targetPeriodYear != null && targetPeriodMonth != null) {
+            monthYearLabel(targetPeriodYear, targetPeriodMonth)
+        } else {
+            "periode aktif"
+        }
+    val contextPrefix = listOf(
+        "pegawai-${currentPegawaiId ?: "unknown"}",
+        "periode-${periodLabel.toCoachmarkKeyPart()}"
+    ).joinToString("|")
+    val pendingTargetReview = pendingSubordinateTargetReview(
+        targetItems = targetItems,
+        currentPegawaiId = currentPegawaiId,
+        targetPeriodYear = targetPeriodYear,
+        targetPeriodMonth = targetPeriodMonth,
+        canReviewSubordinates = canReviewSubordinates
+    )
+
+    if (pendingTargetReview != null) {
+        return DashboardCoachmarkPrompt(
+            key = "$contextPrefix|review-target-bawahan",
+            title = "Review Target Bawahan",
+            message = "Ada ${pendingTargetReview.count} target bawahan periode ${pendingTargetReview.periodLabel} yang menunggu keputusan.",
+            actionLabel = "Mengerti",
+            accentColor = StatusRejected
+        )
+    }
+
+    val isTargetPeriodLocked = isOwnTargetPeriodLocked(
+        assessmentSummary = assessmentSummary,
+        targetItems = targetItems,
+        currentPegawaiId = currentPegawaiId,
+        targetPeriodYear = targetPeriodYear,
+        targetPeriodMonth = targetPeriodMonth
+    )
+    val hasAction = hasDashboardActionToShow(
+        alerts = alerts,
+        targetSummary = targetSummary,
+        assessmentSummary = assessmentSummary,
+        canReviewSubordinates = canReviewSubordinates,
+        isTargetPeriodLocked = isTargetPeriodLocked
+    )
+
+    if (hasAction) {
+        val targetNeedAttention = alerts?.targetNeedAttentionCount ?: 0
+        val realisasiNeedAttention = alerts?.realisasiNeedAttentionCount ?: 0
+        val subordinateReview = alerts?.subordinateReviewCount ?: 0
+        val missingAssessment = alerts?.missingAssessmentCount ?: 0
+        val hasOwnAssessmentAction = assessmentSummary.hasOwnAssessmentAction(alerts)
+        val targetStatus = targetSummary?.status
+            .orEmpty()
+            .trim()
+            .replace('_', ' ')
+            .lowercase(Locale.getDefault())
+        val hasTargetStatusAttention = targetSummary.hasTargetStatusAttention(
+            isTargetPeriodLocked = isTargetPeriodLocked
+        )
+
+        return when {
+            hasTargetStatusAttention && targetStatus == "revisi" -> DashboardCoachmarkPrompt(
+                key = "$contextPrefix|target-revisi",
+                title = "Target Perlu Revisi",
+                message = "Perbaiki target $periodLabel sesuai catatan review agar bisa diproses kembali.",
+                actionLabel = "Mengerti",
+                accentColor = StatusRejected
+            )
+            hasTargetStatusAttention -> DashboardCoachmarkPrompt(
+                key = "$contextPrefix|target-draft",
+                title = "Target Masih Draft",
+                message = "Ajukan target $periodLabel agar bisa diproses atasan.",
+                actionLabel = "Mengerti",
+                accentColor = StatusRejected
+            )
+            hasOwnAssessmentAction -> DashboardCoachmarkPrompt(
+                key = "$contextPrefix|penilaian-saya",
+                title = "Penilaian Belum Final",
+                message = "Lengkapi atau finalkan penilaian $periodLabel agar status periode ini selesai.",
+                actionLabel = "Mengerti",
+                accentColor = StatusRejected
+            )
+            canReviewSubordinates && missingAssessment > 0 -> DashboardCoachmarkPrompt(
+                key = "$contextPrefix|penilaian-belum-dibuat",
+                title = "Penilaian Bawahan Belum Dibuat",
+                message = "Ada target bawahan yang sudah siap dinilai, tetapi draft penilaiannya belum dibuat.",
+                actionLabel = "Mengerti",
+                accentColor = StatusRejected
+            )
+            canReviewSubordinates && subordinateReview > 0 -> DashboardCoachmarkPrompt(
+                key = "$contextPrefix|review-penilaian-bawahan",
+                title = "Review Penilaian Bawahan",
+                message = "Ada penilaian bawahan yang belum final dan perlu ditinjau.",
+                actionLabel = "Mengerti",
+                accentColor = StatusRejected
+            )
+            realisasiNeedAttention > 0 -> DashboardCoachmarkPrompt(
+                key = "$contextPrefix|realisasi-belum-lengkap",
+                title = "Realisasi Belum Lengkap",
+                message = "Isi realisasi atau tautkan laporan kegiatan untuk target $periodLabel.",
+                actionLabel = "Mengerti",
+                accentColor = StatusRejected
+            )
+            targetNeedAttention > 0 -> DashboardCoachmarkPrompt(
+                key = "$contextPrefix|target-perlu-perhatian",
+                title = "Target Perlu Perhatian",
+                message = "Buka target $periodLabel untuk melanjutkan proses periode ini.",
+                actionLabel = "Mengerti",
+                accentColor = StatusRejected
+            )
+            else -> null
+        }
+    }
+
+    if (shouldShowStartTargetGuidance(targetSummary, assessmentSummary)) {
+        return DashboardCoachmarkPrompt(
+            key = "$contextPrefix|pegawai-baru",
+            title = "Mulai dari Sini",
+            message = "Buat target kerja untuk $periodLabel terlebih dahulu. Setelah itu laporan dan penilaian periode ini lebih mudah dipantau.",
+            actionLabel = "Mengerti",
+            accentColor = PrimaryLight
+        )
+    }
+
+    return null
+}
+
+private fun String.toCoachmarkKeyPart(): String {
+    return lowercase(Locale.getDefault())
+        .replace(Regex("[^a-z0-9]+"), "-")
+        .trim('-')
+        .ifBlank { "unknown" }
+}
+
 private fun shouldShowStartTargetGuidance(
     targetSummary: DashboardTargetSummaryData?,
     assessmentSummary: AssessmentSummaryData?
@@ -1427,6 +1654,193 @@ private data class PendingSubordinateTargetReview(
     val bulan: Int,
     val periodLabel: String
 )
+
+@Composable
+private fun DashboardCoachmarkOverlay(
+    prompt: DashboardCoachmarkPrompt,
+    focusBounds: Rect,
+    onDismiss: () -> Unit
+) {
+    val density = LocalDensity.current
+    val overlayInteraction = remember { MutableInteractionSource() }
+    var overlayRootOffset by remember { mutableStateOf(Offset.Zero) }
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { coordinates ->
+                overlayRootOffset = coordinates.positionInRoot()
+            }
+    ) {
+        val maxWidthPx = with(density) { maxWidth.toPx() }
+        val maxHeightPx = with(density) { maxHeight.toPx() }
+        val spotlightPaddingPx = with(density) { 8.dp.toPx() }
+        val spotlightCornerPx = with(density) { 26.dp.toPx() }
+        val bubbleReservePx = with(density) { 168.dp.toPx() }
+        val bubbleGapPx = with(density) { 12.dp.toPx() }
+        val bubbleMinTopPx = with(density) { 16.dp.toPx() }
+        val relativeFocusLeft = focusBounds.left - overlayRootOffset.x
+        val relativeFocusTop = focusBounds.top - overlayRootOffset.y
+        val relativeFocusRight = focusBounds.right - overlayRootOffset.x
+        val relativeFocusBottom = focusBounds.bottom - overlayRootOffset.y
+        val focusLeft = (relativeFocusLeft - spotlightPaddingPx).coerceAtLeast(0f)
+        val focusTop = (relativeFocusTop - spotlightPaddingPx).coerceAtLeast(0f)
+        val focusRight = (relativeFocusRight + spotlightPaddingPx).coerceAtMost(maxWidthPx)
+        val focusBottom = (relativeFocusBottom + spotlightPaddingPx).coerceAtMost(maxHeightPx)
+        val preferredBubbleTop = focusBottom + bubbleGapPx
+        val fallbackBubbleTop = focusTop - bubbleReservePx - bubbleGapPx
+        val bubbleTop = if (preferredBubbleTop + bubbleReservePx <= maxHeightPx) {
+            preferredBubbleTop
+        } else {
+            fallbackBubbleTop
+        }.coerceAtLeast(bubbleMinTopPx)
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    compositingStrategy = CompositingStrategy.Offscreen
+                }
+                .drawWithContent {
+                    drawRect(Color.Black.copy(alpha = 0.46f))
+                    drawRoundRect(
+                        color = Color.Transparent,
+                        topLeft = Offset(focusLeft, focusTop),
+                        size = Size(
+                            width = (focusRight - focusLeft).coerceAtLeast(0f),
+                            height = (focusBottom - focusTop).coerceAtLeast(0f)
+                        ),
+                        cornerRadius = CornerRadius(spotlightCornerPx, spotlightCornerPx),
+                        blendMode = BlendMode.Clear
+                    )
+                }
+                .clickable(
+                    interactionSource = overlayInteraction,
+                    indication = null,
+                    onClick = onDismiss
+                )
+        )
+
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .offset { IntOffset(0, bubbleTop.roundToInt()) },
+            shape = RoundedCornerShape(22.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 10.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = prompt.accentColor.copy(alpha = 0.14f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .padding(9.dp)
+                                .size(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AttentionPulseDot(color = prompt.accentColor)
+                        }
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = prompt.title,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 17.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = prompt.message,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(
+                            text = prompt.actionLabel,
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = FontWeight.ExtraBold
+                            ),
+                            color = prompt.accentColor
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttentionPulseDot(
+    modifier: Modifier = Modifier,
+    color: Color = StatusRejected
+) {
+    val transition = rememberInfiniteTransition()
+    val pulseScale by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.8f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200),
+            repeatMode = RepeatMode.Restart
+        )
+    )
+    val pulseAlpha by transition.animateFloat(
+        initialValue = 0.42f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200),
+            repeatMode = RepeatMode.Restart
+        )
+    )
+
+    Box(
+        modifier = modifier.size(20.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(12.dp)
+                .graphicsLayer {
+                    scaleX = pulseScale
+                    scaleY = pulseScale
+                    alpha = pulseAlpha
+                }
+                .clip(CircleShape)
+                .background(color)
+        )
+        Box(
+            modifier = Modifier
+                .size(9.dp)
+                .clip(CircleShape)
+                .background(color)
+        )
+    }
+}
 
 private fun pendingSubordinateTargetReview(
     targetItems: List<TargetKinerjaItem>,
@@ -1511,7 +1925,9 @@ private fun DashboardFocusSection(
         if (showAction) {
             DashboardFocusHeader(
                 title = "Perlu Tindakan",
-                subtitle = "Prioritas yang perlu diproses sekarang."
+                subtitle = "Prioritas yang perlu diproses sekarang.",
+                showPulse = true,
+                pulseColor = StatusRejected
             )
             if (pendingSubordinateTargetReview != null) {
                 SubordinateTargetReviewActionSection(
@@ -1540,7 +1956,9 @@ private fun DashboardFocusSection(
         } else {
             DashboardFocusHeader(
                 title = "Pegawai Baru",
-                subtitle = "Mulai alur kerja periode aktif dari target kerja."
+                subtitle = "Mulai alur kerja periode aktif dari target kerja.",
+                showPulse = true,
+                pulseColor = PrimaryLight
             )
             StarterGuidanceSection(
                 targetSummary = targetSummary,
@@ -1556,30 +1974,41 @@ private fun DashboardFocusSection(
 @Composable
 private fun DashboardFocusHeader(
     title: String,
-    subtitle: String
+    subtitle: String,
+    showPulse: Boolean = false,
+    pulseColor: Color = StatusRejected
 ) {
-    Column(
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall.copy(
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 15.sp
-            ),
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 12.sp
-            ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 15.sp
+                ),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (showPulse) {
+            AttentionPulseDot(color = pulseColor)
+        }
     }
 }
 
@@ -2014,18 +2443,23 @@ private fun QuickActionGridItem(
             }
 
             action.badgeText?.let { badgeText ->
-                Badge(
+                Box(
                     modifier = Modifier.offset(x = 6.dp, y = (-6).dp),
-                    containerColor = StatusRejected,
-                    contentColor = Color.White
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = badgeText,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 9.sp
+                    AttentionPulseDot(color = StatusRejected)
+                    Badge(
+                        containerColor = StatusRejected,
+                        contentColor = Color.White
+                    ) {
+                        Text(
+                            text = badgeText,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 9.sp
+                            )
                         )
-                    )
+                    }
                 }
             }
         }
