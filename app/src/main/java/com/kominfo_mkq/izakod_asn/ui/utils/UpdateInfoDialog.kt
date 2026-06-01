@@ -1,14 +1,11 @@
 package com.kominfo_mkq.izakod_asn.utils
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -18,7 +15,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.HomeWork
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material3.AlertDialog
@@ -39,7 +35,6 @@ import com.kominfo_mkq.izakod_asn.BuildConfig
 @Composable
 fun UpdateInfoDialog(onDismiss: () -> Unit) {
     val scrollState = rememberScrollState()
-    val canScrollDown = scrollState.canScrollForward
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -68,64 +63,33 @@ fun UpdateInfoDialog(onDismiss: () -> Unit) {
             )
         },
         text = {
-            Column {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier
-                        .weight(1f, fill = false)
-                        .verticalScroll(scrollState)
-                ) {
-                    UpdateItem(
-                        Icons.Default.HomeWork,
-                        "Desain UI Lebih Menarik",
-                        "Tampilan desain UI sekarang dibuat lebih menarik dan informatif untuk Pegawai."
-                    )
-                    UpdateItem(
-                        Icons.Default.Devices,
-                        "Integrasi dengan E-NTAGO",
-                        "Integrasi langsung dengan kehadiran pada aplikasi Absensi E-NTAGO."
-                    )
-                    UpdateItem(
-                        Icons.Default.NotificationsActive,
-                        "Notifikasi Lebih Cerdas",
-                        "Pemberitahuan Laporan telah disetujui oleh Atasan kini tampil pada notifikasi perangkat Anda secara langsung."
-                    )
-                    UpdateItem(
-                        Icons.Default.BugReport,
-                        "Perbaikan & Stabilitas Sistem",
-                        "Telah dilakukan perbaikan dan penyesuaian pada."
-                    )
-                }
-
-                // 4. Indikator "Scroll ke bawah" di atas tombol
-                AnimatedVisibility(
-                    visible = canScrollDown,
-                    enter = fadeIn(),
-                    exit = fadeOut()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            // Beri jarak vertikal agar tidak terlalu menempel list atau tombol
-                            .padding(top = 16.dp, bottom = 4.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary, // Warna disesuaikan biar menarik
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Scroll ke bawah",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(scrollState)
+            ) {
+                UpdateItem(
+                    Icons.Default.HomeWork,
+                    "Desain UI Lebih Menarik",
+                    "Tampilan desain UI sekarang dibuat lebih menarik dan informatif untuk Pegawai."
+                )
+                UpdateItem(
+                    Icons.Default.Devices,
+                    "Integrasi dengan E-NTAGO",
+                    "Integrasi langsung dengan kehadiran pada aplikasi Absensi E-NTAGO."
+                )
+                UpdateItem(
+                    Icons.Default.NotificationsActive,
+                    "Notifikasi Lebih Cerdas",
+                    "Pemberitahuan Laporan telah disetujui oleh Atasan kini tampil pada notifikasi perangkat Anda secara langsung."
+                )
+                UpdateItem(
+                    Icons.Default.BugReport,
+                    "Perbaikan & Stabilitas Sistem",
+                    "Telah dilakukan perbaikan dan penyesuaian pada."
+                )
             }
         },
         shape = RoundedCornerShape(28.dp),

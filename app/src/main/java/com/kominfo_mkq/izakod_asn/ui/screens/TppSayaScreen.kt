@@ -485,6 +485,18 @@ private fun TppProfileSummaryCard(data: TppMeData) {
 
 @Composable
 private fun TppNominalSummaryCard(nominal: TppNominal?) {
+    val isLiveEstimate = nominal?.status?.equals("estimasi_berjalan", ignoreCase = true) == true
+    val title = when {
+        nominal == null -> "TPP Belum Dihitung"
+        isLiveEstimate -> "Estimasi TPP Diterima"
+        else -> "TPP Diterima"
+    }
+    val chipColor = when {
+        nominal?.isFinal == true -> StatusApproved
+        isLiveEstimate -> PrimaryLight
+        else -> StatusPending
+    }
+
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         elevation = 1.dp,
@@ -500,7 +512,7 @@ private fun TppNominalSummaryCard(nominal: TppNominal?) {
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = "Perkiraan TPP Diterima",
+                    text = title,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                 )
                 Text(
@@ -522,7 +534,7 @@ private fun TppNominalSummaryCard(nominal: TppNominal?) {
             }
             TppChip(
                 text = nominal?.label ?: "Belum dihitung",
-                color = if (nominal?.isFinal == true) StatusApproved else StatusPending
+                color = chipColor
             )
         }
 

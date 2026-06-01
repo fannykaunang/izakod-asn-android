@@ -49,7 +49,7 @@ data class BottomNavItem(
 fun defaultBottomNavItems(): List<BottomNavItem> = listOf(
     BottomNavItem(
         route = "dashboard",
-        label = "Dashboard",
+        label = "Beranda",
         selectedIcon = Icons.Filled.Dashboard,
         unselectedIcon = Icons.Outlined.Dashboard
     ),

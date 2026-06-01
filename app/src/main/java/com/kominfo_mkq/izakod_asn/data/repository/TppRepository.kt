@@ -11,6 +11,7 @@ import retrofit2.Response
 class TppRepository {
 
     private val apiService = ApiClient.eabsenApiService
+    private val liveEstimateRepository = PayrollLiveEstimateRepository()
 
     suspend fun getTppSaya(
         tahun: Int? = null,
@@ -25,7 +26,10 @@ class TppRepository {
             if (response.isSuccessful) {
                 val body = response.body()
                 if (body != null && body.success) {
-                    ApiResponse(success = true, data = body)
+                    ApiResponse(
+                        success = true,
+                        data = mergeLiveEstimate(body, tahun, bulan)
+                    )
                 } else {
                     ApiResponse(
                         success = false,
@@ -42,6 +46,32 @@ class TppRepository {
             e.printStackTrace()
             ApiResponse(success = false, error = e.message ?: "Network error")
         }
+    }
+
+    private suspend fun mergeLiveEstimate(
+        body: TppMeResponse,
+        tahun: Int?,
+        bulan: Int?
+    ): TppMeResponse {
+        val currentData = body.data ?: return body
+        if (tahun == null || bulan == null) return body
+
+        val estimateResponse = liveEstimateRepository.getTppEstimasiBerjalan(
+            tahun = tahun,
+            bulan = bulan
+        )
+        val liveData = estimateResponse.data?.data
+        val liveNominal = liveData?.nominalTpp ?: return body
+
+        val mergedNominal = liveNominal.copy(
+            label = liveNominal.label ?: liveData.label
+        )
+
+        return body.copy(
+            data = currentData.copy(
+                nominalTpp = mergedNominal
+            )
+        )
     }
 
     private fun parseErrorMessage(

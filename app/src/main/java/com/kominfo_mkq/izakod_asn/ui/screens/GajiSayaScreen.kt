@@ -324,7 +324,7 @@ private fun GajiDashboardHeader() {
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
         )
         Text(
-            text = "Gaji Non-ASN berdasarkan rekap resmi OPD",
+            text = "Gaji Non-ASN berdasarkan rekap resmi atau estimasi berjalan",
             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
@@ -377,6 +377,9 @@ private fun GajiNominalSummaryCard(
     calculation: GajiNonAsnPerhitungan?,
     onOpenDetail: () -> Unit
 ) {
+    val isLiveEstimate = calculation?.status?.equals("estimasi_berjalan", ignoreCase = true) == true
+    val statusLabel = gajiStatusLabel(calculation?.status)
+
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         elevation = 1.dp,
@@ -392,7 +395,7 @@ private fun GajiNominalSummaryCard(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = "Gaji Diterima",
+                    text = if (isLiveEstimate) "Estimasi Gaji Diterima" else "Gaji Diterima",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                 )
                 Text(
@@ -413,7 +416,7 @@ private fun GajiNominalSummaryCard(
                 )
             }
             GajiChip(
-                text = calculation?.status?.uppercase(Locale.ROOT) ?: "BELUM",
+                text = statusLabel.uppercase(Locale.ROOT),
                 color = gajiStatusColor(calculation?.status)
             )
         }
@@ -442,7 +445,7 @@ private fun GajiNominalDetailCard(calculation: GajiNonAsnPerhitungan?) {
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
         )
         Text(
-            text = calculation?.status ?: "Belum dihitung",
+            text = gajiStatusLabel(calculation?.status),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -454,7 +457,7 @@ private fun GajiNominalDetailCard(calculation: GajiNonAsnPerhitungan?) {
         GajiDetailRow("Potongan lainnya", calculation?.potonganLainnya.formatGajiCurrency())
         GajiDetailRow("Total potongan", calculation?.totalPotongan.formatGajiCurrency())
         GajiDetailRow("Total dibayar", calculation?.totalDibayar.formatGajiCurrency())
-        GajiDetailRow("Status", calculation?.status ?: "-")
+        GajiDetailRow("Status", gajiStatusLabel(calculation?.status))
         GajiDetailRow("Dihitung", formatGajiDateTime(calculation?.calculatedAt))
     }
 }
@@ -761,10 +764,25 @@ private fun gajiStatusColor(status: String?): Color {
     val value = status?.lowercase(Locale.ROOT).orEmpty()
     return when (value) {
         "final", "final_opd", "dibayar", "arsip" -> StatusApproved
-        "dihitung", "draft" -> PrimaryLight
+        "dihitung", "draft", "estimasi_berjalan" -> PrimaryLight
         "revisi", "dikembalikan" -> StatusPending
         "ditolak", "batal" -> StatusRejected
         else -> StatusPending
+    }
+}
+
+private fun gajiStatusLabel(status: String?): String {
+    return when (status?.lowercase(Locale.ROOT)) {
+        "estimasi_berjalan" -> "Estimasi"
+        "dihitung" -> "Dihitung"
+        "final", "final_opd" -> "Final"
+        "dibayar" -> "Dibayar"
+        "arsip" -> "Arsip"
+        "draft" -> "Draft"
+        "revisi", "dikembalikan" -> "Revisi"
+        "ditolak" -> "Ditolak"
+        "batal" -> "Batal"
+        else -> "Belum"
     }
 }
 

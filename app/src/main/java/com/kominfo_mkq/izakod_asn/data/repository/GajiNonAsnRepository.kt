@@ -11,6 +11,7 @@ import retrofit2.Response
 class GajiNonAsnRepository {
 
     private val apiService = ApiClient.eabsenApiService
+    private val liveEstimateRepository = PayrollLiveEstimateRepository()
 
     suspend fun getGajiSaya(
         tahun: Int? = null,
@@ -25,7 +26,10 @@ class GajiNonAsnRepository {
             if (response.isSuccessful) {
                 val body = response.body()
                 if (body != null && body.success) {
-                    ApiResponse(success = true, data = body)
+                    ApiResponse(
+                        success = true,
+                        data = mergeLiveEstimate(body, tahun, bulan)
+                    )
                 } else {
                     ApiResponse(
                         success = false,
@@ -42,6 +46,27 @@ class GajiNonAsnRepository {
             e.printStackTrace()
             ApiResponse(success = false, error = e.message ?: "Network error")
         }
+    }
+
+    private suspend fun mergeLiveEstimate(
+        body: GajiNonAsnMeResponse,
+        tahun: Int?,
+        bulan: Int?
+    ): GajiNonAsnMeResponse {
+        val currentData = body.data ?: return body
+        if (tahun == null || bulan == null) return body
+
+        val estimateResponse = liveEstimateRepository.getGajiEstimasiBerjalan(
+            tahun = tahun,
+            bulan = bulan
+        )
+        val liveCalculation = estimateResponse.data?.data?.nominalGaji ?: return body
+
+        return body.copy(
+            data = currentData.copy(
+                perhitungan = liveCalculation
+            )
+        )
     }
 
     private fun parseErrorMessage(

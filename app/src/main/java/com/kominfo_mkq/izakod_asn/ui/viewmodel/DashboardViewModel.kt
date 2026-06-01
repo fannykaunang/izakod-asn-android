@@ -25,6 +25,7 @@ import java.util.Calendar
  */
 data class DashboardUiState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val isError: Boolean = false,
     val errorMessage: String? = null,
     val metrics: MetricsData? = null,
@@ -141,8 +142,8 @@ class DashboardViewModel : ViewModel() {
      * ✅ PUBLIC refresh function
      * Call this when returning to Dashboard to reload data
      */
-    fun refresh(context: Context? = null) {
-        loadStatistik()
+    fun refresh(context: Context? = null, showFullLoading: Boolean = true) {
+        loadStatistik(showFullLoading = showFullLoading)
         loadNotificationCount()
         loadAssessmentSummary(
             tahun = selectedTargetYear,
@@ -164,18 +165,31 @@ class DashboardViewModel : ViewModel() {
         skpdid: Int? = null,
         pegawaiId: Int? = null,
         bulan: Int? = null,
-        tahun: Int? = null
+        tahun: Int? = null,
+        showFullLoading: Boolean = true
     ) {
         viewModelScope.launch {
             try {
-                _uiState.update { it.copy(isLoading = true) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = showFullLoading,
+                        isRefreshing = !showFullLoading,
+                        isError = false,
+                        errorMessage = null
+                    )
+                }
 
                 val finalPegawaiId = pegawaiId ?: StatistikRepository.getPegawaiId()
 
                 if (finalPegawaiId == null) {
                     // GUNAKAN .update agar tidak meriset seluruh objek
                     _uiState.update {
-                        it.copy(isLoading = false, isError = true, errorMessage = "Session expired")
+                        it.copy(
+                            isLoading = false,
+                            isRefreshing = false,
+                            isError = true,
+                            errorMessage = "Session expired"
+                        )
                     }
                     return@launch
                 }
@@ -196,6 +210,7 @@ class DashboardViewModel : ViewModel() {
                     _uiState.update {
                         it.copy(
                             isLoading = false,
+                            isRefreshing = false,
                             isError = false,
                             metrics = response.data.data.metrics,
                             timeSeries = response.data.data.timeSeries,
@@ -204,12 +219,22 @@ class DashboardViewModel : ViewModel() {
                     }
                 } else {
                     _uiState.update {
-                        it.copy(isLoading = false, isError = true, errorMessage = response.error ?: "Gagal memuat data")
+                        it.copy(
+                            isLoading = false,
+                            isRefreshing = false,
+                            isError = true,
+                            errorMessage = response.error ?: "Gagal memuat data"
+                        )
                     }
                 }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isLoading = false, isError = true, errorMessage = e.message ?: "Error")
+                    it.copy(
+                        isLoading = false,
+                        isRefreshing = false,
+                        isError = true,
+                        errorMessage = e.message ?: "Error"
+                    )
                 }
             }
         }

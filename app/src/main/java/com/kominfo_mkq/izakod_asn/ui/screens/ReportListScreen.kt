@@ -98,6 +98,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kominfo_mkq.izakod_asn.data.model.LaporanKegiatan
+import com.kominfo_mkq.izakod_asn.data.model.isNonAsnJabatan
 import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
 import com.kominfo_mkq.izakod_asn.ui.components.StatusBadge
 import com.kominfo_mkq.izakod_asn.ui.components.StatusType
@@ -1631,17 +1632,24 @@ private fun generateLaporanPdfTppTemplate(
     pager.startPage()
     var canvas = pager.canvas!!
 
-    // --- DRAW FULL HEADER (Logo & ASN Data) ---
+    // --- DRAW FULL HEADER (Logo & Employee Data) ---
+    val isNonAsn = asn.jabatan.isNonAsnJabatan()
+    val reportTitle = if (isNonAsn) {
+        "FORMULIR LAPORAN AKTIVITAS KERJA"
+    } else {
+        "FORMULIR LAPORAN AKTIVITAS KERJA TPP"
+    }
+    val employeeColumnTitle = if (isNonAsn) "Pegawai Non-ASN" else "ASN"
     var y = margin + 12f
     canvas.drawText("TAHUN ANGGARAN $tahun", margin, y, paintBold)
     canvas.drawText(skpdTitle, margin, y + 14f, paintBold)
     canvas.drawText("KABUPATEN MERAUKE", margin, y + 28f, paintBold)
-    val centerX = (pageWidth / 2f) - (measure(paintBold, "FORMULIR LAPORAN AKTIVITAS KERJA TPP") / 2f)
-    canvas.drawText("FORMULIR LAPORAN AKTIVITAS KERJA TPP", centerX, y, paintBold)
+    val centerX = (pageWidth / 2f) - (measure(paintBold, reportTitle) / 2f)
+    canvas.drawText(reportTitle, centerX, y, paintBold)
 
     y += 46f
     val bLX = margin + 300f; val bRX = margin + 560f
-    canvas.drawText("ASN", bLX, y, paintBold); canvas.drawText("Atasan Langsung", bRX, y, paintBold)
+    canvas.drawText(employeeColumnTitle, bLX, y, paintBold); canvas.drawText("Atasan Langsung", bRX, y, paintBold)
     y += 14f
     fun dKV(x: Float, y0: Float, k: String, v: String) = canvas.drawText("$k : $v", x, y0, paintText).run { y0 + 12f }
     val yL = dKV(bLX, dKV(bLX, dKV(bLX, y, "Nama", asn.nama), "NIP", asn.nip), "Jabatan", asn.jabatan)

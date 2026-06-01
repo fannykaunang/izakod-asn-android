@@ -49,6 +49,10 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.CircularProgressIndicator
@@ -223,7 +227,7 @@ private data class DashboardCoachmarkPrompt(
     val accentColor: Color
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
 fun DashboardScreen(
     onNavigateToReports: () -> Unit,
@@ -251,7 +255,31 @@ fun DashboardScreen(
     val tppUiState by tppViewModel.uiState.collectAsState()
     val gajiUiState by gajiViewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val userPreferences = remember { UserPreferences(context) }
+    val sessionData = remember { userPreferences.getSessionData() }
     val isNonAsnPayroll = uiState.pegawaiProfile.isNonAsnPegawai()
+    val isPayrollRefreshing = if (isNonAsnPayroll) {
+        gajiUiState.isRefreshing
+    } else {
+        tppUiState.isRefreshing
+    }
+    val isDashboardRefreshing = uiState.isRefreshing || isPayrollRefreshing
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = isDashboardRefreshing,
+        onRefresh = {
+            viewModel.refresh(context, showFullLoading = false)
+            sessionData?.pin?.takeIf { it.isNotEmpty() }?.let { pin ->
+                viewModel.loadPegawaiProfile(pin)
+            }
+            if (uiState.pegawaiProfile != null) {
+                if (isNonAsnPayroll) {
+                    gajiViewModel.refresh()
+                } else {
+                    tppViewModel.refresh()
+                }
+            }
+        }
+    )
 
     LaunchedEffect(Unit) {
         viewModel.refresh(context)
@@ -267,8 +295,6 @@ fun DashboardScreen(
         }
     }
 
-    val userPreferences = remember { UserPreferences(context) }
-    val sessionData = remember { userPreferences.getSessionData() }
     val activePegawaiId = uiState.currentPegawaiId ?: uiState.pegawaiProfile?.pegawaiId ?: sessionData?.pegawaiId
     var focusSectionBounds by remember { mutableStateOf<Rect?>(null) }
     var dismissedCoachmarkKey by remember { mutableStateOf<String?>(null) }
@@ -323,6 +349,7 @@ fun DashboardScreen(
                     )
                 )
                 .padding(paddingValues)
+                .pullRefresh(pullRefreshState)
         ) {
             when {
                 uiState.isLoading -> LoadingContent()
@@ -390,6 +417,12 @@ fun DashboardScreen(
                     }
                 }
             }
+
+            PullRefreshIndicator(
+                refreshing = isDashboardRefreshing,
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }
@@ -2558,22 +2591,27 @@ private fun MinimalSummarySection(
         ?: gajiPeriod
         ?: assessmentSummary?.activePeriodLabel?.takeIf { it.isNotBlank() }
         ?: "Bulan ini"
+    val tppStatusKey = nominalTpp?.status?.lowercase(Locale.ROOT).orEmpty()
+    val tppIsLiveEstimate = tppStatusKey == "estimasi_berjalan" ||
+        nominalTpp?.label?.contains("estimasi", ignoreCase = true) == true
     val tppFinalityLabel = when {
         nominalTpp == null -> "Belum dihitung"
+        tppIsLiveEstimate -> "Estimasi berjalan"
         nominalTpp.isFinal -> nominalTpp.label?.takeIf { it.isNotBlank() } ?: "Final"
         else -> "Belum final"
     }
     val tppBadge = when {
         nominalTpp == null -> "BELUM"
+        tppIsLiveEstimate -> "ESTIMASI"
         nominalTpp.isFinal -> "FINAL"
         else -> "DRAFT"
     }
-    val tppStatusKey = nominalTpp?.status?.lowercase(Locale.ROOT).orEmpty()
     val tppToneColor = when {
         nominalTpp == null -> MaterialTheme.colorScheme.outline
         nominalTpp.isFinal || tppStatusKey in setOf("final", "final_opd", "dibayar", "arsip") -> StatusApproved
         tppStatusKey in setOf("revisi", "dikembalikan") -> StatusRevised
         tppStatusKey in setOf("ditolak", "batal") -> StatusRejected
+        tppIsLiveEstimate -> PrimaryLight
         else -> StatusPending
     }
     val tppSubtitle = if (!tppPeriod.isNullOrBlank()) {
@@ -2583,19 +2621,23 @@ private fun MinimalSummarySection(
     }
     val gajiStatusKey = gajiCalculation?.status?.lowercase(Locale.ROOT).orEmpty()
     val gajiIsFinal = gajiStatusKey in setOf("final", "final_opd", "dibayar", "arsip")
+    val gajiIsLiveEstimate = gajiStatusKey == "estimasi_berjalan"
     val gajiFinalityLabel = when {
         gajiCalculation == null -> "Belum dihitung"
+        gajiIsLiveEstimate -> "Estimasi berjalan"
         gajiIsFinal -> "Final"
         else -> "Belum final"
     }
     val gajiBadge = when {
         gajiCalculation == null -> "BELUM"
+        gajiIsLiveEstimate -> "ESTIMASI"
         gajiIsFinal -> "FINAL"
         else -> "DIHITUNG"
     }
     val gajiToneColor = when {
         gajiCalculation == null -> MaterialTheme.colorScheme.outline
         gajiIsFinal -> StatusApproved
+        gajiIsLiveEstimate -> PrimaryLight
         gajiStatusKey in setOf("revisi", "dikembalikan") -> StatusRevised
         gajiStatusKey in setOf("ditolak", "batal") -> StatusRejected
         else -> StatusApproved

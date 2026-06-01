@@ -1,9 +1,16 @@
 package com.kominfo_mkq.izakod_asn.ui.screens
 
+import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.provider.Settings as AndroidSettings
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -69,7 +76,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.kominfo_mkq.izakod_asn.BuildConfig
@@ -77,6 +89,7 @@ import com.kominfo_mkq.izakod_asn.R
 import com.kominfo_mkq.izakod_asn.data.local.TokenStore
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
+import com.kominfo_mkq.izakod_asn.data.model.isNonAsnPegawai
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
 import com.kominfo_mkq.izakod_asn.ui.components.GradientCard
 import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
@@ -128,6 +141,7 @@ fun ProfileScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val scrollState = rememberScrollState()
 
     // prefs
@@ -136,6 +150,11 @@ fun ProfileScreen(
 
     // dialog state (HANYA di Profile)
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var accountNotificationsEnabled by remember { mutableStateOf(true) }
+
+    fun syncAccountNotificationState() {
+        accountNotificationsEnabled = areAppNotificationsEnabled(context)
+    }
 
     // load profile hanya sekali (tidak reload saat balik tab)
     LaunchedEffect(pin) {
@@ -143,6 +162,22 @@ fun ProfileScreen(
             viewModel.loadProfile(pin) // jangan reset dulu
         } else {
             viewModel.clearProfile()   // jika benar2 logout / pin kosong
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        syncAccountNotificationState()
+    }
+
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                syncAccountNotificationState()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -207,12 +242,19 @@ fun ProfileScreen(
                             nama = profile.pegawaiNama.displayOrDash(),
                             nip = profile.pegawaiNip.displayOrDash(),
                             jabatan = profile.jabatan.displayOrDash(),
+                            payrollLabel = profile.payrollAccessLabel(),
+                            dataStatusLabel = profile.dataStatusLabel(),
                             isDarkTheme = isDarkTheme
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        AccountSectionLabel("Akun Saya")
+                        if (!accountNotificationsEnabled) {
+                            AccountNoticeSection(onOpenSettings = onNavigateToSettings)
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+
+                        AccountSectionLabel("Ringkasan Akun")
                         ProfileOverviewSection(profile)
 
                         Spacer(modifier = Modifier.height(14.dp))
@@ -222,16 +264,8 @@ fun ProfileScreen(
 
                         Spacer(modifier = Modifier.height(14.dp))
                         
-                        AccountSectionLabel("Sesi")
-                        SimpleActionSection(
-                            items = listOf(
-                                SettingSimpleAction(
-                                    title = "Logout",
-                                    subtitle = "Keluar dari aplikasi IZAKOD-ASN",
-                                    tint = MaterialTheme.colorScheme.error
-                                ) { showLogoutDialog = true }
-                            )
-                        )
+                        AccountSectionLabel("Sesi Akun")
+                        AccountLogoutSection(onLogout = { showLogoutDialog = true })
 
                         Spacer(modifier = Modifier.height(24.dp))
                     }
@@ -289,7 +323,43 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val userPrefs = remember(context) { UserPreferences(context) }
     var showUpdateInfoDialog by remember { mutableStateOf(false) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        userPrefs.setAskedNotificationPermission(true)
+        val enabled = areAppNotificationsEnabled(context)
+        viewModel.setNotifications(enabled)
+        if (!granted || !enabled) {
+            Toast.makeText(
+                context,
+                "Notifikasi perangkat belum aktif. Aktifkan melalui pengaturan aplikasi bila diperlukan.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    fun syncNotificationToggle() {
+        viewModel.setNotifications(areAppNotificationsEnabled(context))
+    }
+
+    LaunchedEffect(Unit) {
+        syncNotificationToggle()
+    }
+
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                syncNotificationToggle()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -322,9 +392,31 @@ fun SettingsScreen(
                     SettingSwitchItem(
                         icon = Icons.Outlined.Notifications,
                         title = "Pengaturan Notifikasi",
-                        subtitle = "Kelola notifikasi aplikasi",
+                        subtitle = notificationSettingsSubtitle(uiState.notificationsEnabled),
                         checked = uiState.notificationsEnabled,
-                        onCheckedChange = { viewModel.setNotifications(it) }
+                        onCheckedChange = { enabled ->
+                            if (enabled) {
+                                when {
+                                    areAppNotificationsEnabled(context) -> {
+                                        userPrefs.setAskedNotificationPermission(true)
+                                        viewModel.setNotifications(true)
+                                    }
+                                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
+                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    }
+                                    else -> {
+                                        openNotificationSettings(context)
+                                    }
+                                }
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    "Untuk menonaktifkan notifikasi, ubah izin di pengaturan Android.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                openNotificationSettings(context)
+                            }
+                        }
                     )
                 )
             )
@@ -506,6 +598,8 @@ private fun AccountProfileHero(
     nama: String,
     nip: String,
     jabatan: String,
+    payrollLabel: String,
+    dataStatusLabel: String,
     isDarkTheme: Boolean
 ) {
     GradientCard(
@@ -520,12 +614,12 @@ private fun AccountProfileHero(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp)
+                .padding(16.dp)
         ) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .size(110.dp)
+                    .size(88.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.08f))
             )
@@ -533,32 +627,19 @@ private fun AccountProfileHero(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .size(72.dp)
+                    .size(50.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.06f))
             )
 
-            Column(
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Surface(
-                    modifier = Modifier
-                        .padding(bottom = 14.dp),
-                    shape = RoundedCornerShape(50),
-                    color = Color.White.copy(alpha = 0.16f)
-                ) {
-                    Text(
-                        text = "Profil Pegawai",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                    )
-                }
-
                 Box(
                     modifier = Modifier
-                        .size(132.dp)
+                        .size(82.dp)
                         .clip(CircleShape)
                         .background(Color.White.copy(alpha = 0.18f)),
                     contentAlignment = Alignment.Center
@@ -573,7 +654,7 @@ private fun AccountProfileHero(
                                 .build(),
                             contentDescription = "Profile Photo",
                             modifier = Modifier
-                                .size(120.dp)
+                                .size(74.dp)
                                 .clip(CircleShape)
                                 .background(Color.White),
                             contentScale = ContentScale.Crop
@@ -581,7 +662,7 @@ private fun AccountProfileHero(
                     } else {
                         Box(
                             modifier = Modifier
-                                .size(120.dp)
+                                .size(74.dp)
                                 .clip(CircleShape)
                                 .background(Color.White),
                             contentAlignment = Alignment.Center
@@ -589,44 +670,42 @@ private fun AccountProfileHero(
                             Icon(
                                 Icons.Default.Person,
                                 contentDescription = null,
-                                modifier = Modifier.size(60.dp),
+                                modifier = Modifier.size(40.dp),
                                 tint = PrimaryLight.copy(alpha = 0.5f)
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
-
-                Text(
-                    text = nama,
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
-                    color = Color.White,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Text(
-                    text = "NIP: $nip",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.82f),
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = Color.White.copy(alpha = 0.18f)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = jabatan,
-                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                        text = "Profil Pegawai",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = Color.White.copy(alpha = 0.82f)
                     )
+                    Text(
+                        text = nama,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                        color = Color.White,
+                        textAlign = TextAlign.Start
+                    )
+                    Text(
+                        text = jabatan,
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                        color = Color.White.copy(alpha = 0.86f)
+                    )
+                    Text(
+                        text = "NIP/NIK $nip",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.72f)
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        AccountHeroPill(text = payrollLabel)
+                        AccountHeroPill(text = dataStatusLabel)
+                    }
                 }
             }
         }
@@ -634,37 +713,105 @@ private fun AccountProfileHero(
 }
 
 @Composable
+private fun AccountHeroPill(text: String) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = Color.White.copy(alpha = 0.18f)
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = Color.White,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+        )
+    }
+}
+
+@Composable
 private fun AccountSectionLabel(text: String) {
     Text(
         text = text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
     )
 }
 
 @Composable
+private fun AccountNoticeSection(onOpenSettings: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clickable(onClick = onOpenSettings),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.error.copy(alpha = 0.08f),
+        tonalElevation = 0.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.14f)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .padding(10.dp)
+                        .size(20.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Notifikasi perangkat belum aktif",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Ketuk untuk mengaktifkan agar pemberitahuan penting tetap muncul.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}
+
+@Composable
 private fun ProfileOverviewSection(profile: PegawaiProfile) {
-    SettingsActionSection(
-        items = listOf(
-            SettingActionItem(
+    AccountSoftSheet(
+        rows = listOf(
+            AccountInfoItem(
                 icon = Icons.Default.Person,
-                title = "Nama Lengkap",
-                subtitle = profile.pegawaiNama.displayOrDash(),
-                showChevron = false
-            ) {},
-            SettingActionItem(
+                label = "NIP / NIK",
+                value = profile.pegawaiNip.displayOrDash()
+            ),
+            AccountInfoItem(
                 icon = Icons.Default.Work,
-                title = "Jabatan",
-                subtitle = profile.jabatan.displayOrDash(),
-                showChevron = false
-            ) {},
-            SettingActionItem(
-                icon = Icons.Default.Phone,
-                title = "No. Telepon",
-                subtitle = profile.pegawaiTelp.displayOrDash(),
-                showChevron = false
-            ) {}
+                label = "Jenis Pegawai",
+                value = profile.employeeTypeLabel()
+            ),
+            AccountInfoItem(
+                icon = Icons.Default.Info,
+                label = "Akses Layanan",
+                value = profile.payrollAccessLabel()
+            ),
+            AccountInfoItem(
+                icon = Icons.Default.Place,
+                label = "Mulai Kerja",
+                value = profile.tglMulaiKerja.formatDateIndonesianOrDash()
+            )
         )
     )
 }
@@ -672,54 +819,162 @@ private fun ProfileOverviewSection(profile: PegawaiProfile) {
 @Composable
 private fun ProfileDetailSection(profile: PegawaiProfile) {
     val detailItems = buildList {
-        add(
-            SettingActionItem(
-                icon = Icons.Default.Person,
-                title = "NIP / NIK",
-                subtitle = profile.pegawaiNip.displayOrDash(),
-                showChevron = false
-            ) {}
-        )
-        add(
-            SettingActionItem(
-                icon = Icons.Default.Work,
-                title = "SKPD",
-                subtitle = profile.skpd.displayOrDash(),
-                showChevron = false
-            ) {}
-        )
-        add(
-            SettingActionItem(
-                icon = Icons.Default.Person,
-                title = "Jenis Kelamin",
-                subtitle = if (profile.gender == 1) "Laki-laki" else "Perempuan",
-                showChevron = false
-            ) {}
-        )
-        add(
-            SettingActionItem(
-                icon = Icons.Default.Settings,
-                title = "Status Kepegawaian",
-                subtitle = if (profile.pegawaiStatus == 1) "Aktif" else "Tidak Aktif",
-                showChevron = false
-            ) {}
-        )
+        add(AccountInfoItem(Icons.Default.Work, "SKPD", profile.skpd.displayOrDash()))
+        add(AccountInfoItem(Icons.Default.Person, "Jabatan", profile.jabatan.displayOrDash()))
+        add(AccountInfoItem(Icons.Default.Settings, "Status Data Pegawai", profile.dataStatusLabel()))
+        add(AccountInfoItem(Icons.Default.Person, "Jenis Kelamin", profile.genderLabel()))
+        add(AccountInfoItem(Icons.Default.Phone, "No. Telepon", profile.pegawaiTelp.displayOrDash()))
         if (!profile.tempatLahir.isNullOrBlank() || !profile.tglLahir.isNullOrBlank()) {
-                        add(
-                            SettingActionItem(
-                                icon = Icons.Default.Person,
-                                title = "Tempat / Tanggal Lahir",
-                                subtitle = listOf(
-                                    profile.tempatLahir.displayOrDash(),
-                                    profile.tglLahir.formatDateIndonesianOrDash()
-                                ).joinToString(", "),
-                                showChevron = false
-                            ) {}
-                        )
+            add(
+                AccountInfoItem(
+                    icon = Icons.Default.Place,
+                    label = "Tempat / Tanggal Lahir",
+                    value = listOf(
+                        profile.tempatLahir.displayOrDash(),
+                        profile.tglLahir.formatDateIndonesianOrDash()
+                    ).joinToString(", ")
+                )
+            )
         }
     }
 
-    SettingsActionSection(items = detailItems)
+    AccountSoftSheet(rows = detailItems)
+}
+
+@Composable
+private fun AccountLogoutSection(onLogout: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clickable(onClick = onLogout),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.error.copy(alpha = 0.08f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.14f)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .padding(10.dp)
+                        .size(20.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Keluar dari aplikasi",
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.error
+                )
+                Text(
+                    text = "Akhiri sesi akun IZAKOD-ASN di perangkat ini",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}
+
+private data class AccountInfoItem(
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val label: String,
+    val value: String
+)
+
+@Composable
+private fun AccountSoftSheet(rows: List<AccountInfoItem>) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+        shadowElevation = 1.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 8.dp)
+        ) {
+            rows.forEach { row ->
+                AccountInfoRow(item = row)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountInfoRow(item: AccountInfoItem) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+        ) {
+            Icon(
+                imageVector = item.icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .padding(10.dp)
+                    .size(20.dp)
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = item.label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = item.value,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+private fun PegawaiProfile.employeeTypeLabel(): String {
+    return if (isNonAsnPegawai()) "Honorer / Kontrak" else "ASN / PPPK"
+}
+
+private fun PegawaiProfile.payrollAccessLabel(): String {
+    return if (isNonAsnPegawai()) "Gaji Non-ASN" else "TPP ASN/PPPK"
+}
+
+private fun PegawaiProfile.dataStatusLabel(): String {
+    return if (pegawaiStatus == 1) "Data aktif" else "Data tidak aktif"
+}
+
+private fun PegawaiProfile.genderLabel(): String {
+    return when (gender) {
+        1 -> "Laki-laki"
+        2 -> "Perempuan"
+        else -> "-"
+    }
 }
 
 private data class SettingActionItem(
@@ -1032,6 +1287,48 @@ private fun DeveloperDetailCard(
                 }
             }
         }
+    }
+}
+
+private fun notificationSettingsSubtitle(enabled: Boolean): String {
+    return if (enabled) {
+        "Notifikasi perangkat aktif"
+    } else {
+        "Notifikasi perangkat belum aktif"
+    }
+}
+
+private fun areAppNotificationsEnabled(context: Context): Boolean {
+    val appNotificationsEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
+    if (!appNotificationsEnabled) return false
+
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
+
+    return ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.POST_NOTIFICATIONS
+    ) == PackageManager.PERMISSION_GRANTED
+}
+
+private fun openNotificationSettings(context: Context) {
+    val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        Intent(AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName)
+        }
+    } else {
+        Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = "package:${context.packageName}".toUri()
+        }
+    }
+
+    try {
+        context.startActivity(intent)
+    } catch (_: ActivityNotFoundException) {
+        context.startActivity(
+            Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = "package:${context.packageName}".toUri()
+            }
+        )
     }
 }
 

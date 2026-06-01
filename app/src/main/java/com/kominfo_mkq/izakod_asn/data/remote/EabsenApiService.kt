@@ -18,6 +18,7 @@ import com.kominfo_mkq.izakod_asn.data.model.LaporanDetailResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanListResponse
 import com.kominfo_mkq.izakod_asn.data.model.MobileTokenRequest
 import com.kominfo_mkq.izakod_asn.data.model.MobileTokenResponse
+import com.kominfo_mkq.izakod_asn.data.model.PayrollLiveEstimateResponse
 import com.kominfo_mkq.izakod_asn.data.model.RefreshTokenRequest
 import com.kominfo_mkq.izakod_asn.data.model.NotifikasiResponse
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiData
@@ -49,6 +50,7 @@ import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanResponse
 import com.kominfo_mkq.izakod_asn.data.model.VerifikasiLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.VerifikasiLaporanResponse
+import com.google.gson.JsonObject
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -120,6 +122,16 @@ interface EabsenApiService {
         @Query("tahun") tahun: Int? = null,
         @Query("bulan") bulan: Int? = null
     ): Response<GajiNonAsnMeResponse>
+
+    @POST("api/tpp/me/estimasi-berjalan")
+    suspend fun getTppEstimasiBerjalan(
+        @Body snapshot: JsonObject
+    ): Response<PayrollLiveEstimateResponse>
+
+    @POST("api/non-asn/gaji/me/estimasi-berjalan")
+    suspend fun getGajiNonAsnEstimasiBerjalan(
+        @Body snapshot: JsonObject
+    ): Response<PayrollLiveEstimateResponse>
 
     /**
      * ✅ NEW: Get list kategori kegiatan

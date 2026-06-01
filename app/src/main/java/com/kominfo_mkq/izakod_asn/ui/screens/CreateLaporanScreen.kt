@@ -280,7 +280,7 @@ fun CreateLaporanScreen(
     }
 
     if (showTemplatePicker) {
-        TemplatePickerDialog(
+        TemplatePickerBottomSheet(
             templates = templateUiState.templates,
             isLoading = templateUiState.isLoading,
             isError = templateUiState.isError,
@@ -448,8 +448,9 @@ private fun TemplateQuickFillSection(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TemplatePickerDialog(
+private fun TemplatePickerBottomSheet(
     templates: List<TemplateKegiatan>,
     isLoading: Boolean,
     isError: Boolean,
@@ -477,24 +478,46 @@ private fun TemplatePickerDialog(
         }
     }
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "Pilih Template",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "Pilih Template",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold
+                        )
                     )
-                )
-                Text(
-                    text = "Data template akan mengisi kategori, nama kegiatan, deskripsi, target, dan lokasi.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                    Text(
+                        text = "Data template akan mengisi kategori, nama kegiatan, deskripsi, target, dan lokasi.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "Tutup")
+                }
             }
-        },
-        text = {
+
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -558,7 +581,7 @@ private fun TemplatePickerDialog(
 
                     else -> {
                         LazyColumn(
-                            modifier = Modifier.heightIn(max = 420.dp),
+                            modifier = Modifier.heightIn(max = 520.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             items(filteredTemplates, key = { it.templateId }) { template ->
@@ -571,14 +594,8 @@ private fun TemplatePickerDialog(
                     }
                 }
             }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Tutup")
-            }
         }
-    )
+    }
 }
 
 @Composable
