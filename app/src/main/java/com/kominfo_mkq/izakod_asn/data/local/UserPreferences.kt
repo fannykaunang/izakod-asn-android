@@ -2,28 +2,26 @@ package com.kominfo_mkq.izakod_asn.data.local
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import androidx.core.content.edit
+import java.io.IOException
+import java.security.GeneralSecurityException
+import java.security.KeyStore
+import javax.crypto.AEADBadTagException
 
 /**
  * UserPreferences - Secure storage untuk session data
  * Menggunakan EncryptedSharedPreferences untuk keamanan
  */
 class UserPreferences(context: Context) {
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
-
-    private val prefs: SharedPreferences = EncryptedSharedPreferences.create(
-        context,
-        "user_session",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    private val appContext = context.applicationContext
+    private var prefs: SharedPreferences = createEncryptedPrefsWithRecovery(appContext)
 
     companion object {
+        private const val TAG = "UserPreferences"
+        private const val PREFS_NAME = "user_session"
         private const val KEY_IS_LOGGED_IN = "is_logged_in"
         private const val KEY_EMAIL = "email"
         private const val KEY_PIN = "pin"
@@ -38,17 +36,108 @@ class UserPreferences(context: Context) {
         private const val KEY_MOBILE_FCM_TOKEN = "mobile_fcm_token"
         private const val KEY_NOTIF_PERMISSION_ASKED = "notif_permission_asked"
         private const val KEY_DASHBOARD_COACHMARK_DISMISSED_PREFIX = "dashboard_coachmark_dismissed_"
+
+        private fun createEncryptedPrefsWithRecovery(context: Context): SharedPreferences {
+            return try {
+                createEncryptedPrefs(context)
+            } catch (error: Throwable) {
+                if (!error.isRecoverableEncryptedPrefsError()) throw error
+
+                Log.w(TAG, "Encrypted preferences rusak saat inisialisasi. Sesi lokal direset.", error)
+                context.deleteSharedPreferences(PREFS_NAME)
+                deleteMasterKeyEntry()
+                createEncryptedPrefs(context)
+            }
+        }
+
+        private fun createEncryptedPrefs(context: Context): SharedPreferences {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+
+            return EncryptedSharedPreferences.create(
+                context,
+                PREFS_NAME,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        }
+
+        private fun deleteMasterKeyEntry() {
+            try {
+                val keyStore = KeyStore.getInstance("AndroidKeyStore")
+                keyStore.load(null)
+                if (keyStore.containsAlias(MasterKey.DEFAULT_MASTER_KEY_ALIAS)) {
+                    keyStore.deleteEntry(MasterKey.DEFAULT_MASTER_KEY_ALIAS)
+                }
+            } catch (error: Exception) {
+                Log.w(TAG, "Gagal menghapus master key lama.", error)
+            }
+        }
+
+        private fun Throwable.isRecoverableEncryptedPrefsError(): Boolean {
+            var current: Throwable? = this
+            while (current != null) {
+                if (
+                    current is AEADBadTagException ||
+                    current is GeneralSecurityException ||
+                    current is IOException
+                ) {
+                    return true
+                }
+
+                val message = current.message.orEmpty()
+                if (
+                    message.contains("decrypt", ignoreCase = true) ||
+                    message.contains("keystore", ignoreCase = true) ||
+                    message.contains("keyset", ignoreCase = true)
+                ) {
+                    return true
+                }
+
+                current = current.cause
+            }
+
+            return false
+        }
+    }
+
+    private fun recoverEncryptedPrefs(error: Throwable) {
+        Log.w(TAG, "Encrypted preferences tidak bisa dibaca. Sesi lokal direset.", error)
+        appContext.deleteSharedPreferences(PREFS_NAME)
+        prefs = createEncryptedPrefsWithRecovery(appContext)
+    }
+
+    private inline fun <T> readSafely(defaultValue: T, block: SharedPreferences.() -> T): T {
+        return try {
+            prefs.block()
+        } catch (error: Throwable) {
+            if (!error.isRecoverableEncryptedPrefsError()) throw error
+            recoverEncryptedPrefs(error)
+            defaultValue
+        }
+    }
+
+    private inline fun editSafely(crossinline block: SharedPreferences.Editor.() -> Unit) {
+        try {
+            prefs.edit { block() }
+        } catch (error: Throwable) {
+            if (!error.isRecoverableEncryptedPrefsError()) throw error
+            recoverEncryptedPrefs(error)
+            prefs.edit { block() }
+        }
     }
 
     fun isDarkTheme(): Boolean =
-        prefs.getBoolean(KEY_DARK_THEME, false)
+        readSafely(false) { getBoolean(KEY_DARK_THEME, false) }
 
     fun setDarkTheme(enabled: Boolean) {
-        prefs.edit { putBoolean(KEY_DARK_THEME, enabled) }
+        editSafely { putBoolean(KEY_DARK_THEME, enabled) }
     }
 
     fun setMobileFcmToken(token: String?) {
-        prefs.edit {
+        editSafely {
             if (token.isNullOrBlank()) remove(KEY_MOBILE_FCM_TOKEN)
             else putString(KEY_MOBILE_FCM_TOKEN, token)
         }
@@ -56,17 +145,17 @@ class UserPreferences(context: Context) {
 // TODO lanjut publish ke playstore di https://play.google.com/console/u/0/developers/7901927936154564272/app/4974458399961873016/app-content/testing-credentials?source=dashboard
     // tambahkan fungsi
     fun hasAskedNotificationPermission(): Boolean =
-        prefs.getBoolean(KEY_NOTIF_PERMISSION_ASKED, false)
+        readSafely(false) { getBoolean(KEY_NOTIF_PERMISSION_ASKED, false) }
 
     fun setAskedNotificationPermission(asked: Boolean) {
-        prefs.edit { putBoolean(KEY_NOTIF_PERMISSION_ASKED, asked) }
+        editSafely { putBoolean(KEY_NOTIF_PERMISSION_ASKED, asked) }
     }
 
     fun isDashboardCoachmarkDismissed(key: String): Boolean =
-        prefs.getBoolean(KEY_DASHBOARD_COACHMARK_DISMISSED_PREFIX + key, false)
+        readSafely(false) { getBoolean(KEY_DASHBOARD_COACHMARK_DISMISSED_PREFIX + key, false) }
 
     fun setDashboardCoachmarkDismissed(key: String, dismissed: Boolean = true) {
-        prefs.edit {
+        editSafely {
             putBoolean(KEY_DASHBOARD_COACHMARK_DISMISSED_PREFIX + key, dismissed)
         }
     }
@@ -81,14 +170,13 @@ class UserPreferences(context: Context) {
         skpdid: Int,
         pegawaiId: Int
     ) {
-        prefs.edit().apply {
+        editSafely {
             putBoolean(KEY_IS_LOGGED_IN, true)
             putString(KEY_EMAIL, email)
             putString(KEY_PIN, pin)
             putInt(KEY_LEVEL, level)
             putInt(KEY_SKPDID, skpdid)
             putInt(KEY_PEGAWAI_ID, pegawaiId)
-            apply()
         }
     }
 
@@ -96,37 +184,39 @@ class UserPreferences(context: Context) {
      * Check if user is logged in
      */
     fun isLoggedIn(): Boolean {
-        return prefs.getBoolean(KEY_IS_LOGGED_IN, false)
+        return readSafely(false) { getBoolean(KEY_IS_LOGGED_IN, false) }
     }
 
     /**
      * Get stored email
      */
-    fun getEmail(): String? = prefs.getString(KEY_EMAIL, null)
+    fun getEmail(): String? = readSafely<String?>(null) { getString(KEY_EMAIL, null) }
 
     /**
      * Get stored PIN
      */
-    fun getPin(): String? = prefs.getString(KEY_PIN, null)
+    fun getPin(): String? = readSafely<String?>(null) { getString(KEY_PIN, null) }
 
     /**
      * Get stored level
      */
-    fun getLevel(): Int = prefs.getInt(KEY_LEVEL, 0)
+    fun getLevel(): Int = readSafely(0) { getInt(KEY_LEVEL, 0) }
 
     /**
      * Get stored SKPD ID
      */
-    fun getSkpdid(): Int = prefs.getInt(KEY_SKPDID, 0)
+    fun getSkpdid(): Int = readSafely(0) { getInt(KEY_SKPDID, 0) }
 
     /**
      * Get stored Pegawai ID
      */
     fun getPegawaiId(): Int? {
-        return if (prefs.contains(KEY_PEGAWAI_ID)) {
-            val id = prefs.getInt(KEY_PEGAWAI_ID, 0)
-            if (id > 0) id else null
-        } else null
+        return readSafely<Int?>(null) {
+            if (contains(KEY_PEGAWAI_ID)) {
+                val id = getInt(KEY_PEGAWAI_ID, 0)
+                if (id > 0) id else null
+            } else null
+        }
     }
 
     /**
@@ -147,47 +237,47 @@ class UserPreferences(context: Context) {
     }
 
     fun setMobileJwtToken(token: String?) {
-        prefs.edit {
+        editSafely {
             if (token.isNullOrBlank()) remove(KEY_MOBILE_JWT_TOKEN)
             else putString(KEY_MOBILE_JWT_TOKEN, token)
         }
     }
 
     fun getMobileJwtToken(): String? {
-        return prefs.getString(KEY_MOBILE_JWT_TOKEN, null)
+        return readSafely<String?>(null) { getString(KEY_MOBILE_JWT_TOKEN, null) }
     }
 
     fun setRefreshToken(token: String?) {
-        prefs.edit {
+        editSafely {
             if (token.isNullOrBlank()) remove(KEY_MOBILE_REFRESH_TOKEN)
             else putString(KEY_MOBILE_REFRESH_TOKEN, token)
         }
     }
 
     fun getRefreshToken(): String? {
-        return prefs.getString(KEY_MOBILE_REFRESH_TOKEN, null)
+        return readSafely<String?>(null) { getString(KEY_MOBILE_REFRESH_TOKEN, null) }
     }
 
     fun setEntagoAccessToken(token: String?) {
-        prefs.edit {
+        editSafely {
             if (token.isNullOrBlank()) remove(KEY_ENTAGO_ACCESS_TOKEN)
             else putString(KEY_ENTAGO_ACCESS_TOKEN, token)
         }
     }
 
     fun getEntagoAccessToken(): String? {
-        return prefs.getString(KEY_ENTAGO_ACCESS_TOKEN, null)
+        return readSafely<String?>(null) { getString(KEY_ENTAGO_ACCESS_TOKEN, null) }
     }
 
     fun setEntagoRefreshToken(token: String?) {
-        prefs.edit {
+        editSafely {
             if (token.isNullOrBlank()) remove(KEY_ENTAGO_REFRESH_TOKEN)
             else putString(KEY_ENTAGO_REFRESH_TOKEN, token)
         }
     }
 
     fun getEntagoRefreshToken(): String? {
-        return prefs.getString(KEY_ENTAGO_REFRESH_TOKEN, null)
+        return readSafely<String?>(null) { getString(KEY_ENTAGO_REFRESH_TOKEN, null) }
     }
 
 
@@ -195,7 +285,7 @@ class UserPreferences(context: Context) {
      * Clear session (logout)
      */
     fun clearSession() {
-        prefs.edit { clear() }
+        editSafely { clear() }
     }
 }
 

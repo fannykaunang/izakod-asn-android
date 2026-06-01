@@ -24,6 +24,8 @@ import com.kominfo_mkq.izakod_asn.ui.screens.CreateLaporanScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.DashboardScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.DeveloperScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.EditLaporanScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.GajiSayaDetailScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.GajiSayaScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.LoginScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.NotificationDetailScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.NotificationScreen
@@ -63,6 +65,7 @@ sealed class Screen(val route: String) {
     object PenilaianBelumDibuat : Screen("penilaian_belum_dibuat")
     object Tertunda : Screen("tertunda")
     object TppSaya : Screen("tpp_saya")
+    object GajiSaya : Screen("gaji_saya")
     object Reminders : Screen("reminders")
     object Profile : Screen("profile")
     object Settings : Screen("settings")
@@ -195,6 +198,9 @@ fun IZAKODNavigation(
                     onNavigateToTertunda = { navController.navigate(Screen.Tertunda.route) },
                     onNavigateToTppDetail = { tahun, bulan ->
                         navController.navigate("tpp_saya_detail/$tahun/$bulan")
+                    },
+                    onNavigateToGajiDetail = { tahun, bulan ->
+                        navController.navigate("gaji_saya_detail/$tahun/$bulan")
                     },
                     onNavigateToTemplates = { navController.navigate(Screen.Templates.route) },
                     onNavigateToReminder = { navController.navigate(Screen.Reminders.route) },
@@ -346,6 +352,15 @@ fun IZAKODNavigation(
                 )
             }
 
+            composable(Screen.GajiSaya.route) {
+                GajiSayaScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToDetail = { tahun, bulan ->
+                        navController.navigate("gaji_saya_detail/$tahun/$bulan")
+                    }
+                )
+            }
+
             composable(
                 route = "tpp_saya_detail/{tahun}/{bulan}",
                 arguments = listOf(
@@ -356,6 +371,22 @@ fun IZAKODNavigation(
                 val tahun = backStackEntry.arguments?.getInt("tahun") ?: 0
                 val bulan = backStackEntry.arguments?.getInt("bulan") ?: 0
                 TppSayaDetailScreen(
+                    tahun = tahun,
+                    bulan = bulan,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(
+                route = "gaji_saya_detail/{tahun}/{bulan}",
+                arguments = listOf(
+                    navArgument("tahun") { type = NavType.IntType },
+                    navArgument("bulan") { type = NavType.IntType }
+                )
+            ) { backStackEntry ->
+                val tahun = backStackEntry.arguments?.getInt("tahun") ?: 0
+                val bulan = backStackEntry.arguments?.getInt("bulan") ?: 0
+                GajiSayaDetailScreen(
                     tahun = tahun,
                     bulan = bulan,
                     onNavigateBack = { navController.popBackStack() }

@@ -75,6 +75,10 @@ fun TppSayaScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    LaunchedEffect(Unit) {
+        viewModel.refresh()
+    }
+
     Scaffold(
         topBar = {
             IZAKODHeaderBar(

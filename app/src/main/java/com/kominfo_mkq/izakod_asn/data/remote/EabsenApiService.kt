@@ -11,6 +11,7 @@ import com.kominfo_mkq.izakod_asn.data.model.DashboardOverviewResponse
 import com.kominfo_mkq.izakod_asn.data.model.EntagoLoginRequest
 import com.kominfo_mkq.izakod_asn.data.model.EntagoLoginResponse
 import com.kominfo_mkq.izakod_asn.data.model.FcmRegisterRequest
+import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnMeResponse
 import com.kominfo_mkq.izakod_asn.data.model.KategoriListResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanCetakResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanDetailResponse
@@ -113,6 +114,12 @@ interface EabsenApiService {
         @Query("tahun") tahun: Int? = null,
         @Query("bulan") bulan: Int? = null
     ): Response<TppMeResponse>
+
+    @GET("api/non-asn/gaji/me")
+    suspend fun getGajiNonAsnSaya(
+        @Query("tahun") tahun: Int? = null,
+        @Query("bulan") bulan: Int? = null
+    ): Response<GajiNonAsnMeResponse>
 
     /**
      * ✅ NEW: Get list kategori kegiatan

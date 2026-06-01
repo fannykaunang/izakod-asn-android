@@ -27,10 +27,6 @@ class TppSayaViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(TppSayaUiState(isLoading = true))
     val uiState: StateFlow<TppSayaUiState> = _uiState.asStateFlow()
 
-    init {
-        refresh()
-    }
-
     fun refresh() {
         loadTppSaya(
             tahun = _uiState.value.tahun,
@@ -40,7 +36,9 @@ class TppSayaViewModel : ViewModel() {
     }
 
     fun setPeriod(tahun: Int, bulan: Int) {
-        if (tahun == _uiState.value.tahun && bulan == _uiState.value.bulan) return
+        if (tahun == _uiState.value.tahun && bulan == _uiState.value.bulan && _uiState.value.data != null) {
+            return
+        }
 
         _uiState.value = _uiState.value.copy(
             tahun = tahun,

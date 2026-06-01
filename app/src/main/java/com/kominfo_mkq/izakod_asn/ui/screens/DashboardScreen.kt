@@ -108,11 +108,15 @@ import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.AssessmentSummaryData
 import com.kominfo_mkq.izakod_asn.data.model.DashboardActionAlertsData
 import com.kominfo_mkq.izakod_asn.data.model.DashboardTargetSummaryData
+import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnMeData
 import com.kominfo_mkq.izakod_asn.data.model.MetricsData
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
 import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaItem
 import com.kominfo_mkq.izakod_asn.data.model.TimeSeriesItem
 import com.kominfo_mkq.izakod_asn.data.model.TppMeData
+import com.kominfo_mkq.izakod_asn.data.model.isNonAsnPegawai
+import com.kominfo_mkq.izakod_asn.ui.viewmodel.GajiSayaUiState
+import com.kominfo_mkq.izakod_asn.ui.viewmodel.GajiSayaViewModel
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.TppSayaUiState
 import com.kominfo_mkq.izakod_asn.ui.components.ElevatedCard
 import com.kominfo_mkq.izakod_asn.ui.components.GradientCard
@@ -232,22 +236,35 @@ fun DashboardScreen(
     onNavigateToPenilaianBelumDibuat: () -> Unit,
     onNavigateToTertunda: () -> Unit,
     onNavigateToTppDetail: (Int, Int) -> Unit,
+    onNavigateToGajiDetail: (Int, Int) -> Unit,
     onNavigateToTemplates: () -> Unit,
     onNavigateToReminder: () -> Unit,
     onNavigateToNotifications: () -> Unit,
     isDarkTheme: Boolean,
     onToggleTheme: (Boolean) -> Unit,
     viewModel: DashboardViewModel = viewModel(),
-    tppViewModel: TppSayaViewModel = viewModel()
+    tppViewModel: TppSayaViewModel = viewModel(),
+    gajiViewModel: GajiSayaViewModel = viewModel()
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val uiState by viewModel.uiState.collectAsState()
     val tppUiState by tppViewModel.uiState.collectAsState()
+    val gajiUiState by gajiViewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val isNonAsnPayroll = uiState.pegawaiProfile.isNonAsnPegawai()
 
     LaunchedEffect(Unit) {
         viewModel.refresh(context)
-        tppViewModel.refresh()
+    }
+
+    LaunchedEffect(uiState.pegawaiProfile?.pegawaiId, isNonAsnPayroll) {
+        if (uiState.pegawaiProfile != null) {
+            if (isNonAsnPayroll) {
+                gajiViewModel.refresh()
+            } else {
+                tppViewModel.refresh()
+            }
+        }
     }
 
     val userPreferences = remember { UserPreferences(context) }
@@ -326,6 +343,9 @@ fun DashboardScreen(
                         targetItems = uiState.targetItems,
                         tppUiState = tppUiState,
                         tppData = tppUiState.data,
+                        gajiUiState = gajiUiState,
+                        gajiData = gajiUiState.data,
+                        isNonAsnPayroll = isNonAsnPayroll,
                         currentPegawaiId = activePegawaiId,
                         targetPeriodYear = uiState.targetPeriodYear,
                         targetPeriodMonth = uiState.targetPeriodMonth,
@@ -346,6 +366,10 @@ fun DashboardScreen(
                         onTppNextMonth = { tppViewModel.moveMonth(1) },
                         onTppRefresh = { tppViewModel.refresh() },
                         onTppDetail = onNavigateToTppDetail,
+                        onGajiPreviousMonth = { gajiViewModel.moveMonth(-1) },
+                        onGajiNextMonth = { gajiViewModel.moveMonth(1) },
+                        onGajiRefresh = { gajiViewModel.refresh() },
+                        onGajiDetail = onNavigateToGajiDetail,
                         onTargetPeriodSelected = viewModel::selectTargetPeriod,
                         onTemplates = onNavigateToTemplates,
                         onReminder = onNavigateToReminder,
@@ -381,6 +405,9 @@ private fun DashboardContent(
     targetItems: List<TargetKinerjaItem>,
     tppUiState: TppSayaUiState,
     tppData: TppMeData?,
+    gajiUiState: GajiSayaUiState,
+    gajiData: GajiNonAsnMeData?,
+    isNonAsnPayroll: Boolean,
     currentPegawaiId: Int?,
     targetPeriodYear: Int?,
     targetPeriodMonth: Int?,
@@ -401,13 +428,19 @@ private fun DashboardContent(
     onTppNextMonth: () -> Unit,
     onTppRefresh: () -> Unit,
     onTppDetail: (Int, Int) -> Unit,
+    onGajiPreviousMonth: () -> Unit,
+    onGajiNextMonth: () -> Unit,
+    onGajiRefresh: () -> Unit,
+    onGajiDetail: (Int, Int) -> Unit,
     onTargetPeriodSelected: (Int, Int) -> Unit,
     onTemplates: () -> Unit,
     onReminder: () -> Unit,
     viewModel: DashboardViewModel,
     onFocusBoundsChanged: (Rect?) -> Unit = {}
 ) {
-    val tabs = listOf("Utama", "Target", "Penilaian", "TPP")
+    val payrollTabTitle = if (isNonAsnPayroll) "Gaji" else "TPP"
+    val payrollMenuLabel = if (isNonAsnPayroll) "Gaji Saya" else "TPP Saya"
+    val tabs = listOf("Utama", "Target", "Penilaian", payrollTabTitle)
 
     val selectedTabIndex by viewModel.currentTabIndex.collectAsState()
 
@@ -486,6 +519,7 @@ private fun DashboardContent(
                                 assessmentSummary = assessmentSummary,
                                 targetSummary = targetSummary,
                                 currentTab = tabs[page],
+                                payrollLabel = payrollMenuLabel,
                                 isDarkTheme = isDarkTheme
                             )
                         }
@@ -534,7 +568,8 @@ private fun DashboardContent(
                                 onTargetKinerja = onTargetKinerja,
                                 onPenilaianKinerja = onPenilaianKinerja,
                                 onTertunda = onTertunda,
-                                onTppSaya = { viewModel.updateTabIndex(tabs.indexOf("TPP")) },
+                                onPayrollSaya = { viewModel.updateTabIndex(tabs.indexOf(payrollTabTitle)) },
+                                payrollLabel = payrollTabTitle,
                                 onTemplates = onTemplates,
                                 onReminder = onReminder
                             )
@@ -544,7 +579,9 @@ private fun DashboardContent(
                                 metrics = metrics,
                                 targetSummary = targetSummary,
                                 assessmentSummary = assessmentSummary,
-                                tppData = tppData
+                                tppData = tppData,
+                                gajiData = gajiData,
+                                isNonAsnPayroll = isNonAsnPayroll
                             )
                         }
                     }
@@ -600,13 +637,23 @@ private fun DashboardContent(
                 }
 
                 else -> {
-                    TppSayaDashboardTabContent(
-                        uiState = tppUiState,
-                        onPreviousMonth = onTppPreviousMonth,
-                        onNextMonth = onTppNextMonth,
-                        onRefresh = onTppRefresh,
-                        onNavigateToDetail = onTppDetail
-                    )
+                    if (isNonAsnPayroll) {
+                        GajiSayaDashboardTabContent(
+                            uiState = gajiUiState,
+                            onPreviousMonth = onGajiPreviousMonth,
+                            onNextMonth = onGajiNextMonth,
+                            onRefresh = onGajiRefresh,
+                            onNavigateToDetail = onGajiDetail
+                        )
+                    } else {
+                        TppSayaDashboardTabContent(
+                            uiState = tppUiState,
+                            onPreviousMonth = onTppPreviousMonth,
+                            onNextMonth = onTppNextMonth,
+                            onRefresh = onTppRefresh,
+                            onNavigateToDetail = onTppDetail
+                        )
+                    }
                 }
             }
         }
@@ -1261,6 +1308,7 @@ private fun HeroPlaySectionV2(
     assessmentSummary: AssessmentSummaryData?,
     targetSummary: DashboardTargetSummaryData?,
     currentTab: String,
+    payrollLabel: String,
     isDarkTheme: Boolean
 ) {
     val greeting = currentGreeting()
@@ -1282,7 +1330,7 @@ private fun HeroPlaySectionV2(
     val heroStatusItems = when (currentTab) {
         "Target" -> listOf("Target $targetPeriodMonth: $targetStatus")
         "Penilaian" -> listOf("Penilaian $assessmentPeriodMonth: $assessmentStatus")
-        "TPP" -> listOf("TPP Saya")
+        "TPP", "Gaji" -> listOf(payrollLabel)
         else -> listOf(
             "Target $targetPeriodMonth: $targetStatus",
             "Penilaian $assessmentPeriodMonth: $assessmentStatus"
@@ -2347,7 +2395,8 @@ private fun MinimalQuickActionsSection(
     onTargetKinerja: () -> Unit,
     onPenilaianKinerja: () -> Unit,
     onTertunda: () -> Unit,
-    onTppSaya: () -> Unit,
+    onPayrollSaya: () -> Unit,
+    payrollLabel: String,
     onTemplates: () -> Unit,
     onReminder: () -> Unit
 ) {
@@ -2369,7 +2418,7 @@ private fun MinimalQuickActionsSection(
             badgeText = tertundaBadge
         ),
         CompactQuickActionData("Penilaian", Icons.Default.Bookmark, StatusApproved, onPenilaianKinerja),
-        CompactQuickActionData("TPP", Icons.Default.PlaylistAddCheckCircle, StatusPending, onTppSaya),
+        CompactQuickActionData(payrollLabel, Icons.Default.PlaylistAddCheckCircle, StatusPending, onPayrollSaya),
         CompactQuickActionData("Pengingat", Icons.Default.AlarmOn, StatusApproved, onReminder)
     )
 
@@ -2483,7 +2532,9 @@ private fun MinimalSummarySection(
     metrics: MetricsData?,
     targetSummary: DashboardTargetSummaryData?,
     assessmentSummary: AssessmentSummaryData?,
-    tppData: TppMeData?
+    tppData: TppMeData?,
+    gajiData: GajiNonAsnMeData?,
+    isNonAsnPayroll: Boolean
 ) {
     val totalKegiatan = metrics?.totalKegiatan.toIntSafe()
     val progressValue = "${(targetSummary?.persentaseProgress ?: 0.0).toInt()}%"
@@ -2499,10 +2550,12 @@ private fun MinimalSummarySection(
         ?.takeIf { it.isNotBlank() }
         ?: "Belum ada periode final"
     val nominalTpp = tppData?.nominalTpp
-    val tppValue = nominalTpp?.estimasiDiterima.formatDashboardCurrency()
     val tppPeriod = tppData?.periode?.let { monthYearLabel(it.tahun, it.bulan) }
+    val gajiCalculation = gajiData?.perhitungan
+    val gajiPeriod = gajiData?.periode?.let { monthYearLabel(it.tahun, it.bulan) }
     val currentPeriodLabel = targetSummary?.activePeriodLabel?.takeIf { it.isNotBlank() }
         ?: tppPeriod
+        ?: gajiPeriod
         ?: assessmentSummary?.activePeriodLabel?.takeIf { it.isNotBlank() }
         ?: "Bulan ini"
     val tppFinalityLabel = when {
@@ -2528,6 +2581,39 @@ private fun MinimalSummarySection(
     } else {
         tppFinalityLabel
     }
+    val gajiStatusKey = gajiCalculation?.status?.lowercase(Locale.ROOT).orEmpty()
+    val gajiIsFinal = gajiStatusKey in setOf("final", "final_opd", "dibayar", "arsip")
+    val gajiFinalityLabel = when {
+        gajiCalculation == null -> "Belum dihitung"
+        gajiIsFinal -> "Final"
+        else -> "Belum final"
+    }
+    val gajiBadge = when {
+        gajiCalculation == null -> "BELUM"
+        gajiIsFinal -> "FINAL"
+        else -> "DIHITUNG"
+    }
+    val gajiToneColor = when {
+        gajiCalculation == null -> MaterialTheme.colorScheme.outline
+        gajiIsFinal -> StatusApproved
+        gajiStatusKey in setOf("revisi", "dikembalikan") -> StatusRevised
+        gajiStatusKey in setOf("ditolak", "batal") -> StatusRejected
+        else -> StatusApproved
+    }
+    val gajiSubtitle = if (!gajiPeriod.isNullOrBlank()) {
+        "Periode $gajiPeriod - $gajiFinalityLabel"
+    } else {
+        gajiFinalityLabel
+    }
+    val payrollTitle = if (isNonAsnPayroll) "Gaji Saya" else "TPP Saya"
+    val payrollValue = if (isNonAsnPayroll) {
+        gajiCalculation?.totalDibayar.formatDashboardCurrency()
+    } else {
+        nominalTpp?.estimasiDiterima.formatDashboardCurrency()
+    }
+    val payrollSubtitle = if (isNonAsnPayroll) gajiSubtitle else tppSubtitle
+    val payrollBadge = if (isNonAsnPayroll) gajiBadge else tppBadge
+    val payrollToneColor = if (isNonAsnPayroll) gajiToneColor else tppToneColor
     val scoreSubtitle = if (latestScorePeriod == "Belum ada periode final") {
         latestScorePeriod
     } else {
@@ -2567,12 +2653,12 @@ private fun MinimalSummarySection(
                     )
                 }
                 MinimalTppSummaryCard(
-                    title = "TPP Saya",
-                    value = tppValue,
+                    title = payrollTitle,
+                    value = payrollValue,
                     modifier = Modifier.fillMaxWidth(),
-                    subtitle = tppSubtitle,
-                    badge = tppBadge,
-                    toneColor = tppToneColor
+                    subtitle = payrollSubtitle,
+                    badge = payrollBadge,
+                    toneColor = payrollToneColor
                 )
                 MinimalScoreSummaryCard(
                     title = "Nilai Kinerja Terakhir",
