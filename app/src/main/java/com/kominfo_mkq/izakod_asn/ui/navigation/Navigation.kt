@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -91,6 +92,8 @@ fun NavHostController.backToDashboardAlways() {
 fun IZAKODNavigation(
     navController: NavHostController = rememberNavController(),
     startDestination: String = Screen.Login.route,
+    pendingExternalRoute: String? = null,
+    onPendingExternalRouteConsumed: () -> Unit = {},
     isDarkTheme: Boolean,
     onToggleTheme: (Boolean) -> Unit
 ) {
@@ -107,6 +110,16 @@ fun IZAKODNavigation(
     )
 
     val showMainNavigation = currentRoute in mainRoutes
+
+    LaunchedEffect(pendingExternalRoute, currentRoute) {
+        val route = pendingExternalRoute ?: return@LaunchedEffect
+        if (currentRoute == null || currentRoute == Screen.Login.route) return@LaunchedEffect
+
+        navController.navigate(route) {
+            launchSingleTop = true
+        }
+        onPendingExternalRouteConsumed()
+    }
 
     val navigateToCreateReport = {
         createLaporanViewModel.startFreshForm()
@@ -160,8 +173,13 @@ fun IZAKODNavigation(
             composable(Screen.Login.route) {
                 LoginScreen(
                     onLoginSuccess = {
-                        navController.navigate(Screen.Dashboard.route) {
+                        val targetRoute = pendingExternalRoute ?: Screen.Dashboard.route
+                        navController.navigate(targetRoute) {
                             popUpTo(Screen.Login.route) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                        if (pendingExternalRoute != null) {
+                            onPendingExternalRouteConsumed()
                         }
                     }
                 )

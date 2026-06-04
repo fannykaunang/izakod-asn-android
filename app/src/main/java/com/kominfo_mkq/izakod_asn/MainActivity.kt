@@ -1,7 +1,9 @@
 package com.kominfo_mkq.izakod_asn
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Base64
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -69,6 +72,7 @@ fun RequestNotificationPermissionOnce(userPrefs: UserPreferences) {
 
 class MainActivity : ComponentActivity() {
     private lateinit var userPrefs: UserPreferences
+    private var externalRouteHandler: ((String) -> Unit)? = null
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -125,10 +129,21 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         userPrefs = prefs
+        val initialExternalRoute = resolvePayrollDeepLinkRoute(intent)
 
         setContent {
             var isDarkTheme by remember { mutableStateOf(userPrefs.isDarkTheme()) }
+            var pendingExternalRoute by rememberSaveable { mutableStateOf(initialExternalRoute) }
             val startDestination = remember { checkAndRestoreSession() }
+
+            DisposableEffect(Unit) {
+                externalRouteHandler = { route ->
+                    pendingExternalRoute = route
+                }
+                onDispose {
+                    externalRouteHandler = null
+                }
+            }
 
             IZAKODASNTheme(darkTheme = isDarkTheme) {
                 Surface(
@@ -143,6 +158,10 @@ class MainActivity : ComponentActivity() {
 
                     IZAKODNavigation(
                         startDestination = startDestination,
+                        pendingExternalRoute = pendingExternalRoute,
+                        onPendingExternalRouteConsumed = {
+                            pendingExternalRoute = null
+                        },
 
                         // ✅ callback untuk Settings toggle
                         isDarkTheme = isDarkTheme,
@@ -153,6 +172,14 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        resolvePayrollDeepLinkRoute(intent)?.let { route ->
+            externalRouteHandler?.invoke(route)
         }
     }
 
@@ -223,5 +250,25 @@ class MainActivity : ComponentActivity() {
             prefs.setEntagoRefreshToken(legacyRefreshToken)
             Log.d("MainActivity", "✅ Migrated legacy E-NTAGO refresh token")
         }
+    }
+    private fun resolvePayrollDeepLinkRoute(intent: Intent?): String? {
+        val uri = intent?.data ?: return null
+        if (!uri.scheme.equals("izakod-asn", ignoreCase = true)) return null
+        if (!uri.host.equals("payroll", ignoreCase = true)) return null
+        if (uri.pathSegments.firstOrNull()?.equals("detail", ignoreCase = true) != true) return null
+
+        val tahun = uri.queryInt("tahun") ?: return null
+        val bulan = uri.queryInt("bulan")?.takeIf { it in 1..12 } ?: return null
+        val jenis = uri.getQueryParameter("jenis").orEmpty().trim().lowercase()
+
+        return when (jenis) {
+            "gaji", "gaji_non_asn", "non_asn" -> "gaji_saya_detail/$tahun/$bulan"
+            "tpp", "tpp_asn" -> "tpp_saya_detail/$tahun/$bulan"
+            else -> null
+        }
+    }
+
+    private fun Uri.queryInt(name: String): Int? {
+        return getQueryParameter(name)?.toIntOrNull()
     }
 }
