@@ -1,8 +1,15 @@
 package com.kominfo_mkq.izakod_asn.data.remote
 
-import com.kominfo_mkq.izakod_asn.data.model.*
+import com.kominfo_mkq.izakod_asn.data.model.EntagoLoginRequest
+import com.kominfo_mkq.izakod_asn.data.model.EntagoLoginResponse
+import com.kominfo_mkq.izakod_asn.data.model.PegawaiData
+import com.kominfo_mkq.izakod_asn.data.model.StatistikBulananResponse
 import retrofit2.Response
-import retrofit2.http.*
+import retrofit2.http.Body
+import retrofit2.http.GET
+import retrofit2.http.POST
+import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
  * API Service untuk IZAKOD-ASN API

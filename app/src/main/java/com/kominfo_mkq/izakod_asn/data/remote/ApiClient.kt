@@ -1,6 +1,7 @@
 package com.kominfo_mkq.izakod_asn.data.remote
 
 import com.kominfo_mkq.izakod_asn.data.local.AppContextHolder
+import com.kominfo_mkq.izakod_asn.data.local.AuthSessionManager
 import com.kominfo_mkq.izakod_asn.data.local.TokenStore
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.RefreshTokenRequest
@@ -77,8 +78,12 @@ object ApiClient {
             return@Interceptor chain.proceed(original)
         }
 
-        val token = TokenStore.getToken()
+        val prefs = AppContextHolder.get()?.let { UserPreferences(it) }
+        val token = TokenStore.getToken().trimmedOrNull()
+            ?: prefs?.getMobileJwtToken().trimmedOrNull()
         if (token.isNullOrBlank()) return@Interceptor chain.proceed(original)
+
+        TokenStore.setToken(token)
 
         val newReq = original.newBuilder()
             .header("Authorization", "Bearer $token")
@@ -135,18 +140,40 @@ object ApiClient {
         val prefs = UserPreferences(context)
         val failedToken = response.request.header("Authorization")
             ?.removePrefix("Bearer ")
-            ?.trim()
+            .trimmedOrNull()
 
         return synchronized(refreshLock) {
-            val latestToken = TokenStore.getToken() ?: prefs.getMobileJwtToken()
+            val latestToken = TokenStore.getToken().trimmedOrNull()
+                ?: prefs.getMobileJwtToken().trimmedOrNull()
+
+            if (failedToken.isNullOrBlank()) {
+                if (!latestToken.isNullOrBlank()) {
+                    TokenStore.setToken(latestToken)
+                    return@synchronized response.request.newBuilder()
+                        .header("Authorization", "Bearer $latestToken")
+                        .build()
+                }
+
+                android.util.Log.w(
+                    "ApiClient",
+                    "401 tanpa Authorization untuk ${url.encodedPath}; tidak menandai sesi berakhir."
+                )
+                return@synchronized null
+            }
+
             if (!latestToken.isNullOrBlank() && latestToken != failedToken) {
+                TokenStore.setToken(latestToken)
                 return@synchronized response.request.newBuilder()
                     .header("Authorization", "Bearer $latestToken")
                     .build()
             }
 
-            val refreshToken = TokenStore.getRefreshToken() ?: prefs.getRefreshToken()
-            if (refreshToken.isNullOrBlank()) return@synchronized null
+            val refreshToken = TokenStore.getRefreshToken().trimmedOrNull()
+                ?: prefs.getRefreshToken().trimmedOrNull()
+            if (refreshToken.isNullOrBlank()) {
+                AuthSessionManager.expireSession(context)
+                return@synchronized null
+            }
 
             try {
                 val refreshApi = createMobileRefreshApi()
@@ -159,7 +186,7 @@ object ApiClient {
                         "ApiClient",
                         "Refresh token IZAKOD gagal: ${refreshResponse.code()}"
                     )
-                    clearMobileTokens(prefs)
+                    AuthSessionManager.expireSession(context)
                     return@synchronized null
                 }
 
@@ -169,7 +196,7 @@ object ApiClient {
 
                 if (newToken.isEmpty() || newRefreshToken.isEmpty()) {
                     android.util.Log.w("ApiClient", "Refresh token IZAKOD response tidak lengkap")
-                    clearMobileTokens(prefs)
+                    AuthSessionManager.expireSession(context)
                     return@synchronized null
                 }
 
@@ -203,13 +230,6 @@ object ApiClient {
             .create(EabsenApiService::class.java)
     }
 
-    private fun clearMobileTokens(prefs: UserPreferences) {
-        prefs.setMobileJwtToken(null)
-        prefs.setRefreshToken(null)
-        TokenStore.setToken(null)
-        TokenStore.setRefreshToken(null)
-    }
-
     private fun isIzakodNextJsRequest(url: HttpUrl): Boolean {
         val base = BASE_URL.toHttpUrlOrNull() ?: return false
         return url.host == base.host && url.port == base.port
@@ -219,7 +239,8 @@ object ApiClient {
         val path = url.encodedPath
         return path.endsWith("/api/login") ||
             path.endsWith("/api/mobile/token") ||
-            path.endsWith("/api/mobile/refresh")
+            path.endsWith("/api/mobile/refresh") ||
+            path.endsWith("/api/mobile/sso-exchange")
     }
 
     private fun responseCount(response: Response): Int {
@@ -230,6 +251,10 @@ object ApiClient {
             priorResponse = priorResponse.priorResponse
         }
         return result
+    }
+
+    private fun String?.trimmedOrNull(): String? {
+        return this?.trim()?.takeIf { it.isNotBlank() }
     }
 
     private fun redactHeaderValue(name: String, value: String): String {

@@ -270,6 +270,7 @@ private fun TppSayaContent(
             item {
                 TppRekapSummaryCard(
                     rekap = data.rekap,
+                    hasEffectivePayrollData = data.nominalTpp.hasEffectiveTppData(),
                     onOpenDetail = { onNavigateToDetail(uiState.tahun, uiState.bulan) }
                 )
             }
@@ -445,15 +446,11 @@ private fun TppProfileSummaryCard(data: TppMeData) {
         elevation = 1.dp,
         cornerRadius = 20.dp
     ) {
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text(
                     text = data.pegawai.pegawaiNama ?: "Pegawai",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
@@ -475,6 +472,7 @@ private fun TppProfileSummaryCard(data: TppMeData) {
                     overflow = TextOverflow.Ellipsis
                 )
             }
+
             TppChip(
                 text = data.status.label ?: data.profile?.statusTpp ?: "Belum siap",
                 color = statusColor
@@ -597,6 +595,7 @@ private fun TppNominalDetailCard(nominal: TppNominal?) {
 @Composable
 private fun TppRekapSummaryCard(
     rekap: TppRekapKehadiran?,
+    hasEffectivePayrollData: Boolean,
     onOpenDetail: () -> Unit
 ) {
     ElevatedCard(
@@ -622,7 +621,7 @@ private fun TppRekapSummaryCard(
             }
             Button(
                 onClick = onOpenDetail,
-                enabled = rekap != null
+                enabled = rekap != null || hasEffectivePayrollData
             ) {
                 Text(text = "Detail")
             }
@@ -1181,6 +1180,14 @@ private fun formatDateTime(value: String?): String {
     }.getOrElse {
         value
     }
+}
+
+private fun TppNominal?.hasEffectiveTppData(): Boolean {
+    val nominal = this ?: return false
+    return nominal.estimasiDiterima > 0.0 ||
+        nominal.totalDibayar > 0.0 ||
+        nominal.totalNetto > 0.0 ||
+        !nominal.status.isNullOrBlank()
 }
 
 private fun statusColor(status: String?): Color {

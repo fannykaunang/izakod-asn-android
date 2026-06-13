@@ -8,7 +8,9 @@ import com.google.android.gms.location.LocationServices
 import com.google.gson.JsonElement
 import com.google.gson.JsonNull
 import com.google.gson.JsonPrimitive
-import com.kominfo_mkq.izakod_asn.data.model.*
+import com.kominfo_mkq.izakod_asn.data.model.KategoriKegiatan
+import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaItem
+import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
 import com.kominfo_mkq.izakod_asn.data.repository.LaporanRepository
 import com.kominfo_mkq.izakod_asn.data.repository.TargetKinerjaRepository

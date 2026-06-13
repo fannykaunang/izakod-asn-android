@@ -1,14 +1,20 @@
 package com.kominfo_mkq.izakod_asn.ui.navigation
 
+import android.net.Uri
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.annotation.RequiresApi
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
@@ -20,6 +26,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.kominfo_mkq.izakod_asn.data.local.AuthSessionManager
+import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatan
 import com.kominfo_mkq.izakod_asn.ui.components.IZAKODBottomNavigationBar
 import com.kominfo_mkq.izakod_asn.ui.screens.CreateLaporanScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.DashboardScreen
@@ -28,6 +36,7 @@ import com.kominfo_mkq.izakod_asn.ui.screens.EditLaporanScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.GajiSayaDetailScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.GajiSayaScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.LoginScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.MobileSsoBridgeScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.NotificationDetailScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.NotificationScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.PenilaianBelumDibuatScreen
@@ -74,6 +83,26 @@ sealed class Screen(val route: String) {
     object CreateReport : Screen("create_report")
     object Notifications : Screen("notifications")
     object NotificationDetail : Screen("notification_detail")
+    object MobileSsoBridge : Screen("mobile_sso_bridge?ssoTicket={ssoTicket}&fallbackRoute={fallbackRoute}")
+}
+
+private const val DASHBOARD_PAYROLL_TAB_INDEX = 3
+
+fun mobileSsoBridgeRoute(ticket: String, fallbackRoute: String?): String {
+    return buildString {
+        append("mobile_sso_bridge?ssoTicket=")
+        append(Uri.encode(ticket))
+        append("&fallbackRoute=")
+        append(Uri.encode(fallbackRoute.orEmpty()))
+    }
+}
+
+private fun isMobileSsoBridgeRoute(route: String): Boolean {
+    return route.startsWith("mobile_sso_bridge?")
+}
+
+private fun isPayrollDetailRoute(route: String): Boolean {
+    return route.startsWith("tpp_saya_detail/") || route.startsWith("gaji_saya_detail/")
 }
 
 private fun penilaianKinerjaRoute(mode: String = "mine"): String {
@@ -92,15 +121,20 @@ fun NavHostController.backToDashboardAlways() {
 fun IZAKODNavigation(
     navController: NavHostController = rememberNavController(),
     startDestination: String = Screen.Login.route,
+    initialSsoTicket: String? = null,
+    initialSsoFallbackRoute: String? = null,
     pendingExternalRoute: String? = null,
     onPendingExternalRouteConsumed: () -> Unit = {},
     isDarkTheme: Boolean,
     onToggleTheme: (Boolean) -> Unit
 ) {
-    val createLaporanViewModel: CreateLaporanViewModel = viewModel()
     val profileViewModel: ProfileViewModel = viewModel()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    var loginNoticeMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingReportTemplate by remember { mutableStateOf<TemplateKegiatan?>(null) }
+    var dashboardRequestedTabIndex by rememberSaveable { mutableStateOf<Int?>(null) }
+    var payrollDetailReturnToDashboard by rememberSaveable { mutableStateOf(false) }
 
     val mainRoutes = setOf(
         Screen.Dashboard.route,
@@ -111,10 +145,22 @@ fun IZAKODNavigation(
 
     val showMainNavigation = currentRoute in mainRoutes
 
+    LaunchedEffect(navController) {
+        AuthSessionManager.sessionExpiredEvents.collect { message ->
+            loginNoticeMessage = message
+            navController.navigate(Screen.Login.route) {
+                popUpTo(navController.graph.id) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
+
     LaunchedEffect(pendingExternalRoute, currentRoute) {
         val route = pendingExternalRoute ?: return@LaunchedEffect
-        if (currentRoute == null || currentRoute == Screen.Login.route) return@LaunchedEffect
+        if (currentRoute == null) return@LaunchedEffect
+        if (currentRoute == Screen.Login.route && !isMobileSsoBridgeRoute(route)) return@LaunchedEffect
 
+        payrollDetailReturnToDashboard = isPayrollDetailRoute(route)
         navController.navigate(route) {
             launchSingleTop = true
         }
@@ -122,8 +168,26 @@ fun IZAKODNavigation(
     }
 
     val navigateToCreateReport = {
-        createLaporanViewModel.startFreshForm()
+        pendingReportTemplate = null
         navController.navigate(Screen.CreateReport.route)
+    }
+
+    val navigateToDashboardPayrollTab = {
+        dashboardRequestedTabIndex = DASHBOARD_PAYROLL_TAB_INDEX
+        payrollDetailReturnToDashboard = false
+        navController.navigate(Screen.Dashboard.route) {
+            popUpTo(navController.graph.id) { inclusive = true }
+            launchSingleTop = true
+        }
+    }
+
+    val navigateBackFromPayrollDetail = {
+        if (payrollDetailReturnToDashboard) {
+            navigateToDashboardPayrollTab()
+        } else {
+            val returned = navController.popBackStack()
+            if (!returned) navigateToDashboardPayrollTab()
+        }
     }
 
     Scaffold(
@@ -172,8 +236,11 @@ fun IZAKODNavigation(
         ) {
             composable(Screen.Login.route) {
                 LoginScreen(
+                    sessionMessage = loginNoticeMessage,
+                    onSessionMessageConsumed = { loginNoticeMessage = null },
                     onLoginSuccess = {
                         val targetRoute = pendingExternalRoute ?: Screen.Dashboard.route
+                        payrollDetailReturnToDashboard = isPayrollDetailRoute(targetRoute)
                         navController.navigate(targetRoute) {
                             popUpTo(Screen.Login.route) { inclusive = true }
                             launchSingleTop = true
@@ -181,6 +248,50 @@ fun IZAKODNavigation(
                         if (pendingExternalRoute != null) {
                             onPendingExternalRouteConsumed()
                         }
+                    }
+                )
+            }
+
+            composable(
+                route = Screen.MobileSsoBridge.route,
+                arguments = listOf(
+                    navArgument("ssoTicket") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    },
+                    navArgument("fallbackRoute") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    }
+                )
+            ) { backStackEntry ->
+                val ticket = backStackEntry.arguments
+                    ?.getString("ssoTicket")
+                    ?.takeIf { it.isNotBlank() }
+                    ?: initialSsoTicket.orEmpty()
+                val fallbackRoute = backStackEntry.arguments
+                    ?.getString("fallbackRoute")
+                    ?.takeIf { it.isNotBlank() }
+                    ?: initialSsoFallbackRoute?.takeIf { it.isNotBlank() }
+
+                MobileSsoBridgeScreen(
+                    ticket = ticket,
+                    fallbackRoute = fallbackRoute,
+                    onSuccess = { route ->
+                        payrollDetailReturnToDashboard = isPayrollDetailRoute(route)
+                        navController.navigate(route) {
+                            popUpTo(navController.graph.id) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                        onPendingExternalRouteConsumed()
+                    },
+                    onFailure = { message ->
+                        loginNoticeMessage = "$message Silakan login kembali."
+                        navController.navigate(Screen.Login.route) {
+                            popUpTo(navController.graph.id) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                        onPendingExternalRouteConsumed()
                     }
                 )
             }
@@ -224,7 +335,9 @@ fun IZAKODNavigation(
                     onNavigateToReminder = { navController.navigate(Screen.Reminders.route) },
                     onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) },
                     isDarkTheme = isDarkTheme,
-                    onToggleTheme = onToggleTheme
+                    onToggleTheme = onToggleTheme,
+                    requestedTabIndex = dashboardRequestedTabIndex,
+                    onRequestedTabConsumed = { dashboardRequestedTabIndex = null }
                 )
             }
 
@@ -388,10 +501,11 @@ fun IZAKODNavigation(
             ) { backStackEntry ->
                 val tahun = backStackEntry.arguments?.getInt("tahun") ?: 0
                 val bulan = backStackEntry.arguments?.getInt("bulan") ?: 0
+                BackHandler { navigateBackFromPayrollDetail() }
                 TppSayaDetailScreen(
                     tahun = tahun,
                     bulan = bulan,
-                    onNavigateBack = { navController.popBackStack() }
+                    onNavigateBack = navigateBackFromPayrollDetail
                 )
             }
 
@@ -404,10 +518,11 @@ fun IZAKODNavigation(
             ) { backStackEntry ->
                 val tahun = backStackEntry.arguments?.getInt("tahun") ?: 0
                 val bulan = backStackEntry.arguments?.getInt("bulan") ?: 0
+                BackHandler { navigateBackFromPayrollDetail() }
                 GajiSayaDetailScreen(
                     tahun = tahun,
                     bulan = bulan,
-                    onNavigateBack = { navController.popBackStack() }
+                    onNavigateBack = navigateBackFromPayrollDetail
                 )
             }
 
@@ -474,12 +589,17 @@ fun IZAKODNavigation(
             }
 
             composable(Screen.CreateReport.route) {
+                val createLaporanViewModel: CreateLaporanViewModel = viewModel()
+
                 CreateLaporanScreen(
                     onNavigateBack = {
                         createLaporanViewModel.clearForm()
+                        pendingReportTemplate = null
                         navController.popBackStack()
                     },
-                    viewModel = createLaporanViewModel
+                    viewModel = createLaporanViewModel,
+                    initialTemplate = pendingReportTemplate,
+                    onInitialTemplateConsumed = { pendingReportTemplate = null }
                 )
             }
 
@@ -498,7 +618,7 @@ fun IZAKODNavigation(
                 TemplateKegiatanScreen(
                     onNavigateBack = { navController.popBackStack() },
                     onTemplateClick = { template ->
-                        createLaporanViewModel.loadFromTemplate(template)
+                        pendingReportTemplate = template
                         navController.navigate(Screen.CreateReport.route)
                     }
                 )

@@ -261,15 +261,32 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         val entagoRefresh = userPrefs.getEntagoRefreshToken()
         val legacyMobileToken = userPrefs.getMobileJwtToken()
         val legacyRefreshToken = userPrefs.getRefreshToken()
+        val legacyAccessIsEntagoToken =
+            entagoAccess.isNullOrBlank() &&
+                !legacyMobileToken.isNullOrBlank() &&
+                !isLikelyMobileToken(legacyMobileToken)
 
-        if (entagoAccess.isNullOrBlank() && !legacyMobileToken.isNullOrBlank() && !isLikelyMobileToken(legacyMobileToken)) {
+        if (legacyAccessIsEntagoToken) {
             userPrefs.setEntagoAccessToken(legacyMobileToken)
             android.util.Log.d("LoginViewModel", "✅ Migrated legacy E-NTAGO access token")
         }
 
-        if (entagoRefresh.isNullOrBlank() && !legacyRefreshToken.isNullOrBlank()) {
+        if (
+            legacyAccessIsEntagoToken &&
+            entagoRefresh.isNullOrBlank() &&
+            !legacyRefreshToken.isNullOrBlank()
+        ) {
             userPrefs.setEntagoRefreshToken(legacyRefreshToken)
             android.util.Log.d("LoginViewModel", "✅ Migrated legacy E-NTAGO refresh token")
+        } else if (
+            !entagoRefresh.isNullOrBlank() &&
+            !legacyRefreshToken.isNullOrBlank() &&
+            entagoRefresh == legacyRefreshToken &&
+            !legacyMobileToken.isNullOrBlank() &&
+            isLikelyMobileToken(legacyMobileToken)
+        ) {
+            userPrefs.setEntagoRefreshToken(null)
+            android.util.Log.w("LoginViewModel", "Cleared invalid E-NTAGO refresh token copied from IZAKOD mobile token")
         }
     }
 }

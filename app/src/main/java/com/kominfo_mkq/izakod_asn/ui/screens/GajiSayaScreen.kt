@@ -379,6 +379,7 @@ private fun GajiNominalSummaryCard(
 ) {
     val isLiveEstimate = calculation?.status?.equals("estimasi_berjalan", ignoreCase = true) == true
     val statusLabel = gajiStatusLabel(calculation?.status)
+    val hasEffectiveCalculation = calculation.hasEffectiveGajiData()
 
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
@@ -425,7 +426,7 @@ private fun GajiNominalSummaryCard(
 
         OutlinedButton(
             onClick = onOpenDetail,
-            enabled = calculation != null,
+            enabled = hasEffectiveCalculation,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Lihat rincian gaji")
@@ -784,6 +785,13 @@ private fun gajiStatusLabel(status: String?): String {
         "batal" -> "Batal"
         else -> "Belum"
     }
+}
+
+private fun GajiNonAsnPerhitungan?.hasEffectiveGajiData(): Boolean {
+    val calculation = this ?: return false
+    return calculation.totalDibayar != null ||
+        calculation.gajiPokok != null ||
+        !calculation.status.isNullOrBlank()
 }
 
 private fun gajiPeriodLabel(tahun: Int, bulan: Int): String {

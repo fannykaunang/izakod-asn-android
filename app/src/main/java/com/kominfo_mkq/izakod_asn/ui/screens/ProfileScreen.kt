@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import android.provider.Settings as AndroidSettings
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -16,8 +15,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -98,6 +97,7 @@ import com.kominfo_mkq.izakod_asn.ui.viewmodel.ProfileViewModel
 import com.kominfo_mkq.izakod_asn.utils.UpdateInfoDialog
 import java.text.SimpleDateFormat
 import java.util.Locale
+import android.provider.Settings as AndroidSettings
 
 private fun String?.displayOrDash(): String = this?.takeIf { it.isNotBlank() } ?: "-"
 

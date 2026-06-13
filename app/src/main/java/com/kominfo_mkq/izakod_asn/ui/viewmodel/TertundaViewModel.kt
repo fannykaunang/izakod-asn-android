@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kominfo_mkq.izakod_asn.data.model.LaporanKegiatan
-import com.kominfo_mkq.izakod_asn.data.model.PenilaianKinerjaItem
 import com.kominfo_mkq.izakod_asn.data.model.RealisasiKinerjaItem
 import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaItem
 import com.kominfo_mkq.izakod_asn.data.repository.LaporanRepository

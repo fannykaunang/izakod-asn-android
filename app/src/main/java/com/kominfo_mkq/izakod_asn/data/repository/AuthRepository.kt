@@ -3,6 +3,8 @@ package com.kominfo_mkq.izakod_asn.data.repository
 import com.kominfo_mkq.izakod_asn.data.model.ApiResponse
 import com.kominfo_mkq.izakod_asn.data.model.AuthenticatedSession
 import com.kominfo_mkq.izakod_asn.data.model.EntagoLoginRequest
+import com.kominfo_mkq.izakod_asn.data.model.MobileSsoExchangeRequest
+import com.kominfo_mkq.izakod_asn.data.model.MobileSsoExchangeResponse
 import com.kominfo_mkq.izakod_asn.data.model.MobileTokenRequest
 import com.kominfo_mkq.izakod_asn.data.model.MobileTokenResponse
 import com.kominfo_mkq.izakod_asn.data.model.RefreshTokenRequest
@@ -87,6 +89,14 @@ class AuthRepository {
     ): Response<MobileTokenResponse> {
         return ApiClient.eabsenApiService.refreshMobileToken(
             RefreshTokenRequest(refreshToken = refreshToken)
+        )
+    }
+
+    suspend fun exchangeMobileSsoTicket(
+        ticket: String
+    ): Response<MobileSsoExchangeResponse> {
+        return ApiClient.eabsenApiService.exchangeMobileSsoTicket(
+            MobileSsoExchangeRequest(ticket = ticket)
         )
     }
 }

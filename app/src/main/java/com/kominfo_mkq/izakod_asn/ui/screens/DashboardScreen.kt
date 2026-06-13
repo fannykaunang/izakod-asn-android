@@ -1,7 +1,13 @@
 package com.kominfo_mkq.izakod_asn.ui.screens
 
-import androidx.compose.foundation.background
+import android.util.Log
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -26,11 +32,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
@@ -49,7 +51,6 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
@@ -87,23 +88,23 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
@@ -119,9 +120,6 @@ import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaItem
 import com.kominfo_mkq.izakod_asn.data.model.TimeSeriesItem
 import com.kominfo_mkq.izakod_asn.data.model.TppMeData
 import com.kominfo_mkq.izakod_asn.data.model.isNonAsnPegawai
-import com.kominfo_mkq.izakod_asn.ui.viewmodel.GajiSayaUiState
-import com.kominfo_mkq.izakod_asn.ui.viewmodel.GajiSayaViewModel
-import com.kominfo_mkq.izakod_asn.ui.viewmodel.TppSayaUiState
 import com.kominfo_mkq.izakod_asn.ui.components.ElevatedCard
 import com.kominfo_mkq.izakod_asn.ui.components.GradientCard
 import com.kominfo_mkq.izakod_asn.ui.components.OutlinedCard
@@ -134,17 +132,21 @@ import com.kominfo_mkq.izakod_asn.ui.theme.StatusRejected
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusRevised
 import com.kominfo_mkq.izakod_asn.ui.theme.TertiaryLight
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.DashboardViewModel
+import com.kominfo_mkq.izakod_asn.ui.viewmodel.GajiSayaUiState
+import com.kominfo_mkq.izakod_asn.ui.viewmodel.GajiSayaViewModel
+import com.kominfo_mkq.izakod_asn.ui.viewmodel.TppSayaUiState
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.TppSayaViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
-import kotlin.math.roundToInt
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private fun String?.displayOrDash(): String = this?.takeIf { it.isNotBlank() } ?: "-"
+private const val DASHBOARD_PAYROLL_LOG_TAG = "IZAKOD_DASH_PAYROLL"
 private fun String?.toIntSafe(): Int = this?.toIntOrNull() ?: 0
 private fun String?.toFloatSafe(): Float = this?.toFloatOrNull() ?: 0f
 private fun String?.toDoubleSafe(): Double = this?.toDoubleOrNull() ?: 0.0
@@ -246,6 +248,8 @@ fun DashboardScreen(
     onNavigateToNotifications: () -> Unit,
     isDarkTheme: Boolean,
     onToggleTheme: (Boolean) -> Unit,
+    requestedTabIndex: Int? = null,
+    onRequestedTabConsumed: () -> Unit = {},
     viewModel: DashboardViewModel = viewModel(),
     tppViewModel: TppSayaViewModel = viewModel(),
     gajiViewModel: GajiSayaViewModel = viewModel()
@@ -256,12 +260,41 @@ fun DashboardScreen(
     val gajiUiState by gajiViewModel.uiState.collectAsState()
     val context = LocalContext.current
     val userPreferences = remember { UserPreferences(context) }
+
     val sessionData = remember { userPreferences.getSessionData() }
-    val isNonAsnPayroll = uiState.pegawaiProfile.isNonAsnPegawai()
-    val isPayrollRefreshing = if (isNonAsnPayroll) {
-        gajiUiState.isRefreshing
-    } else {
-        tppUiState.isRefreshing
+    val isPayrollProfileReady = uiState.pegawaiProfile != null
+    val isNonAsnPayroll = uiState.pegawaiProfile?.isNonAsnPegawai() == true
+
+    LaunchedEffect(
+        requestedTabIndex,
+        isPayrollProfileReady,
+        isNonAsnPayroll,
+        gajiUiState.data?.perhitungan?.totalDibayar,
+        tppUiState.data?.nominalTpp?.estimasiDiterima
+    ) {
+        if (!isPayrollProfileReady) {
+            Log.d(
+                DASHBOARD_PAYROLL_LOG_TAG,
+                "Dashboard payroll pending: requestedTab=$requestedTabIndex, profileReady=false"
+            )
+            return@LaunchedEffect
+        }
+
+        Log.d(
+            DASHBOARD_PAYROLL_LOG_TAG,
+            "Dashboard payroll state: requestedTab=$requestedTabIndex, isNonAsn=$isNonAsnPayroll, " +
+                "gajiPeriod=${gajiUiState.tahun}-${gajiUiState.bulan}, gajiHasData=${gajiUiState.data != null}, " +
+                "gajiHasCalculation=${gajiUiState.data?.perhitungan != null}, gajiTotal=${gajiUiState.data?.perhitungan?.totalDibayar}, " +
+                "gajiStatus=${gajiUiState.data?.perhitungan?.status}, " +
+                "tppPeriod=${tppUiState.tahun}-${tppUiState.bulan}, tppHasData=${tppUiState.data != null}, " +
+                "tppHasNominal=${tppUiState.data?.nominalTpp != null}, tppEstimasi=${tppUiState.data?.nominalTpp?.estimasiDiterima}, " +
+                "tppStatus=${tppUiState.data?.nominalTpp?.status}"
+        )
+    }
+    val isPayrollRefreshing = when {
+        !isPayrollProfileReady -> false
+        isNonAsnPayroll -> gajiUiState.isRefreshing
+        else -> tppUiState.isRefreshing
     }
     val isDashboardRefreshing = uiState.isRefreshing || isPayrollRefreshing
     val pullRefreshState = rememberPullRefreshState(
@@ -271,7 +304,7 @@ fun DashboardScreen(
             sessionData?.pin?.takeIf { it.isNotEmpty() }?.let { pin ->
                 viewModel.loadPegawaiProfile(pin)
             }
-            if (uiState.pegawaiProfile != null) {
+            if (isPayrollProfileReady) {
                 if (isNonAsnPayroll) {
                     gajiViewModel.refresh()
                 } else {
@@ -359,6 +392,9 @@ fun DashboardScreen(
                         onRetry = { viewModel.retry(context) }
                     )
                 }
+                !isPayrollProfileReady -> LoadingContent(
+                    message = "Memuat profil pegawai..."
+                )
                 else -> {
                     DashboardContent(
                         metrics = uiState.metrics,
@@ -401,6 +437,8 @@ fun DashboardScreen(
                         onTemplates = onNavigateToTemplates,
                         onReminder = onNavigateToReminder,
                         viewModel = viewModel,
+                        requestedTabIndex = requestedTabIndex,
+                        onRequestedTabConsumed = onRequestedTabConsumed,
                         onFocusBoundsChanged = { focusSectionBounds = it }
                     )
 
@@ -469,6 +507,8 @@ private fun DashboardContent(
     onTemplates: () -> Unit,
     onReminder: () -> Unit,
     viewModel: DashboardViewModel,
+    requestedTabIndex: Int? = null,
+    onRequestedTabConsumed: () -> Unit = {},
     onFocusBoundsChanged: (Rect?) -> Unit = {}
 ) {
     val payrollTabTitle = if (isNonAsnPayroll) "Gaji" else "TPP"
@@ -476,6 +516,12 @@ private fun DashboardContent(
     val tabs = listOf("Utama", "Target", "Penilaian", payrollTabTitle)
 
     val selectedTabIndex by viewModel.currentTabIndex.collectAsState()
+
+    LaunchedEffect(requestedTabIndex, tabs.size) {
+        val targetIndex = requestedTabIndex?.takeIf { it in tabs.indices } ?: return@LaunchedEffect
+        viewModel.updateTabIndex(targetIndex)
+        onRequestedTabConsumed()
+    }
 
     val canReviewSubordinates = assessmentSummary?.canReviewSubordinates == true
 
@@ -772,7 +818,9 @@ fun DashboardTopBar(
 }
 
 @Composable
-fun LoadingContent() {
+fun LoadingContent(
+    message: String = "Memuat ringkasan dashboard..."
+) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -783,7 +831,7 @@ fun LoadingContent() {
         ) {
             CircularProgressIndicator()
             Text(
-                text = "Memuat ringkasan dashboard...",
+                text = message,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )

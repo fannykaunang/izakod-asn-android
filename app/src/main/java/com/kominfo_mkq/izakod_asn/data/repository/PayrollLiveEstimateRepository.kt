@@ -1,5 +1,7 @@
 package com.kominfo_mkq.izakod_asn.data.repository
 
+import com.kominfo_mkq.izakod_asn.data.local.AppContextHolder
+import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.ApiResponse
 import com.kominfo_mkq.izakod_asn.data.model.PayrollLiveEstimateResponse
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
@@ -30,6 +32,13 @@ class PayrollLiveEstimateRepository {
         type: EstimateType
     ): ApiResponse<PayrollLiveEstimateResponse> = withContext(Dispatchers.IO) {
         try {
+            if (!hasEntagoSession()) {
+                return@withContext ApiResponse(
+                    success = false,
+                    error = "Snapshot absensi live E-NTAGO belum tersedia di perangkat ini."
+                )
+            }
+
             val snapshotResponse = entagoApiService.getPayrollAbsensiLiveSnapshot(
                 tahun = tahun,
                 bulan = bulan
@@ -96,6 +105,13 @@ class PayrollLiveEstimateRepository {
         }
 
         return parsedMessage.ifBlank { fallback }
+    }
+
+    private fun hasEntagoSession(): Boolean {
+        val context = AppContextHolder.get() ?: return false
+        val prefs = UserPreferences(context)
+        return !prefs.getEntagoAccessToken().isNullOrBlank() ||
+            !prefs.getEntagoRefreshToken().isNullOrBlank()
     }
 
     private enum class EstimateType {

@@ -1,8 +1,8 @@
 package com.kominfo_mkq.izakod_asn.data.repository
 
 import com.kominfo_mkq.izakod_asn.data.model.ApiResponse
-import com.kominfo_mkq.izakod_asn.data.model.StatistikHarianResponse
 import com.kominfo_mkq.izakod_asn.data.model.StatistikBulananResponse
+import com.kominfo_mkq.izakod_asn.data.model.StatistikHarianResponse
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

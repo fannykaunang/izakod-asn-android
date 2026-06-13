@@ -2,8 +2,10 @@ package com.kominfo_mkq.izakod_asn.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kominfo_mkq.izakod_asn.data.local.AppContextHolder
+import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
-import com.kominfo_mkq.izakod_asn.data.remote.EabsenRetrofitClient
+import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,7 +37,7 @@ class ProfileViewModel : ViewModel() {
     }
 
     /**
-     * Load pegawai profile from ASP.NET Core Eabsen API
+     * Load pegawai profile from IZAKOD-ASN pegawai_cache.
      */
     fun loadProfile(pin: String) {
         viewModelScope.launch {
@@ -49,7 +51,7 @@ class ProfileViewModel : ViewModel() {
                     // BIARKAN profile lama tetap ada sementara loading (no flicker)
                 )
 
-                val response = EabsenRetrofitClient.apiService.getPegawaiProfile(pin)
+                val response = ApiClient.eabsenApiService.getMobileProfile()
 
                 if (response.isSuccessful && response.body()?.success == true && response.body()?.data != null) {
                     val profile = response.body()!!.data!!
@@ -57,9 +59,11 @@ class ProfileViewModel : ViewModel() {
                     android.util.Log.d("ProfileViewModel", "✅ Profile loaded: ${profile.pegawaiNama}")
                     android.util.Log.d("ProfileViewModel", "📸 Photo path: ${profile.photoPath}")
 
-                    val photoUrl = if (profile.photoPath != null) {
-                        "https://entago.merauke.go.id/${profile.photoPath}"
-                    } else null
+                    AppContextHolder.get()?.let { context ->
+                        UserPreferences(context).saveProfileSnapshot(profile)
+                    }
+
+                    val photoUrl = profile.toEntagoPhotoUrl()
 
                     android.util.Log.d("ProfileViewModel", "🔗 Photo URL: $photoUrl")
 
@@ -75,20 +79,12 @@ class ProfileViewModel : ViewModel() {
                         "❌ Profile response body: success=${response.body()?.success}, message=${response.body()?.message}"
                     )
 
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        isError = true,
-                        errorMessage = "Gagal memuat profil (${response.code()})"
-                    )
+                    applyCachedProfileFallback("Gagal memuat profil (${response.code()})")
                 }
             } catch (e: Exception) {
                 android.util.Log.e("ProfileViewModel", "❌ Error loading profile: ${e.message}", e)
 
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    isError = true,
-                    errorMessage = e.message ?: "Terjadi kesalahan"
-                )
+                applyCachedProfileFallback(e.message ?: "Terjadi kesalahan")
             }
         }
     }
@@ -101,5 +97,31 @@ class ProfileViewModel : ViewModel() {
             profile = null,
             photoUrl = null
         )
+    }
+
+    private fun applyCachedProfileFallback(fallbackMessage: String) {
+        val cachedProfile = AppContextHolder.get()
+            ?.let { context -> UserPreferences(context).getCachedPegawaiProfile() }
+
+        if (cachedProfile != null) {
+            _uiState.value = _uiState.value.copy(
+                isLoading = false,
+                isError = false,
+                errorMessage = null,
+                profile = cachedProfile,
+                photoUrl = cachedProfile.toEntagoPhotoUrl()
+            )
+        } else {
+            _uiState.value = _uiState.value.copy(
+                isLoading = false,
+                isError = true,
+                errorMessage = fallbackMessage
+            )
+        }
+    }
+
+    private fun PegawaiProfile.toEntagoPhotoUrl(): String? {
+        val cleanPath = photoPath?.removePrefix("/") ?: return null
+        return "https://entago.merauke.go.id/$cleanPath"
     }
 }

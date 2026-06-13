@@ -1,5 +1,6 @@
 package com.kominfo_mkq.izakod_asn.ui.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnMeData
@@ -28,6 +29,13 @@ class GajiSayaViewModel : ViewModel() {
     val uiState: StateFlow<GajiSayaUiState> = _uiState.asStateFlow()
 
     fun refresh() {
+        Log.d(
+            TAG,
+            "refresh requested: tahun=${_uiState.value.tahun}, bulan=${_uiState.value.bulan}, " +
+                "hasData=${_uiState.value.data != null}, " +
+                "hasCalculation=${_uiState.value.data?.perhitungan != null}, " +
+                "total=${_uiState.value.data?.perhitungan?.totalDibayar}"
+        )
         loadGajiSaya(
             tahun = _uiState.value.tahun,
             bulan = _uiState.value.bulan,
@@ -36,6 +44,15 @@ class GajiSayaViewModel : ViewModel() {
     }
 
     fun setPeriod(tahun: Int, bulan: Int) {
+        val shouldSkip = tahun == _uiState.value.tahun &&
+            bulan == _uiState.value.bulan &&
+            _uiState.value.data != null
+        Log.d(
+            TAG,
+            "setPeriod requested: tahun=$tahun, bulan=$bulan, current=${_uiState.value.tahun}-${_uiState.value.bulan}, " +
+                "hasData=${_uiState.value.data != null}, hasCalculation=${_uiState.value.data?.perhitungan != null}, " +
+                "willSkip=$shouldSkip"
+        )
         if (tahun == _uiState.value.tahun && bulan == _uiState.value.bulan && _uiState.value.data != null) {
             return
         }
@@ -68,6 +85,7 @@ class GajiSayaViewModel : ViewModel() {
         refreshOnly: Boolean = false
     ) {
         viewModelScope.launch {
+            Log.d(TAG, "loadGajiSaya start: tahun=$tahun, bulan=$bulan, refreshOnly=$refreshOnly")
             _uiState.value = _uiState.value.copy(
                 isLoading = !refreshOnly,
                 isRefreshing = refreshOnly,
@@ -81,8 +99,20 @@ class GajiSayaViewModel : ViewModel() {
             )
 
             if (_uiState.value.tahun != tahun || _uiState.value.bulan != bulan) {
+                Log.d(
+                    TAG,
+                    "loadGajiSaya ignored stale response: requested=$tahun-$bulan, current=${_uiState.value.tahun}-${_uiState.value.bulan}"
+                )
                 return@launch
             }
+
+            Log.d(
+                TAG,
+                "loadGajiSaya response: success=${response.success}, hasData=${response.data?.data != null}, " +
+                    "hasCalculation=${response.data?.data?.perhitungan != null}, " +
+                    "total=${response.data?.data?.perhitungan?.totalDibayar}, " +
+                    "status=${response.data?.data?.perhitungan?.status}, error=${response.error}"
+            )
 
             if (response.success && response.data?.data != null) {
                 _uiState.value = _uiState.value.copy(
@@ -101,5 +131,9 @@ class GajiSayaViewModel : ViewModel() {
                 )
             }
         }
+    }
+
+    private companion object {
+        private const val TAG = "IZAKOD_GAJI_VM"
     }
 }

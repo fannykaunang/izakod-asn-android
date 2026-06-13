@@ -3,15 +3,16 @@ package com.kominfo_mkq.izakod_asn.ui.viewmodel
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kominfo_mkq.izakod_asn.data.local.AppContextHolder
+import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.AssessmentSummaryData
 import com.kominfo_mkq.izakod_asn.data.model.DashboardActionAlertsData
 import com.kominfo_mkq.izakod_asn.data.model.DashboardTargetSummaryData
 import com.kominfo_mkq.izakod_asn.data.model.MetricsData
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
-import com.kominfo_mkq.izakod_asn.data.model.TimeSeriesItem
 import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaItem
+import com.kominfo_mkq.izakod_asn.data.model.TimeSeriesItem
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
-import com.kominfo_mkq.izakod_asn.data.remote.EabsenRetrofitClient
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -81,27 +82,27 @@ class DashboardViewModel : ViewModel() {
             try {
                 _uiState.update { it.copy(isLoadingProfile = true) }
 
-                val response = EabsenRetrofitClient.apiService.getPegawaiProfile(pin)
+                val response = ApiClient.eabsenApiService.getMobileProfile()
 
                 if (response.isSuccessful && response.body()?.success == true && response.body()?.data != null) {
                     val profile = response.body()!!.data!!
 
-                    // Bersihkan path jika ada double slash
-                    val cleanPath = profile.photoPath?.removePrefix("/")
-                    val fullPhotoUrl = if (cleanPath != null) {
-                        "https://entago.merauke.go.id/$cleanPath"
-                    } else null
+                    AppContextHolder.get()?.let { context ->
+                        UserPreferences(context).saveProfileSnapshot(profile)
+                    }
 
                     _uiState.update {
                         it.copy(
                             pegawaiProfile = profile,
-                            photoUrl = fullPhotoUrl,
+                            photoUrl = profile.toEntagoPhotoUrl(),
                             isLoadingProfile = false
                         )
                     }
+                } else {
+                    applyCachedProfileFallback()
                 }
             } catch (_: Exception) {
-                _uiState.update { it.copy(isLoadingProfile = false) }
+                applyCachedProfileFallback()
             }
         }
     }
@@ -154,6 +155,28 @@ class DashboardViewModel : ViewModel() {
             bulan = selectedTargetMonth
         )
         context?.let { loadTertundaCount(it.applicationContext) }
+    }
+
+    private fun applyCachedProfileFallback() {
+        val cachedProfile = AppContextHolder.get()
+            ?.let { context -> UserPreferences(context).getCachedPegawaiProfile() }
+
+        if (cachedProfile != null) {
+            _uiState.update {
+                it.copy(
+                    pegawaiProfile = cachedProfile,
+                    photoUrl = cachedProfile.toEntagoPhotoUrl(),
+                    isLoadingProfile = false
+                )
+            }
+        } else {
+            _uiState.update { it.copy(isLoadingProfile = false) }
+        }
+    }
+
+    private fun PegawaiProfile.toEntagoPhotoUrl(): String? {
+        val cleanPath = photoPath?.removePrefix("/") ?: return null
+        return "https://entago.merauke.go.id/$cleanPath"
     }
 
     /**

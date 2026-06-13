@@ -1,5 +1,6 @@
 package com.kominfo_mkq.izakod_asn.ui.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kominfo_mkq.izakod_asn.data.model.TppMeData
@@ -28,6 +29,14 @@ class TppSayaViewModel : ViewModel() {
     val uiState: StateFlow<TppSayaUiState> = _uiState.asStateFlow()
 
     fun refresh() {
+        Log.d(
+            TAG,
+            "refresh requested: tahun=${_uiState.value.tahun}, bulan=${_uiState.value.bulan}, " +
+                "hasData=${_uiState.value.data != null}, " +
+                "hasNominal=${_uiState.value.data?.nominalTpp != null}, " +
+                "estimasi=${_uiState.value.data?.nominalTpp?.estimasiDiterima}, " +
+                "totalDibayar=${_uiState.value.data?.nominalTpp?.totalDibayar}"
+        )
         loadTppSaya(
             tahun = _uiState.value.tahun,
             bulan = _uiState.value.bulan,
@@ -36,6 +45,15 @@ class TppSayaViewModel : ViewModel() {
     }
 
     fun setPeriod(tahun: Int, bulan: Int) {
+        val shouldSkip = tahun == _uiState.value.tahun &&
+            bulan == _uiState.value.bulan &&
+            _uiState.value.data != null
+        Log.d(
+            TAG,
+            "setPeriod requested: tahun=$tahun, bulan=$bulan, current=${_uiState.value.tahun}-${_uiState.value.bulan}, " +
+                "hasData=${_uiState.value.data != null}, hasNominal=${_uiState.value.data?.nominalTpp != null}, " +
+                "willSkip=$shouldSkip"
+        )
         if (tahun == _uiState.value.tahun && bulan == _uiState.value.bulan && _uiState.value.data != null) {
             return
         }
@@ -68,6 +86,7 @@ class TppSayaViewModel : ViewModel() {
         refreshOnly: Boolean = false
     ) {
         viewModelScope.launch {
+            Log.d(TAG, "loadTppSaya start: tahun=$tahun, bulan=$bulan, refreshOnly=$refreshOnly")
             _uiState.value = _uiState.value.copy(
                 isLoading = !refreshOnly,
                 isRefreshing = refreshOnly,
@@ -81,8 +100,21 @@ class TppSayaViewModel : ViewModel() {
             )
 
             if (_uiState.value.tahun != tahun || _uiState.value.bulan != bulan) {
+                Log.d(
+                    TAG,
+                    "loadTppSaya ignored stale response: requested=$tahun-$bulan, current=${_uiState.value.tahun}-${_uiState.value.bulan}"
+                )
                 return@launch
             }
+
+            Log.d(
+                TAG,
+                "loadTppSaya response: success=${response.success}, hasData=${response.data?.data != null}, " +
+                    "hasNominal=${response.data?.data?.nominalTpp != null}, " +
+                    "estimasi=${response.data?.data?.nominalTpp?.estimasiDiterima}, " +
+                    "totalDibayar=${response.data?.data?.nominalTpp?.totalDibayar}, " +
+                    "status=${response.data?.data?.nominalTpp?.status}, error=${response.error}"
+            )
 
             if (response.success && response.data?.data != null) {
                 _uiState.value = _uiState.value.copy(
@@ -101,5 +133,9 @@ class TppSayaViewModel : ViewModel() {
                 )
             }
         }
+    }
+
+    private companion object {
+        private const val TAG = "IZAKOD_TPP_VM"
     }
 }

@@ -3,11 +3,11 @@ package com.kominfo_mkq.izakod_asn.data.remote
 import com.kominfo_mkq.izakod_asn.data.local.AppContextHolder
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.RefreshTokenRequest
+import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.logging.HttpLoggingInterceptor
-import kotlinx.coroutines.runBlocking
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
@@ -53,10 +53,17 @@ object EabsenRetrofitClient {
                 ?.removePrefix("Bearer ")
                 ?.trim()
 
-            val refreshToken = AppContextHolder.get()?.let { context ->
-                UserPreferences(context).getEntagoRefreshToken()
+            val context = AppContextHolder.get()
+            val refreshToken = context?.let {
+                UserPreferences(it).getEntagoRefreshToken()
             }
-            if (refreshToken.isNullOrBlank()) return@authenticator null
+            if (refreshToken.isNullOrBlank()) {
+                android.util.Log.w(
+                    "EabsenRetrofitClient",
+                    "Token E-NTAGO tidak tersedia; request upstream dibiarkan gagal tanpa logout IZAKOD."
+                )
+                return@authenticator null
+            }
 
             val refreshClient = OkHttpClient.Builder()
                 .addInterceptor { chain ->
@@ -96,11 +103,7 @@ object EabsenRetrofitClient {
                             "EabsenRetrofitClient",
                             "Refresh token gagal: ${refreshResponse.code()}"
                         )
-                        AppContextHolder.get()?.let { context ->
-                            val prefs = UserPreferences(context)
-                            prefs.setEntagoAccessToken(null)
-                            prefs.setEntagoRefreshToken(null)
-                        }
+                        clearEntagoTokens(context)
                         return@synchronized null
                     }
 
@@ -110,11 +113,7 @@ object EabsenRetrofitClient {
 
                     if (newToken.isEmpty() || newRefreshToken.isEmpty()) {
                         android.util.Log.e("EabsenRetrofitClient", "Refresh response tidak lengkap")
-                        AppContextHolder.get()?.let { context ->
-                            val prefs = UserPreferences(context)
-                            prefs.setEntagoAccessToken(null)
-                            prefs.setEntagoRefreshToken(null)
-                        }
+                        clearEntagoTokens(context)
                         return@synchronized null
                     }
 
@@ -129,6 +128,7 @@ object EabsenRetrofitClient {
                         .build()
                 } catch (e: Exception) {
                     android.util.Log.e("EabsenRetrofitClient", "Refresh fatal: ${e.message}", e)
+                    clearEntagoTokens(context)
                     null
                 }
             }
@@ -158,5 +158,11 @@ object EabsenRetrofitClient {
             priorResponse = priorResponse.priorResponse
         }
         return result
+    }
+
+    private fun clearEntagoTokens(context: android.content.Context?) {
+        context?.applicationContext?.let {
+            UserPreferences(it).clearEntagoTokens()
+        }
     }
 }

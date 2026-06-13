@@ -1,13 +1,15 @@
 package com.kominfo_mkq.izakod_asn.data.remote
 
+import com.google.gson.JsonObject
 import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiResponse
 import com.kominfo_mkq.izakod_asn.data.model.BasicActionResponse
 import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanResponse
+import com.kominfo_mkq.izakod_asn.data.model.CreatePenilaianKinerjaRequest
 import com.kominfo_mkq.izakod_asn.data.model.CreateReminderRequest
 import com.kominfo_mkq.izakod_asn.data.model.CreateReminderResponse
-import com.kominfo_mkq.izakod_asn.data.model.DeleteReminderResponse
 import com.kominfo_mkq.izakod_asn.data.model.DashboardOverviewResponse
+import com.kominfo_mkq.izakod_asn.data.model.DeleteReminderResponse
 import com.kominfo_mkq.izakod_asn.data.model.EntagoLoginRequest
 import com.kominfo_mkq.izakod_asn.data.model.EntagoLoginResponse
 import com.kominfo_mkq.izakod_asn.data.model.FcmRegisterRequest
@@ -16,43 +18,51 @@ import com.kominfo_mkq.izakod_asn.data.model.KategoriListResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanCetakResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanDetailResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanListResponse
+import com.kominfo_mkq.izakod_asn.data.model.MobileSsoExchangeRequest
+import com.kominfo_mkq.izakod_asn.data.model.MobileSsoExchangeResponse
 import com.kominfo_mkq.izakod_asn.data.model.MobileTokenRequest
 import com.kominfo_mkq.izakod_asn.data.model.MobileTokenResponse
-import com.kominfo_mkq.izakod_asn.data.model.PayrollLiveEstimateResponse
-import com.kominfo_mkq.izakod_asn.data.model.RefreshTokenRequest
 import com.kominfo_mkq.izakod_asn.data.model.NotifikasiResponse
+import com.kominfo_mkq.izakod_asn.data.model.PayrollLiveEstimateResponse
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiData
-import com.kominfo_mkq.izakod_asn.data.model.CreatePenilaianKinerjaRequest
+import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfileResponse
 import com.kominfo_mkq.izakod_asn.data.model.PenilaianBelumDibuatResponse
 import com.kominfo_mkq.izakod_asn.data.model.PenilaianKinerjaDetailResponse
 import com.kominfo_mkq.izakod_asn.data.model.PenilaianKinerjaListResponse
-import com.kominfo_mkq.izakod_asn.data.model.UpdatePenilaianKinerjaRequest
+import com.kominfo_mkq.izakod_asn.data.model.RealisasiKinerjaDetailResponse
+import com.kominfo_mkq.izakod_asn.data.model.RealisasiKinerjaHistoryResponse
+import com.kominfo_mkq.izakod_asn.data.model.RealisasiKinerjaListResponse
+import com.kominfo_mkq.izakod_asn.data.model.RealisasiKinerjaRequest
+import com.kominfo_mkq.izakod_asn.data.model.RealisasiLinkLaporanRequest
+import com.kominfo_mkq.izakod_asn.data.model.RealisasiLinkedLaporanResponse
+import com.kominfo_mkq.izakod_asn.data.model.RefreshTokenRequest
 import com.kominfo_mkq.izakod_asn.data.model.ReminderListResponse
-import com.kominfo_mkq.izakod_asn.data.model.StatistikHarianResponse
 import com.kominfo_mkq.izakod_asn.data.model.StatistikBulananResponse
-import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanCreateRequest
-import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanCreateResponse
-import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanResponse
-import com.kominfo_mkq.izakod_asn.data.model.TppMeResponse
+import com.kominfo_mkq.izakod_asn.data.model.StatistikHarianResponse
 import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaDetailResponse
 import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaHistoryResponse
 import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaListResponse
 import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaMutationResponse
 import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaRequest
 import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaReviewRequest
-import com.kominfo_mkq.izakod_asn.data.model.RealisasiKinerjaDetailResponse
-import com.kominfo_mkq.izakod_asn.data.model.RealisasiKinerjaHistoryResponse
-import com.kominfo_mkq.izakod_asn.data.model.RealisasiKinerjaListResponse
-import com.kominfo_mkq.izakod_asn.data.model.RealisasiKinerjaRequest
-import com.kominfo_mkq.izakod_asn.data.model.RealisasiLinkedLaporanResponse
-import com.kominfo_mkq.izakod_asn.data.model.RealisasiLinkLaporanRequest
+import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanCreateRequest
+import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanCreateResponse
+import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanResponse
+import com.kominfo_mkq.izakod_asn.data.model.TppMeResponse
 import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanResponse
+import com.kominfo_mkq.izakod_asn.data.model.UpdatePenilaianKinerjaRequest
 import com.kominfo_mkq.izakod_asn.data.model.VerifikasiLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.VerifikasiLaporanResponse
-import com.google.gson.JsonObject
 import retrofit2.Response
-import retrofit2.http.*
+import retrofit2.http.Body
+import retrofit2.http.DELETE
+import retrofit2.http.GET
+import retrofit2.http.PATCH
+import retrofit2.http.POST
+import retrofit2.http.PUT
+import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
  * API Service untuk eAbsen endpoints
@@ -110,6 +120,9 @@ interface EabsenApiService {
         @Query("tahun") tahun: Int? = null,
         @Query("bulan") bulan: Int? = null
     ): Response<DashboardOverviewResponse>
+
+    @GET("api/mobile/profile/me")
+    suspend fun getMobileProfile(): Response<PegawaiProfileResponse>
 
     @GET("api/tpp/me")
     suspend fun getTppSaya(
@@ -298,6 +311,11 @@ interface EabsenApiService {
     suspend fun refreshMobileToken(
         @Body request: RefreshTokenRequest
     ): Response<MobileTokenResponse>
+
+    @POST("api/mobile/sso-exchange")
+    suspend fun exchangeMobileSsoTicket(
+        @Body request: MobileSsoExchangeRequest
+    ): Response<MobileSsoExchangeResponse>
 
     @POST("api/mobile/fcm/register")
     suspend fun registerFcmToken(

@@ -3,9 +3,11 @@ package com.kominfo_mkq.izakod_asn.data.local
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import androidx.core.content.edit
+import com.kominfo_mkq.izakod_asn.data.model.EntagoLoginUser
+import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
 import java.io.IOException
 import java.security.GeneralSecurityException
 import java.security.KeyStore
@@ -33,9 +35,30 @@ class UserPreferences(context: Context) {
         private const val KEY_MOBILE_REFRESH_TOKEN = "mobile_refresh_token"
         private const val KEY_ENTAGO_ACCESS_TOKEN = "entago_access_token"
         private const val KEY_ENTAGO_REFRESH_TOKEN = "entago_refresh_token"
+        private const val KEY_PROFILE_NAMA = "profile_nama"
+        private const val KEY_PROFILE_NIP = "profile_nip"
+        private const val KEY_PROFILE_TEMPAT_LAHIR = "profile_tempat_lahir"
+        private const val KEY_PROFILE_TGL_LAHIR = "profile_tgl_lahir"
+        private const val KEY_PROFILE_GENDER = "profile_gender"
+        private const val KEY_PROFILE_TELP = "profile_telp"
+        private const val KEY_PROFILE_STATUS = "profile_status"
+        private const val KEY_PROFILE_JABATAN = "profile_jabatan"
+        private const val KEY_PROFILE_SKPD = "profile_skpd"
+        private const val KEY_PROFILE_SOTK = "profile_sotk"
+        private const val KEY_PROFILE_TGL_MULAI_KERJA = "profile_tgl_mulai_kerja"
+        private const val KEY_PROFILE_PHOTO_PATH = "profile_photo_path"
+        private const val KEY_PROFILE_DEVICE_ID = "profile_device_id"
         private const val KEY_MOBILE_FCM_TOKEN = "mobile_fcm_token"
         private const val KEY_NOTIF_PERMISSION_ASKED = "notif_permission_asked"
         private const val KEY_DASHBOARD_COACHMARK_DISMISSED_PREFIX = "dashboard_coachmark_dismissed_"
+        private const val KEY_SSO_PAYROLL_ESTIMATE_JSON = "sso_payroll_estimate_json"
+        private const val KEY_SSO_PAYROLL_ESTIMATE_SAVED_AT = "sso_payroll_estimate_saved_at"
+
+        @Volatile
+        private var inMemorySsoPayrollEstimateJson: String? = null
+
+        @Volatile
+        private var inMemorySsoPayrollEstimateSavedAt: Long = 0L
 
         private fun createEncryptedPrefsWithRecovery(context: Context): SharedPreferences {
             return try {
@@ -170,7 +193,13 @@ class UserPreferences(context: Context) {
         skpdid: Int,
         pegawaiId: Int
     ) {
+        val previousPegawaiId = getPegawaiId()
+        val previousPin = getPin()
+        val isDifferentPegawai = (previousPegawaiId != null && previousPegawaiId != pegawaiId) ||
+                (!previousPin.isNullOrBlank() && previousPin != pin)
+
         editSafely {
+            if (isDifferentPegawai) clearProfileSnapshotFields()
             putBoolean(KEY_IS_LOGGED_IN, true)
             putString(KEY_EMAIL, email)
             putString(KEY_PIN, pin)
@@ -280,6 +309,152 @@ class UserPreferences(context: Context) {
         return readSafely<String?>(null) { getString(KEY_ENTAGO_REFRESH_TOKEN, null) }
     }
 
+    fun saveSsoPayrollEstimate(json: String?) {
+        val cleanedJson = json?.trim()?.takeIf { it.isNotBlank() }
+        val savedAt = if (cleanedJson == null) 0L else System.currentTimeMillis()
+
+        inMemorySsoPayrollEstimateJson = cleanedJson
+        inMemorySsoPayrollEstimateSavedAt = savedAt
+
+        editSafely {
+            if (cleanedJson == null) {
+                remove(KEY_SSO_PAYROLL_ESTIMATE_JSON)
+                remove(KEY_SSO_PAYROLL_ESTIMATE_SAVED_AT)
+            } else {
+                putString(KEY_SSO_PAYROLL_ESTIMATE_JSON, cleanedJson)
+                putLong(KEY_SSO_PAYROLL_ESTIMATE_SAVED_AT, savedAt)
+            }
+        }
+    }
+
+    fun getSsoPayrollEstimateJson(maxAgeMillis: Long = 10 * 60 * 1000L): String? {
+        val now = System.currentTimeMillis()
+        val savedAt = readSafely(0L) { getLong(KEY_SSO_PAYROLL_ESTIMATE_SAVED_AT, 0L) }
+        val persistedJson = readSafely<String?>(null) { getString(KEY_SSO_PAYROLL_ESTIMATE_JSON, null) }
+        if (savedAt > 0L && now - savedAt <= maxAgeMillis && !persistedJson.isNullOrBlank()) {
+            return persistedJson
+        }
+
+        val memoryJson = inMemorySsoPayrollEstimateJson
+        val memorySavedAt = inMemorySsoPayrollEstimateSavedAt
+        if (memorySavedAt > 0L && now - memorySavedAt <= maxAgeMillis && !memoryJson.isNullOrBlank()) {
+            return memoryJson
+        }
+
+        clearSsoPayrollEstimate()
+        return null
+    }
+
+    fun clearSsoPayrollEstimate() {
+        inMemorySsoPayrollEstimateJson = null
+        inMemorySsoPayrollEstimateSavedAt = 0L
+
+        editSafely {
+            remove(KEY_SSO_PAYROLL_ESTIMATE_JSON)
+            remove(KEY_SSO_PAYROLL_ESTIMATE_SAVED_AT)
+        }
+    }
+
+    fun saveProfileSnapshot(profile: PegawaiProfile) {
+        editSafely {
+            putString(KEY_PROFILE_NAMA, profile.pegawaiNama)
+            putString(KEY_PROFILE_NIP, profile.pegawaiNip)
+            putString(KEY_PROFILE_TEMPAT_LAHIR, profile.tempatLahir)
+            putString(KEY_PROFILE_TGL_LAHIR, profile.tglLahir)
+            putInt(KEY_PROFILE_GENDER, profile.gender)
+            putProfileTextIfAvailable(KEY_PROFILE_TELP, profile.pegawaiTelp)
+            if (profile.pegawaiStatus == null) remove(KEY_PROFILE_STATUS)
+            else putInt(KEY_PROFILE_STATUS, profile.pegawaiStatus)
+            putString(KEY_PROFILE_JABATAN, profile.jabatan)
+            putString(KEY_PROFILE_SKPD, profile.skpd)
+            putString(KEY_PROFILE_SOTK, profile.sotk)
+            putProfileTextIfAvailable(KEY_PROFILE_TGL_MULAI_KERJA, profile.tglMulaiKerja)
+            putProfilePhotoPathIfAvailable(profile.photoPath)
+            putString(KEY_PROFILE_DEVICE_ID, profile.deviceId)
+        }
+    }
+
+    fun saveProfileSnapshot(user: EntagoLoginUser?) {
+        if (user == null) return
+
+        editSafely {
+            putString(KEY_PROFILE_NAMA, user.pegawaiNama)
+            putString(KEY_PROFILE_NIP, user.pegawaiNip)
+            putString(KEY_PROFILE_TEMPAT_LAHIR, user.tempatLahir)
+            putString(KEY_PROFILE_TGL_LAHIR, user.tglLahir)
+            putInt(KEY_PROFILE_GENDER, user.gender ?: 1)
+            putProfileTextIfAvailable(KEY_PROFILE_TELP, user.pegawaiTelp)
+            if (user.pegawaiStatus == null) remove(KEY_PROFILE_STATUS)
+            else putInt(KEY_PROFILE_STATUS, user.pegawaiStatus)
+            putString(KEY_PROFILE_JABATAN, user.jabatan)
+            putString(KEY_PROFILE_SKPD, user.skpd)
+            putString(KEY_PROFILE_SOTK, user.sotk)
+            putProfileTextIfAvailable(KEY_PROFILE_TGL_MULAI_KERJA, user.tglMulaiKerja)
+            putProfilePhotoPathIfAvailable(user.photoPath)
+            putString(KEY_PROFILE_DEVICE_ID, user.deviceId)
+        }
+    }
+
+    private fun SharedPreferences.Editor.putProfilePhotoPathIfAvailable(photoPath: String?) {
+        val cleanPath = photoPath?.trim().orEmpty()
+        if (cleanPath.isNotBlank()) putString(KEY_PROFILE_PHOTO_PATH, cleanPath)
+    }
+
+    private fun SharedPreferences.Editor.putProfileTextIfAvailable(key: String, value: String?) {
+        val cleanValue = value?.trim().orEmpty()
+        if (cleanValue.isNotBlank()) putString(key, cleanValue)
+    }
+
+    private fun SharedPreferences.Editor.clearProfileSnapshotFields() {
+        remove(KEY_PROFILE_NAMA)
+        remove(KEY_PROFILE_NIP)
+        remove(KEY_PROFILE_TEMPAT_LAHIR)
+        remove(KEY_PROFILE_TGL_LAHIR)
+        remove(KEY_PROFILE_GENDER)
+        remove(KEY_PROFILE_TELP)
+        remove(KEY_PROFILE_STATUS)
+        remove(KEY_PROFILE_JABATAN)
+        remove(KEY_PROFILE_SKPD)
+        remove(KEY_PROFILE_SOTK)
+        remove(KEY_PROFILE_TGL_MULAI_KERJA)
+        remove(KEY_PROFILE_PHOTO_PATH)
+        remove(KEY_PROFILE_DEVICE_ID)
+    }
+
+    fun getCachedPegawaiProfile(): PegawaiProfile? {
+        val session = getSessionData() ?: return null
+        val pegawaiId = session.pegawaiId ?: return null
+        val nama = readSafely<String?>(null) { getString(KEY_PROFILE_NAMA, null) }
+            ?: session.email.takeIf { it.isNotBlank() }
+
+        return PegawaiProfile(
+            pegawaiId = pegawaiId,
+            pegawaiPin = session.pin,
+            pegawaiNip = readSafely<String?>(null) { getString(KEY_PROFILE_NIP, null) },
+            pegawaiNama = nama,
+            tempatLahir = readSafely<String?>(null) { getString(KEY_PROFILE_TEMPAT_LAHIR, null) },
+            pegawaiPrivilege = session.level.toString(),
+            pegawaiTelp = readSafely<String?>(null) { getString(KEY_PROFILE_TELP, null) },
+            pegawaiStatus = readSafely<Int?>(null) {
+                if (contains(KEY_PROFILE_STATUS)) getInt(KEY_PROFILE_STATUS, 1) else null
+            },
+            tglLahir = readSafely<String?>(null) { getString(KEY_PROFILE_TGL_LAHIR, null) },
+            jabatan = readSafely<String?>(null) { getString(KEY_PROFILE_JABATAN, null) },
+            skpd = readSafely<String?>(null) { getString(KEY_PROFILE_SKPD, null) },
+            sotk = readSafely<String?>(null) { getString(KEY_PROFILE_SOTK, null) },
+            tglMulaiKerja = readSafely<String?>(null) { getString(KEY_PROFILE_TGL_MULAI_KERJA, null) },
+            gender = readSafely(1) { getInt(KEY_PROFILE_GENDER, 1) },
+            photoPath = readSafely<String?>(null) { getString(KEY_PROFILE_PHOTO_PATH, null) },
+            deviceId = readSafely<String?>(null) { getString(KEY_PROFILE_DEVICE_ID, null) }
+        )
+    }
+
+    fun clearEntagoTokens() {
+        editSafely {
+            remove(KEY_ENTAGO_ACCESS_TOKEN)
+            remove(KEY_ENTAGO_REFRESH_TOKEN)
+        }
+    }
 
     /**
      * Clear session (logout)

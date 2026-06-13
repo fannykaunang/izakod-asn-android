@@ -52,7 +52,43 @@ data class EntagoLoginUser(
     val deviceId: String = "",
 
     @SerializedName("pegawai_id")
-    val pegawaiId: Int = 0
+    val pegawaiId: Int = 0,
+
+    @SerializedName("pegawai_nama")
+    val pegawaiNama: String? = null,
+
+    @SerializedName("pegawai_nip")
+    val pegawaiNip: String? = null,
+
+    @SerializedName("tempat_lahir")
+    val tempatLahir: String? = null,
+
+    @SerializedName("tgl_lahir")
+    val tglLahir: String? = null,
+
+    @SerializedName("gender")
+    val gender: Int? = null,
+
+    @SerializedName("pegawai_telp")
+    val pegawaiTelp: String? = null,
+
+    @SerializedName("pegawai_status")
+    val pegawaiStatus: Int? = null,
+
+    @SerializedName("jabatan")
+    val jabatan: String? = null,
+
+    @SerializedName("skpd")
+    val skpd: String? = null,
+
+    @SerializedName("sotk")
+    val sotk: String? = null,
+
+    @SerializedName("tgl_mulai_kerja")
+    val tglMulaiKerja: String? = null,
+
+    @SerializedName("photo_path")
+    val photoPath: String? = null
 )
 
 data class AuthenticatedSession(

@@ -17,8 +17,14 @@ import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -31,6 +37,7 @@ import com.kominfo_mkq.izakod_asn.data.repository.AuthRepository
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
 import com.kominfo_mkq.izakod_asn.ui.navigation.IZAKODNavigation
 import com.kominfo_mkq.izakod_asn.ui.navigation.Screen
+import com.kominfo_mkq.izakod_asn.ui.navigation.mobileSsoBridgeRoute
 import com.kominfo_mkq.izakod_asn.ui.theme.IZAKODASNTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -73,6 +80,11 @@ fun RequestNotificationPermissionOnce(userPrefs: UserPreferences) {
 class MainActivity : ComponentActivity() {
     private lateinit var userPrefs: UserPreferences
     private var externalRouteHandler: ((String) -> Unit)? = null
+
+    private data class PayrollDeepLink(
+        val route: String,
+        val ssoTicket: String?
+    )
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -129,12 +141,24 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         userPrefs = prefs
-        val initialExternalRoute = resolvePayrollDeepLinkRoute(intent)
+        val initialPayrollDeepLink = resolvePayrollDeepLink(intent)
+        val initialSsoTicket = initialPayrollDeepLink?.ssoTicket?.takeIf { it.isNotBlank() }
+        val initialSsoFallbackRoute = initialPayrollDeepLink?.route
 
         setContent {
             var isDarkTheme by remember { mutableStateOf(userPrefs.isDarkTheme()) }
-            var pendingExternalRoute by rememberSaveable { mutableStateOf(initialExternalRoute) }
-            val startDestination = remember { checkAndRestoreSession() }
+            var pendingExternalRoute by rememberSaveable {
+                mutableStateOf(
+                    if (initialSsoTicket == null) initialPayrollDeepLink?.route else null
+                )
+            }
+            val startDestination = remember {
+                if (initialSsoTicket != null) {
+                    Screen.MobileSsoBridge.route
+                } else {
+                    checkAndRestoreSession()
+                }
+            }
 
             DisposableEffect(Unit) {
                 externalRouteHandler = { route ->
@@ -158,6 +182,8 @@ class MainActivity : ComponentActivity() {
 
                     IZAKODNavigation(
                         startDestination = startDestination,
+                        initialSsoTicket = initialSsoTicket,
+                        initialSsoFallbackRoute = initialSsoFallbackRoute,
                         pendingExternalRoute = pendingExternalRoute,
                         onPendingExternalRouteConsumed = {
                             pendingExternalRoute = null
@@ -178,7 +204,17 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        resolvePayrollDeepLinkRoute(intent)?.let { route ->
+        resolvePayrollDeepLink(intent)?.let { deepLink ->
+            val route = deepLink.ssoTicket
+                ?.takeIf { it.isNotBlank() }
+                ?.let { ticket ->
+                    mobileSsoBridgeRoute(
+                        ticket = ticket,
+                        fallbackRoute = deepLink.route
+                    )
+                }
+                ?: deepLink.route
+
             externalRouteHandler?.invoke(route)
         }
     }
@@ -240,18 +276,36 @@ class MainActivity : ComponentActivity() {
         val entagoRefresh = prefs.getEntagoRefreshToken()
         val legacyMobileToken = prefs.getMobileJwtToken()
         val legacyRefreshToken = prefs.getRefreshToken()
+        val legacyAccessIsEntagoToken =
+            entagoAccess.isNullOrBlank() &&
+                !legacyMobileToken.isNullOrBlank() &&
+                !isLikelyMobileToken(legacyMobileToken)
 
-        if (entagoAccess.isNullOrBlank() && !legacyMobileToken.isNullOrBlank() && !isLikelyMobileToken(legacyMobileToken)) {
+        if (legacyAccessIsEntagoToken) {
             prefs.setEntagoAccessToken(legacyMobileToken)
             Log.d("MainActivity", "✅ Migrated legacy E-NTAGO access token")
         }
 
-        if (entagoRefresh.isNullOrBlank() && !legacyRefreshToken.isNullOrBlank()) {
+        if (
+            legacyAccessIsEntagoToken &&
+            entagoRefresh.isNullOrBlank() &&
+            !legacyRefreshToken.isNullOrBlank()
+        ) {
             prefs.setEntagoRefreshToken(legacyRefreshToken)
             Log.d("MainActivity", "✅ Migrated legacy E-NTAGO refresh token")
+        } else if (
+            !entagoRefresh.isNullOrBlank() &&
+            !legacyRefreshToken.isNullOrBlank() &&
+            entagoRefresh == legacyRefreshToken &&
+            !legacyMobileToken.isNullOrBlank() &&
+            isLikelyMobileToken(legacyMobileToken)
+        ) {
+            prefs.setEntagoRefreshToken(null)
+            Log.w("MainActivity", "Cleared invalid E-NTAGO refresh token copied from IZAKOD mobile token")
         }
     }
-    private fun resolvePayrollDeepLinkRoute(intent: Intent?): String? {
+
+    private fun resolvePayrollDeepLink(intent: Intent?): PayrollDeepLink? {
         val uri = intent?.data ?: return null
         if (!uri.scheme.equals("izakod-asn", ignoreCase = true)) return null
         if (!uri.host.equals("payroll", ignoreCase = true)) return null
@@ -260,12 +314,20 @@ class MainActivity : ComponentActivity() {
         val tahun = uri.queryInt("tahun") ?: return null
         val bulan = uri.queryInt("bulan")?.takeIf { it in 1..12 } ?: return null
         val jenis = uri.getQueryParameter("jenis").orEmpty().trim().lowercase()
+        val ssoTicket = uri.getQueryParameter("sso_ticket")?.trim()?.takeIf { it.isNotBlank() }
 
-        return when (jenis) {
+        val route = when (jenis) {
             "gaji", "gaji_non_asn", "non_asn" -> "gaji_saya_detail/$tahun/$bulan"
             "tpp", "tpp_asn" -> "tpp_saya_detail/$tahun/$bulan"
             else -> null
-        }
+        } ?: return null
+
+        Log.d(
+            "MainActivity",
+            "Payroll deep link diterima: jenis=$jenis, tahun=$tahun, bulan=$bulan, sso=${ssoTicket != null}"
+        )
+
+        return PayrollDeepLink(route = route, ssoTicket = ssoTicket)
     }
 
     private fun Uri.queryInt(name: String): Int? {
