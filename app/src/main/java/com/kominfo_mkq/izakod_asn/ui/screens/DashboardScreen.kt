@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.PlaylistAddCheckCircle
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.outlined.DarkMode
@@ -114,6 +115,7 @@ import com.kominfo_mkq.izakod_asn.data.model.AssessmentSummaryData
 import com.kominfo_mkq.izakod_asn.data.model.DashboardActionAlertsData
 import com.kominfo_mkq.izakod_asn.data.model.DashboardTargetSummaryData
 import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnMeData
+import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnPerhitungan
 import com.kominfo_mkq.izakod_asn.data.model.MetricsData
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
 import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaItem
@@ -214,6 +216,28 @@ private fun Double?.formatDashboardCurrency(): String {
     return formatter.format(value)
 }
 
+private fun GajiNonAsnPerhitungan?.hasEffectiveDashboardGajiData(): Boolean {
+    val calculation = this ?: return false
+    return calculation.totalDibayar != null ||
+        calculation.gajiPokok != null ||
+        !calculation.status.isNullOrBlank()
+}
+
+private fun dashboardGajiStatusLabel(statusKey: String): String {
+    return when (statusKey) {
+        "estimasi_berjalan" -> "Estimasi"
+        "dihitung" -> "Dihitung"
+        "final", "final_opd" -> "Final"
+        "dibayar" -> "Dibayar"
+        "arsip" -> "Arsip"
+        "draft" -> "Draft"
+        "revisi", "dikembalikan" -> "Revisi"
+        "ditolak" -> "Ditolak"
+        "batal" -> "Batal"
+        else -> "Dihitung"
+    }
+}
+
 private data class TargetPeriodGroup(
     val tahun: Int,
     val bulan: Int,
@@ -245,6 +269,7 @@ fun DashboardScreen(
     onNavigateToGajiDetail: (Int, Int) -> Unit,
     onNavigateToTemplates: () -> Unit,
     onNavigateToReminder: () -> Unit,
+    onNavigateToAssistant: () -> Unit,
     onNavigateToNotifications: () -> Unit,
     isDarkTheme: Boolean,
     onToggleTheme: (Boolean) -> Unit,
@@ -362,6 +387,7 @@ fun DashboardScreen(
         topBar = {
             DashboardTopBar(
                 scrollBehavior = scrollBehavior,
+                onNavigateToAssistant = onNavigateToAssistant,
                 onNavigateToNotifications = onNavigateToNotifications,
                 pegawaiProfile = uiState.pegawaiProfile,
                 unreadNotificationCount = uiState.unreadNotificationCount,
@@ -658,7 +684,9 @@ private fun DashboardContent(
                                 metrics = metrics,
                                 targetSummary = targetSummary,
                                 assessmentSummary = assessmentSummary,
+                                tppUiState = tppUiState,
                                 tppData = tppData,
+                                gajiUiState = gajiUiState,
                                 gajiData = gajiData,
                                 isNonAsnPayroll = isNonAsnPayroll
                             )
@@ -743,6 +771,7 @@ private fun DashboardContent(
 @Composable
 fun DashboardTopBar(
     scrollBehavior: TopAppBarScrollBehavior,
+    onNavigateToAssistant: () -> Unit,
     onNavigateToNotifications: () -> Unit,
     pegawaiProfile: PegawaiProfile?,
     unreadNotificationCount: Int,
@@ -769,6 +798,13 @@ fun DashboardTopBar(
             }
         },
         actions = {
+            IconButton(onClick = onNavigateToAssistant) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = "Tanya Asisten"
+                )
+            }
+
             IconButton(onClick = { onToggleTheme(!isDarkTheme) }) {
                 Icon(
                     imageVector = if (isDarkTheme) Icons.Filled.LightMode else Icons.Outlined.DarkMode,
@@ -2613,7 +2649,9 @@ private fun MinimalSummarySection(
     metrics: MetricsData?,
     targetSummary: DashboardTargetSummaryData?,
     assessmentSummary: AssessmentSummaryData?,
+    tppUiState: TppSayaUiState,
     tppData: TppMeData?,
+    gajiUiState: GajiSayaUiState,
     gajiData: GajiNonAsnMeData?,
     isNonAsnPayroll: Boolean
 ) {
@@ -2631,9 +2669,9 @@ private fun MinimalSummarySection(
         ?.takeIf { it.isNotBlank() }
         ?: "Belum ada periode final"
     val nominalTpp = tppData?.nominalTpp
-    val tppPeriod = tppData?.periode?.let { monthYearLabel(it.tahun, it.bulan) }
+    val tppPeriod = monthYearLabel(tppUiState.tahun, tppUiState.bulan)
     val gajiCalculation = gajiData?.perhitungan
-    val gajiPeriod = gajiData?.periode?.let { monthYearLabel(it.tahun, it.bulan) }
+    val gajiPeriod = monthYearLabel(gajiUiState.tahun, gajiUiState.bulan)
     val currentPeriodLabel = targetSummary?.activePeriodLabel?.takeIf { it.isNotBlank() }
         ?: tppPeriod
         ?: gajiPeriod
@@ -2667,28 +2705,32 @@ private fun MinimalSummarySection(
     } else {
         tppFinalityLabel
     }
+    val hasEffectiveGajiData = gajiCalculation.hasEffectiveDashboardGajiData()
     val gajiStatusKey = gajiCalculation?.status?.lowercase(Locale.ROOT).orEmpty()
     val gajiIsFinal = gajiStatusKey in setOf("final", "final_opd", "dibayar", "arsip")
     val gajiIsLiveEstimate = gajiStatusKey == "estimasi_berjalan"
     val gajiFinalityLabel = when {
-        gajiCalculation == null -> "Belum dihitung"
+        !hasEffectiveGajiData -> "Belum dihitung"
         gajiIsLiveEstimate -> "Estimasi berjalan"
-        gajiIsFinal -> "Final"
-        else -> "Belum final"
+        gajiIsFinal -> dashboardGajiStatusLabel(gajiStatusKey)
+        gajiStatusKey in setOf("revisi", "dikembalikan", "ditolak", "batal", "draft") ->
+            dashboardGajiStatusLabel(gajiStatusKey)
+        else -> "Dihitung"
     }
     val gajiBadge = when {
-        gajiCalculation == null -> "BELUM"
+        !hasEffectiveGajiData -> "BELUM"
         gajiIsLiveEstimate -> "ESTIMASI"
         gajiIsFinal -> "FINAL"
-        else -> "DIHITUNG"
+        else -> dashboardGajiStatusLabel(gajiStatusKey).uppercase(Locale.ROOT)
     }
     val gajiToneColor = when {
-        gajiCalculation == null -> MaterialTheme.colorScheme.outline
+        !hasEffectiveGajiData -> MaterialTheme.colorScheme.outline
         gajiIsFinal -> StatusApproved
         gajiIsLiveEstimate -> PrimaryLight
+        gajiStatusKey in setOf("", "dihitung", "draft") -> PrimaryLight
         gajiStatusKey in setOf("revisi", "dikembalikan") -> StatusRevised
         gajiStatusKey in setOf("ditolak", "batal") -> StatusRejected
-        else -> StatusApproved
+        else -> PrimaryLight
     }
     val gajiSubtitle = if (!gajiPeriod.isNullOrBlank()) {
         "Periode $gajiPeriod - $gajiFinalityLabel"
@@ -3507,6 +3549,7 @@ private fun TargetPeriodChip(
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         label = { Text("Tahun") },
+                        placeholder = { Text("Contoh: 2026") },
                         isError = draftYearText.isNotBlank() && !isYearValid,
                         supportingText = {
                             if (draftYearText.isNotBlank() && !isYearValid) {

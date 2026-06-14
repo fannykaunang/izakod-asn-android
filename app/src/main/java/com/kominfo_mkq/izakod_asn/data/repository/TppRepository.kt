@@ -51,22 +51,44 @@ class TppRepository {
                         data = merged
                     )
                 } else {
-                    ApiResponse(
+                    val error = body?.message ?: "Gagal memuat TPP Saya"
+                    ssoFallbackResponse(tahun, bulan, error) ?: ApiResponse(
                         success = false,
-                        error = body?.message ?: "Gagal memuat TPP Saya"
+                        error = error
                     )
                 }
             } else {
                 Log.w(TAG, "getTppSaya failed HTTP: code=${response.code()}, message=${response.message()}")
-                ApiResponse(
+                val error = parseErrorMessage(response, "Gagal memuat TPP Saya")
+                ssoFallbackResponse(tahun, bulan, error) ?: ApiResponse(
                     success = false,
-                    error = parseErrorMessage(response, "Gagal memuat TPP Saya")
+                    error = error
                 )
             }
         } catch (e: Exception) {
             Log.w(TAG, "getTppSaya exception: ${e.message}", e)
-            ApiResponse(success = false, error = e.message ?: "Network error")
+            val error = e.message ?: "Network error"
+            ssoFallbackResponse(tahun, bulan, error) ?: ApiResponse(success = false, error = error)
         }
+    }
+
+    private fun ssoFallbackResponse(
+        tahun: Int?,
+        bulan: Int?,
+        reason: String
+    ): ApiResponse<TppMeResponse>? {
+        if (tahun == null || bulan == null) return null
+
+        val fallback = ssoEstimateCacheRepository.getTppFallbackResponse(
+            tahun = tahun,
+            bulan = bulan
+        ) ?: return null
+
+        Log.w(TAG, "getTppSaya uses SSO fallback after official detail failure: $reason")
+        return ApiResponse(
+            success = true,
+            data = fallback
+        )
     }
 
     private suspend fun mergeLiveEstimate(

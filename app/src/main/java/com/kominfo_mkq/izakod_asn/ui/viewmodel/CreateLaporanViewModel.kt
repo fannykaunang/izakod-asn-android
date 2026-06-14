@@ -11,6 +11,7 @@ import com.kominfo_mkq.izakod_asn.data.model.KategoriKegiatan
 import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaItem
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatan
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
+import com.kominfo_mkq.izakod_asn.data.repository.EntagoTokenRepository
 import com.kominfo_mkq.izakod_asn.data.repository.LaporanRepository
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
 import com.kominfo_mkq.izakod_asn.data.repository.TargetKinerjaRepository
@@ -20,8 +21,22 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+
+private const val DEFAULT_SUBMISSION_DEADLINE_DAYS = 7
+
+private fun todayDateString(): String =
+    SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+private fun addDays(dateString: String, days: Int): String {
+    val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    val calendar = Calendar.getInstance()
+    calendar.time = formatter.parse(dateString) ?: Date()
+    calendar.add(Calendar.DAY_OF_YEAR, days)
+    return formatter.format(calendar.time)
+}
 
 /**
  * UI State untuk Create Laporan Screen
@@ -35,7 +50,10 @@ data class CreateLaporanUiState(
     val selectedImages: List<Uri> = emptyList(),
 
     // Form fields
-    val tanggalKegiatan: String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
+    val tanggalKegiatan: String = todayDateString(),
+    val minTanggalKegiatan: String = addDays(todayDateString(), -DEFAULT_SUBMISSION_DEADLINE_DAYS),
+    val maxTanggalKegiatan: String = todayDateString(),
+    val submissionDeadlineDays: Int = DEFAULT_SUBMISSION_DEADLINE_DAYS,
     val kategoriId: String = "",
     val namaKegiatan: String = "",
     val deskripsiKegiatan: String = "",
@@ -91,7 +109,37 @@ class CreateLaporanViewModel : ViewModel() {
 
     init {
         loadKategoriList()
+        loadLaporanSettings()
         loadTargetKinerjaOptions()
+    }
+
+    private fun loadLaporanSettings() {
+        viewModelScope.launch {
+            try {
+                val pegawaiId = StatistikRepository.getPegawaiId()
+                val response = apiService.getLaporanKegiatanSettings(pegawaiId)
+
+                if (response.isSuccessful && response.body()?.success == true) {
+                    response.body()?.data?.let { settings ->
+                        val maxDate = settings.maxDate.ifBlank { todayDateString() }
+                        val minDate = settings.minDate.ifBlank {
+                            addDays(maxDate, -settings.submissionDeadlineDays)
+                        }
+
+                        _uiState.value = _uiState.value.copy(
+                            minTanggalKegiatan = minDate,
+                            maxTanggalKegiatan = maxDate,
+                            submissionDeadlineDays = settings.submissionDeadlineDays
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.w(
+                    "CreateLaporanViewModel",
+                    "Gagal memuat pengaturan laporan: ${e.message}"
+                )
+            }
+        }
     }
 
     /**
@@ -130,10 +178,16 @@ class CreateLaporanViewModel : ViewModel() {
         // ✅ Preserve kategoris
         val currentKategoris = _uiState.value.kategoris
         val currentTargetKinerjaList = _uiState.value.targetKinerjaList
+        val currentMinTanggal = _uiState.value.minTanggalKegiatan
+        val currentMaxTanggal = _uiState.value.maxTanggalKegiatan
+        val currentDeadlineDays = _uiState.value.submissionDeadlineDays
 
         _uiState.value = CreateLaporanUiState(
             kategoris = currentKategoris,  // ✅ Keep kategoris!
             targetKinerjaList = currentTargetKinerjaList,
+            minTanggalKegiatan = currentMinTanggal,
+            maxTanggalKegiatan = currentMaxTanggal,
+            submissionDeadlineDays = currentDeadlineDays,
             isSuccess = false,
             isLoading = false,
             errorMessage = null
@@ -285,6 +339,11 @@ class CreateLaporanViewModel : ViewModel() {
 
         if (state.tanggalKegiatan.isEmpty()) {
             errors["tanggal_kegiatan"] = "Tanggal kegiatan wajib diisi"
+        } else if (state.tanggalKegiatan < state.minTanggalKegiatan) {
+            errors["tanggal_kegiatan"] =
+                "Tanggal kegiatan maksimal ${state.submissionDeadlineDays} hari ke belakang"
+        } else if (state.tanggalKegiatan > state.maxTanggalKegiatan) {
+            errors["tanggal_kegiatan"] = "Tanggal kegiatan tidak boleh lebih besar dari hari ini"
         }
 
         if (state.kategoriId.isEmpty()) {
@@ -342,6 +401,7 @@ class CreateLaporanViewModel : ViewModel() {
                 // ✅ Get pegawai_id from StatistikRepository
                 val pegawaiId = StatistikRepository.getPegawaiId()
                 val pin = StatistikRepository.getPin()
+                val entagoAccessToken = EntagoTokenRepository.refreshAccessTokenIfPossible(context)
 
                 if (pegawaiId == null) {
                     _uiState.value = _uiState.value.copy(
@@ -384,7 +444,8 @@ class CreateLaporanViewModel : ViewModel() {
                 val response = apiService.createLaporan(
                     request = request,
                     pegawaiId = pegawaiId,
-                    pin = pin
+                    pin = pin,
+                    entagoAccessToken = entagoAccessToken
                 )
 
                 if (response.isSuccessful && response.body()?.success == true) {

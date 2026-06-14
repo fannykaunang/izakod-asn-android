@@ -1002,7 +1002,8 @@ fun TargetKinerjaDetailScreen(
                                         onValueChange = { reviewNote = it },
                                         modifier = Modifier.fillMaxWidth(),
                                         minLines = 4,
-                                        label = { Text("Catatan Atasan") }
+                                        label = { Text("Catatan Atasan") },
+                                        placeholder = { Text("Contoh: Target disetujui, lanjutkan pelaksanaan.") }
                                     )
 
                                     Row(
@@ -1617,6 +1618,7 @@ private fun TargetPeriodPickerDialog(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Tahun") },
+                    placeholder = { Text("Contoh: 2026") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     isError = draftTahun.isNotBlank() && !isYearValid,
                     supportingText = {
@@ -2107,6 +2109,7 @@ private fun TargetDetailItemCardModern(
                         onValueChange = { onDraftChange(draft.copy(realisasiKuantitas = it)) },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("Realisasi Kuantitas") },
+                        placeholder = { Text("Contoh: 12 dokumen") },
                         enabled = !isSaving
                     )
                     Row(
@@ -2118,6 +2121,7 @@ private fun TargetDetailItemCardModern(
                             onValueChange = { onDraftChange(draft.copy(realisasiKualitas = it)) },
                             modifier = Modifier.weight(1f),
                             label = { Text("Kualitas") },
+                            placeholder = { Text("Contoh: 90%") },
                             enabled = !isSaving
                         )
                         OutlinedTextField(
@@ -2125,6 +2129,7 @@ private fun TargetDetailItemCardModern(
                             onValueChange = { onDraftChange(draft.copy(realisasiWaktu = it)) },
                             modifier = Modifier.weight(1f),
                             label = { Text("Waktu") },
+                            placeholder = { Text("Contoh: 30 hari") },
                             enabled = !isSaving
                         )
                     }
@@ -2134,6 +2139,7 @@ private fun TargetDetailItemCardModern(
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3,
                         label = { Text("Catatan Realisasi") },
+                        placeholder = { Text("Contoh: Kegiatan selesai sesuai rencana.") },
                         enabled = !isSaving
                     )
                     Button(
@@ -2614,6 +2620,7 @@ private fun TargetDetailItemCard(
                         onValueChange = { onDraftChange(draft.copy(realisasiKuantitas = it)) },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("Realisasi Kuantitas") },
+                        placeholder = { Text("Contoh: 12 dokumen") },
                         enabled = canManageRealisasi && !isSaving
                     )
                     OutlinedTextField(
@@ -2621,6 +2628,7 @@ private fun TargetDetailItemCard(
                         onValueChange = { onDraftChange(draft.copy(realisasiKualitas = it)) },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("Realisasi Kualitas") },
+                        placeholder = { Text("Contoh: 90%") },
                         enabled = canManageRealisasi && !isSaving
                     )
                     OutlinedTextField(
@@ -2628,6 +2636,7 @@ private fun TargetDetailItemCard(
                         onValueChange = { onDraftChange(draft.copy(realisasiWaktu = it)) },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("Realisasi Waktu") },
+                        placeholder = { Text("Contoh: 30 hari") },
                         enabled = canManageRealisasi && !isSaving
                     )
                     OutlinedTextField(
@@ -2636,6 +2645,7 @@ private fun TargetDetailItemCard(
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3,
                         label = { Text("Catatan Realisasi") },
+                        placeholder = { Text("Contoh: Kegiatan selesai sesuai rencana.") },
                         enabled = canManageRealisasi && !isSaving
                     )
 

@@ -13,13 +13,30 @@ import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaItem
 import com.kominfo_mkq.izakod_asn.data.model.UpdateLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
 import com.kominfo_mkq.izakod_asn.data.repository.LaporanRepository
+import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
 import com.kominfo_mkq.izakod_asn.data.repository.TargetKinerjaRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
 import java.util.Locale
+
+private const val DEFAULT_SUBMISSION_DEADLINE_DAYS = 7
+
+private fun todayDateString(): String =
+    SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+private fun addDays(dateString: String, days: Int): String {
+    val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    val calendar = Calendar.getInstance()
+    calendar.time = formatter.parse(dateString) ?: Date()
+    calendar.add(Calendar.DAY_OF_YEAR, days)
+    return formatter.format(calendar.time)
+}
 
 data class EditLaporanUiState(
     // Loading states
@@ -32,6 +49,9 @@ data class EditLaporanUiState(
     // Form fields (same as CreateLaporanUiState)
     val laporanId: Int = 0,
     val tanggalKegiatan: String = "",
+    val minTanggalKegiatan: String = addDays(todayDateString(), -DEFAULT_SUBMISSION_DEADLINE_DAYS),
+    val maxTanggalKegiatan: String = todayDateString(),
+    val submissionDeadlineDays: Int = DEFAULT_SUBMISSION_DEADLINE_DAYS,
     val kategoriId: String = "",
     val namaKegiatan: String = "",
     val deskripsiKegiatan: String = "",
@@ -72,6 +92,7 @@ class EditLaporanViewModel : ViewModel() {
      * Load existing laporan data
      */
     fun loadLaporan(laporanId: Int) {
+        loadLaporanSettings()
         viewModelScope.launch {
             try {
                 android.util.Log.d("EditLaporanViewModel", "📋 Loading laporan ID: $laporanId")
@@ -147,6 +168,35 @@ class EditLaporanViewModel : ViewModel() {
         }
     }
 
+    private fun loadLaporanSettings() {
+        viewModelScope.launch {
+            try {
+                val pegawaiId = StatistikRepository.getPegawaiId()
+                val response = apiService.getLaporanKegiatanSettings(pegawaiId)
+
+                if (response.isSuccessful && response.body()?.success == true) {
+                    response.body()?.data?.let { settings ->
+                        val maxDate = settings.maxDate.ifBlank { todayDateString() }
+                        val minDate = settings.minDate.ifBlank {
+                            addDays(maxDate, -settings.submissionDeadlineDays)
+                        }
+
+                        _uiState.value = _uiState.value.copy(
+                            minTanggalKegiatan = minDate,
+                            maxTanggalKegiatan = maxDate,
+                            submissionDeadlineDays = settings.submissionDeadlineDays
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.w(
+                    "EditLaporanViewModel",
+                    "Gagal memuat pengaturan laporan: ${e.message}"
+                )
+            }
+        }
+    }
+
     /**
      * Update laporan
      */
@@ -192,7 +242,7 @@ class EditLaporanViewModel : ViewModel() {
 
                 android.util.Log.d("EditLaporanViewModel", "📤 Request date: ${request.tanggal_kegiatan}")
 
-                val response = repository.updateLaporan(state.laporanId, request)
+                val response = repository.updateLaporan(context, state.laporanId, request)
 
                 if (response.isSuccessful && response.body()?.success == true) {
                     _uiState.value = _uiState.value.copy(
@@ -222,9 +272,16 @@ class EditLaporanViewModel : ViewModel() {
     private fun validateForm(): Boolean {
         val errors = mutableMapOf<String, String>()
         val state = _uiState.value
+        val shouldValidateTanggalRange =
+            !state.statusLaporan.equals("Diajukan", ignoreCase = true)
 
         if (state.tanggalKegiatan.isBlank()) {
             errors["tanggal_kegiatan"] = "Tanggal kegiatan wajib diisi"
+        } else if (shouldValidateTanggalRange && state.tanggalKegiatan < state.minTanggalKegiatan) {
+            errors["tanggal_kegiatan"] =
+                "Tanggal kegiatan maksimal ${state.submissionDeadlineDays} hari ke belakang"
+        } else if (shouldValidateTanggalRange && state.tanggalKegiatan > state.maxTanggalKegiatan) {
+            errors["tanggal_kegiatan"] = "Tanggal kegiatan tidak boleh lebih besar dari hari ini"
         }
         if (state.kategoriId.isBlank()) {
             errors["kategori_id"] = "Kategori wajib dipilih"

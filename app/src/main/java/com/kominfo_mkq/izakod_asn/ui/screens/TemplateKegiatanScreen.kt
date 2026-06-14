@@ -675,6 +675,7 @@ private fun TemplateFormDialog(
                     value = nama,
                     onValueChange = { nama = it },
                     label = { Text("Nama template*") },
+                    placeholder = { Text("Contoh: Rapat Koordinasi Mingguan") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -713,6 +714,7 @@ private fun TemplateFormDialog(
                         value = kategoriId.toString(),
                         onValueChange = { kategoriId = it.toIntOrNull() ?: 0 },
                         label = { Text("Kategori ID*") },
+                        placeholder = { Text("Contoh: 1") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
@@ -722,6 +724,7 @@ private fun TemplateFormDialog(
                     value = deskripsi,
                     onValueChange = { deskripsi = it },
                     label = { Text("Catatan singkat") },
+                    placeholder = { Text("Contoh: Membahas progres pekerjaan dan tindak lanjut.") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -729,6 +732,7 @@ private fun TemplateFormDialog(
                     value = targetOutput,
                     onValueChange = { targetOutput = it },
                     label = { Text("Output yang biasa dihasilkan") },
+                    placeholder = { Text("Contoh: Notulen rapat atau daftar tindak lanjut") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -736,6 +740,7 @@ private fun TemplateFormDialog(
                     value = lokasi,
                     onValueChange = { lokasi = it },
                     label = { Text("Lokasi bawaan") },
+                    placeholder = { Text("Contoh: Ruang Rapat Lantai 2") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -743,6 +748,7 @@ private fun TemplateFormDialog(
                     value = durasiText,
                     onValueChange = { durasiText = it.filter { ch -> ch.isDigit() } },
                     label = { Text("Perkiraan durasi (menit)") },
+                    placeholder = { Text("Contoh: 60") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )

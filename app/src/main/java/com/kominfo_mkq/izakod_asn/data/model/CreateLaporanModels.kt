@@ -87,6 +87,37 @@ data class LaporanErrorResponse(
     val requiresAttendance: Boolean? = null
 )
 
+data class LaporanKegiatanSettingsResponse(
+    @SerializedName("success")
+    val success: Boolean,
+
+    @SerializedName("data")
+    val data: LaporanKegiatanSettings? = null
+)
+
+data class LaporanKegiatanSettings(
+    @SerializedName("minDurasi")
+    val minDurasi: Int = 1,
+
+    @SerializedName("maxDurasi")
+    val maxDurasi: Int = 720,
+
+    @SerializedName("submissionDeadlineDays")
+    val submissionDeadlineDays: Int = 7,
+
+    @SerializedName("workStartLabel")
+    val workStartLabel: String = "08:00",
+
+    @SerializedName("workEndLabel")
+    val workEndLabel: String = "17:00",
+
+    @SerializedName("minDate")
+    val minDate: String = "",
+
+    @SerializedName("maxDate")
+    val maxDate: String = ""
+)
+
 // Model untuk Kategori Kegiatan
 data class KategoriKegiatan(
     @SerializedName("kategori_id")

@@ -58,6 +58,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -87,6 +88,7 @@ import com.kominfo_mkq.izakod_asn.ui.viewmodel.EditLaporanViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -202,6 +204,8 @@ fun EditLaporanScreen(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         // Basic Information Section
+                        val isTanggalLocked =
+                            uiState.statusLaporan.equals("Diajukan", ignoreCase = true)
                         BasicInformationSection(
                             tanggalKegiatan = uiState.tanggalKegiatan,
                             kategoriId = uiState.kategoriId,
@@ -209,7 +213,27 @@ fun EditLaporanScreen(
                             deskripsiKegiatan = uiState.deskripsiKegiatan,
                             kategoris = uiState.kategoris,
                             errors = uiState.errors,
-                            onTanggalClick = { showDatePicker = true },
+                            dateHelpText = if (isTanggalLocked) {
+                                "Tanggal laporan yang sudah diajukan tidak dapat diubah langsung."
+                            } else {
+                                buildLaporanDateHelpText(
+                                    uiState.minTanggalKegiatan,
+                                    uiState.maxTanggalKegiatan,
+                                    uiState.submissionDeadlineDays
+                                )
+                            },
+                            isTanggalEditable = !isTanggalLocked,
+                            onTanggalClick = {
+                                if (isTanggalLocked) {
+                                    Toast.makeText(
+                                        context,
+                                        "Tanggal laporan yang sudah diajukan tidak dapat diubah langsung",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    showDatePicker = true
+                                }
+                            },
                             onKategoriChange = { viewModel.updateKategori(it) },
                             onNamaChange = { viewModel.updateNamaKegiatan(it) },
                             onDeskripsiChange = { viewModel.updateDeskripsi(it) }
@@ -326,8 +350,28 @@ fun EditLaporanScreen(
 
     // Date Picker Dialog
     if (showDatePicker) {
+        val minDateMillis = remember(uiState.minTanggalKegiatan) {
+            dateStringToUtcMillis(uiState.minTanggalKegiatan) ?: Long.MIN_VALUE
+        }
+        val maxDateMillis = remember(uiState.maxTanggalKegiatan) {
+            dateStringToUtcMillis(uiState.maxTanggalKegiatan) ?: Long.MAX_VALUE
+        }
+        val selectedDateMillis = remember(
+            uiState.tanggalKegiatan,
+            minDateMillis,
+            maxDateMillis
+        ) {
+            val selected = dateStringToUtcMillis(uiState.tanggalKegiatan)
+                ?: System.currentTimeMillis()
+            selected.coerceIn(minDateMillis, maxDateMillis)
+        }
         val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = System.currentTimeMillis()
+            initialSelectedDateMillis = selectedDateMillis,
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                    return utcTimeMillis in minDateMillis..maxDateMillis
+                }
+            }
         )
 
         DatePickerDialog(
@@ -372,6 +416,28 @@ fun EditLaporanScreen(
             DatePicker(state = datePickerState)
         }
     }
+}
+
+private fun dateStringToUtcMillis(dateString: String): Long? {
+    val parts = dateString.split("-")
+    if (parts.size != 3) return null
+
+    val year = parts[0].toIntOrNull() ?: return null
+    val month = parts[1].toIntOrNull() ?: return null
+    val day = parts[2].toIntOrNull() ?: return null
+
+    return Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        clear()
+        set(year, month - 1, day)
+    }.timeInMillis
+}
+
+private fun buildLaporanDateHelpText(
+    minDate: String,
+    maxDate: String,
+    deadlineDays: Int
+): String {
+    return "Pilih tanggal ${formatDate(minDate)} - ${formatDate(maxDate)}. Maksimal $deadlineDays hari ke belakang dan wajib sudah absen datang."
 }
 
 @Composable
@@ -696,6 +762,8 @@ private fun BasicInformationSection(
     deskripsiKegiatan: String,
     kategoris: List<KategoriKegiatan>,
     errors: Map<String, String>,
+    dateHelpText: String,
+    isTanggalEditable: Boolean,
     onTanggalClick: () -> Unit,
     onKategoriChange: (String) -> Unit,
     onNamaChange: (String) -> Unit,
@@ -710,6 +778,7 @@ private fun BasicInformationSection(
         // Tanggal Kegiatan
         OutlinedCard(
             modifier = Modifier.fillMaxWidth(),
+            enabled = isTanggalEditable,
             onClick = onTanggalClick
         ) {
             Row(
@@ -738,10 +807,18 @@ private fun BasicInformationSection(
                 Icon(Icons.Default.CalendarToday, contentDescription = null)
             }
         }
-        errors["tanggal_kegiatan"]?.let {
+        val tanggalError = errors["tanggal_kegiatan"]
+        if (tanggalError != null) {
             Text(
-                it,
+                tanggalError,
                 color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+            )
+        } else {
+            Text(
+                dateHelpText,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(start = 16.dp, top = 4.dp)
             )

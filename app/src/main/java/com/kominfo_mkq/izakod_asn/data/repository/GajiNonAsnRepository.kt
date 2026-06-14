@@ -49,22 +49,44 @@ class GajiNonAsnRepository {
                         data = merged
                     )
                 } else {
-                    ApiResponse(
+                    val error = body?.message ?: "Gagal memuat Gaji Saya"
+                    ssoFallbackResponse(tahun, bulan, error) ?: ApiResponse(
                         success = false,
-                        error = body?.message ?: "Gagal memuat Gaji Saya"
+                        error = error
                     )
                 }
             } else {
                 Log.w(TAG, "getGajiSaya failed HTTP: code=${response.code()}, message=${response.message()}")
-                ApiResponse(
+                val error = parseErrorMessage(response, "Gagal memuat Gaji Saya")
+                ssoFallbackResponse(tahun, bulan, error) ?: ApiResponse(
                     success = false,
-                    error = parseErrorMessage(response, "Gagal memuat Gaji Saya")
+                    error = error
                 )
             }
         } catch (e: Exception) {
             Log.w(TAG, "getGajiSaya exception: ${e.message}", e)
-            ApiResponse(success = false, error = e.message ?: "Network error")
+            val error = e.message ?: "Network error"
+            ssoFallbackResponse(tahun, bulan, error) ?: ApiResponse(success = false, error = error)
         }
+    }
+
+    private fun ssoFallbackResponse(
+        tahun: Int?,
+        bulan: Int?,
+        reason: String
+    ): ApiResponse<GajiNonAsnMeResponse>? {
+        if (tahun == null || bulan == null) return null
+
+        val fallback = ssoEstimateCacheRepository.getGajiFallbackResponse(
+            tahun = tahun,
+            bulan = bulan
+        ) ?: return null
+
+        Log.w(TAG, "getGajiSaya uses SSO fallback after official detail failure: $reason")
+        return ApiResponse(
+            success = true,
+            data = fallback
+        )
     }
 
     private suspend fun mergeLiveEstimate(

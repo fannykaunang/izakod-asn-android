@@ -761,6 +761,7 @@ fun PenilaianKinerjaDetailScreen(
                                     onValueChange = { nilaiTarget = it },
                                     modifier = Modifier.fillMaxWidth(),
                                     label = { Text("Nilai Target") },
+                                    placeholder = { Text("Contoh: 90") },
                                     enabled = !readonly
                                 )
                                 OutlinedTextField(
@@ -768,6 +769,7 @@ fun PenilaianKinerjaDetailScreen(
                                     onValueChange = { nilaiRealisasi = it },
                                     modifier = Modifier.fillMaxWidth(),
                                     label = { Text("Nilai Realisasi") },
+                                    placeholder = { Text("Contoh: 85") },
                                     enabled = !readonly
                                 )
                                 OutlinedTextField(
@@ -775,6 +777,7 @@ fun PenilaianKinerjaDetailScreen(
                                     onValueChange = { nilaiAkhir = it },
                                     modifier = Modifier.fillMaxWidth(),
                                     label = { Text("Nilai Akhir") },
+                                    placeholder = { Text("Contoh: 88") },
                                     enabled = !readonly
                                 )
                                 OutlinedTextField(
@@ -782,6 +785,7 @@ fun PenilaianKinerjaDetailScreen(
                                     onValueChange = { predikat = it },
                                     modifier = Modifier.fillMaxWidth(),
                                     label = { Text("Predikat") },
+                                    placeholder = { Text("Contoh: Baik") },
                                     enabled = !readonly
                                 )
                                 OutlinedTextField(
@@ -790,6 +794,7 @@ fun PenilaianKinerjaDetailScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     minLines = 4,
                                     label = { Text("Catatan Penilaian") },
+                                    placeholder = { Text("Contoh: Realisasi sudah sesuai target.") },
                                     enabled = !readonly
                                 )
 

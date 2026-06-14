@@ -1,6 +1,8 @@
 package com.kominfo_mkq.izakod_asn.data.remote
 
 import com.google.gson.JsonObject
+import com.kominfo_mkq.izakod_asn.data.model.AiPanduanRequest
+import com.kominfo_mkq.izakod_asn.data.model.AiPanduanResponse
 import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiResponse
 import com.kominfo_mkq.izakod_asn.data.model.BasicActionResponse
 import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanRequest
@@ -15,6 +17,7 @@ import com.kominfo_mkq.izakod_asn.data.model.EntagoLoginResponse
 import com.kominfo_mkq.izakod_asn.data.model.FcmRegisterRequest
 import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnMeResponse
 import com.kominfo_mkq.izakod_asn.data.model.KategoriListResponse
+import com.kominfo_mkq.izakod_asn.data.model.LaporanKegiatanSettingsResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanCetakResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanDetailResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanListResponse
@@ -58,6 +61,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -124,6 +128,11 @@ interface EabsenApiService {
     @GET("api/mobile/profile/me")
     suspend fun getMobileProfile(): Response<PegawaiProfileResponse>
 
+    @POST("api/ai/panduan")
+    suspend fun askAiPanduan(
+        @Body request: AiPanduanRequest
+    ): Response<AiPanduanResponse>
+
     @GET("api/tpp/me")
     suspend fun getTppSaya(
         @Query("tahun") tahun: Int? = null,
@@ -155,6 +164,11 @@ interface EabsenApiService {
         @Query("is_active") isActive: Int = 1
     ): Response<KategoriListResponse>
 
+    @GET("api/laporan-kegiatan/settings")
+    suspend fun getLaporanKegiatanSettings(
+        @Query("pegawai_id") pegawaiId: Int? = null
+    ): Response<LaporanKegiatanSettingsResponse>
+
     /**
      * Create new laporan kegiatan with pegawai_id in query
      * POST /api/laporan-kegiatan?pegawai_id={pegawai_id}
@@ -163,7 +177,8 @@ interface EabsenApiService {
     suspend fun createLaporan(
         @Body request: CreateLaporanRequest,
         @Query("pegawai_id") pegawaiId: Int? = null,
-        @Query("pin") pin: String? = null  // ✅ Add PIN parameter
+        @Query("pin") pin: String? = null,  // ✅ Add PIN parameter
+        @Header("X-Entago-Access-Token") entagoAccessToken: String? = null
     ): Response<CreateLaporanResponse>
 
     /**
@@ -193,7 +208,9 @@ interface EabsenApiService {
     suspend fun updateLaporan(
         @Path("id") laporanId: Int,
         @Body request: UpdateLaporanRequest,
-        @Query("pegawai_id") pegawaiId: Int? = null
+        @Query("pegawai_id") pegawaiId: Int? = null,
+        @Query("pin") pin: String? = null,
+        @Header("X-Entago-Access-Token") entagoAccessToken: String? = null
     ): Response<UpdateLaporanResponse>
 
     /**

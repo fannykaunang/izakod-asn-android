@@ -75,10 +75,13 @@ class LaporanRepository {
     }
 
     suspend fun updateLaporan(
+        context: Context,
         laporanId: Int,
         request: UpdateLaporanRequest
     ): Response<UpdateLaporanResponse> {
         val pegawaiId = StatistikRepository.getPegawaiId()
+        val pin = StatistikRepository.getPin()
+        val entagoAccessToken = EntagoTokenRepository.refreshAccessTokenIfPossible(context)
 
         android.util.Log.d("LaporanRepository", "Updating laporan_id: $laporanId")
 
@@ -86,7 +89,13 @@ class LaporanRepository {
             throw Exception("Session expired")
         }
 
-        return eabsenApiService.updateLaporan(laporanId, request, pegawaiId)
+        return eabsenApiService.updateLaporan(
+            laporanId = laporanId,
+            request = request,
+            pegawaiId = pegawaiId,
+            pin = pin,
+            entagoAccessToken = entagoAccessToken
+        )
     }
 
     suspend fun getLaporanDetail(laporanId: Int): Response<LaporanDetailResponse> {

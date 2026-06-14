@@ -29,6 +29,7 @@ import androidx.navigation.navArgument
 import com.kominfo_mkq.izakod_asn.data.local.AuthSessionManager
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatan
 import com.kominfo_mkq.izakod_asn.ui.components.IZAKODBottomNavigationBar
+import com.kominfo_mkq.izakod_asn.ui.screens.AiPanduanChatScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.CreateLaporanScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.DashboardScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.DeveloperScreen
@@ -80,6 +81,7 @@ sealed class Screen(val route: String) {
     object Profile : Screen("profile")
     object Settings : Screen("settings")
     object Developer : Screen("developer")
+    object AiPanduanChat : Screen("ai_panduan_chat")
     object CreateReport : Screen("create_report")
     object Notifications : Screen("notifications")
     object NotificationDetail : Screen("notification_detail")
@@ -333,6 +335,7 @@ fun IZAKODNavigation(
                     },
                     onNavigateToTemplates = { navController.navigate(Screen.Templates.route) },
                     onNavigateToReminder = { navController.navigate(Screen.Reminders.route) },
+                    onNavigateToAssistant = { navController.navigate(Screen.AiPanduanChat.route) },
                     onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) },
                     isDarkTheme = isDarkTheme,
                     onToggleTheme = onToggleTheme,
@@ -661,9 +664,15 @@ fun IZAKODNavigation(
                 SettingsScreen(
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToDeveloper = { navController.navigate(Screen.Developer.route) },
+                    onNavigateToAssistant = { navController.navigate(Screen.AiPanduanChat.route) },
                     isDarkTheme = isDarkTheme,
                     onToggleTheme = onToggleTheme,
                     viewModel = profileViewModel
+                )
+            }
+            composable(Screen.AiPanduanChat.route) {
+                AiPanduanChatScreen(
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
             composable(Screen.Developer.route) {

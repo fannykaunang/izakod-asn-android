@@ -36,6 +36,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.AssignmentTurnedIn
 import androidx.compose.material.icons.filled.CalendarToday
@@ -60,6 +61,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -81,7 +83,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -111,12 +115,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.kominfo_mkq.izakod_asn.data.model.KategoriKegiatan
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatan
+import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatanCreateRequest
 import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
+import com.kominfo_mkq.izakod_asn.ui.viewmodel.CreateLaporanUiState
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.CreateLaporanViewModel
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.TemplateKegiatanViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 
 /**
  * CreateLaporanScreen - Form untuk membuat laporan kegiatan baru
@@ -151,6 +158,34 @@ fun CreateLaporanScreen(
     var showAdditionalDetails by rememberSaveable { mutableStateOf(false) }
     var showSupportingDetails by rememberSaveable { mutableStateOf(false) }
     var showTemplatePicker by rememberSaveable { mutableStateOf(false) }
+    var showTemplateCreateSheet by rememberSaveable { mutableStateOf(false) }
+    var pendingTemplateToApply by remember { mutableStateOf<TemplateKegiatan?>(null) }
+    var pendingTemplateWasCreated by rememberSaveable { mutableStateOf(false) }
+
+    fun applyTemplate(template: TemplateKegiatan, wasCreated: Boolean = false) {
+        viewModel.loadFromTemplate(template)
+        pendingTemplateToApply = null
+        pendingTemplateWasCreated = false
+        if (!template.targetOutputDefault.isNullOrBlank() || !template.lokasiDefault.isNullOrBlank()) {
+            showAdditionalDetails = true
+        }
+        Toast.makeText(
+            context,
+            if (wasCreated) "Template dibuat dan diterapkan ke laporan" else "Template diterapkan ke laporan",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    fun requestApplyTemplate(template: TemplateKegiatan, wasCreated: Boolean = false) {
+        showTemplatePicker = false
+        showTemplateCreateSheet = false
+        if (uiState.hasTemplateOverwriteRisk()) {
+            pendingTemplateToApply = template
+            pendingTemplateWasCreated = wasCreated
+        } else {
+            applyTemplate(template, wasCreated)
+        }
+    }
 
     LaunchedEffect(Unit) {
         android.util.Log.d("CreateLaporanScreen", "🆕 Screen opened, resetting success")
@@ -223,6 +258,7 @@ fun CreateLaporanScreen(
                 isError = templateUiState.isError,
                 errorMessage = templateUiState.errorMessage,
                 onOpenPicker = { showTemplatePicker = true },
+                onCreateTemplate = { showTemplateCreateSheet = true },
                 onRetry = { templateViewModel.loadTemplates() }
             )
 
@@ -236,6 +272,11 @@ fun CreateLaporanScreen(
                 deskripsiKegiatan = uiState.deskripsiKegiatan,
                 kategoris = uiState.kategoris,
                 errors = uiState.errors,
+                dateHelpText = buildLaporanDateHelpText(
+                    uiState.minTanggalKegiatan,
+                    uiState.maxTanggalKegiatan,
+                    uiState.submissionDeadlineDays
+                ),
                 onTanggalClick = { showDatePicker = true },
                 onKategoriChange = { viewModel.updateKategori(it) },
                 onNamaChange = { viewModel.updateNamaKegiatan(it) },
@@ -366,20 +407,84 @@ fun CreateLaporanScreen(
             onRetry = { templateViewModel.loadTemplates() },
             onDismiss = { showTemplatePicker = false },
             onSelect = { template ->
-                viewModel.loadFromTemplate(template)
-                showTemplatePicker = false
-                if (!template.targetOutputDefault.isNullOrBlank() || !template.lokasiDefault.isNullOrBlank()) {
-                    showAdditionalDetails = true
+                requestApplyTemplate(template)
+            }
+        )
+    }
+
+    if (showTemplateCreateSheet) {
+        TemplateCreateBottomSheet(
+            kategoris = uiState.kategoris,
+            initialKategoriId = uiState.kategoriId.toIntOrNull(),
+            initialName = uiState.namaKegiatan,
+            initialDescription = uiState.deskripsiKegiatan,
+            initialTargetOutput = uiState.targetOutput,
+            initialLocation = uiState.lokasiKegiatan,
+            isSaving = templateUiState.isMutating,
+            onDismiss = { if (!templateUiState.isMutating) showTemplateCreateSheet = false },
+            onSubmit = { request ->
+                templateViewModel.createTemplate(request) { createdTemplate ->
+                    templateViewModel.consumeActionMessage()
+                    requestApplyTemplate(createdTemplate, wasCreated = true)
                 }
-                Toast.makeText(context, "Template diterapkan ke laporan", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    pendingTemplateToApply?.let { template ->
+        AlertDialog(
+            onDismissRequest = {
+                pendingTemplateToApply = null
+                pendingTemplateWasCreated = false
+            },
+            title = { Text("Terapkan template?") },
+            text = {
+                Text(
+                    "Template \"${template.namaTemplate}\" akan mengganti kategori, nama kegiatan, deskripsi, target output, dan lokasi yang sudah terisi."
+                )
+            },
+            confirmButton = {
+                Button(onClick = { applyTemplate(template, pendingTemplateWasCreated) }) {
+                    Text("Terapkan")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingTemplateToApply = null
+                        pendingTemplateWasCreated = false
+                    }
+                ) {
+                    Text("Batal")
+                }
             }
         )
     }
 
     // Date Picker Dialog
     if (showDatePicker) {
+        val minDateMillis = remember(uiState.minTanggalKegiatan) {
+            dateStringToUtcMillis(uiState.minTanggalKegiatan) ?: Long.MIN_VALUE
+        }
+        val maxDateMillis = remember(uiState.maxTanggalKegiatan) {
+            dateStringToUtcMillis(uiState.maxTanggalKegiatan) ?: Long.MAX_VALUE
+        }
+        val selectedDateMillis = remember(
+            uiState.tanggalKegiatan,
+            minDateMillis,
+            maxDateMillis
+        ) {
+            val selected = dateStringToUtcMillis(uiState.tanggalKegiatan)
+                ?: System.currentTimeMillis()
+            selected.coerceIn(minDateMillis, maxDateMillis)
+        }
         val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = System.currentTimeMillis()
+            initialSelectedDateMillis = selectedDateMillis,
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                    return utcTimeMillis in minDateMillis..maxDateMillis
+                }
+            }
         )
 
         DatePickerDialog(
@@ -420,6 +525,51 @@ fun CreateLaporanScreen(
     }
 }
 
+private fun CreateLaporanUiState.hasTemplateOverwriteRisk(): Boolean {
+    return listOf(
+        kategoriId,
+        namaKegiatan,
+        deskripsiKegiatan,
+        targetOutput,
+        hasilOutput,
+        selectedTargetKinerjaId,
+        selectedTargetKinerjaDetailId,
+        waktuMulai,
+        waktuSelesai,
+        lokasiKegiatan,
+        pesertaKegiatan,
+        linkReferensi,
+        kendala,
+        solusi
+    ).any { it.isNotBlank() } ||
+        jumlahPeserta.toIntOrNull()?.let { it > 0 } == true ||
+        latitude != null ||
+        longitude != null ||
+        selectedImages.isNotEmpty()
+}
+
+private fun dateStringToUtcMillis(dateString: String): Long? {
+    val parts = dateString.split("-")
+    if (parts.size != 3) return null
+
+    val year = parts[0].toIntOrNull() ?: return null
+    val month = parts[1].toIntOrNull() ?: return null
+    val day = parts[2].toIntOrNull() ?: return null
+
+    return Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        clear()
+        set(year, month - 1, day)
+    }.timeInMillis
+}
+
+private fun buildLaporanDateHelpText(
+    minDate: String,
+    maxDate: String,
+    deadlineDays: Int
+): String {
+    return "Pilih tanggal ${formatDate(minDate)} - ${formatDate(maxDate)}. Maksimal $deadlineDays hari ke belakang dan wajib sudah absen datang."
+}
+
 @Composable
 private fun TemplateQuickFillSection(
     templates: List<TemplateKegiatan>,
@@ -427,6 +577,7 @@ private fun TemplateQuickFillSection(
     isError: Boolean,
     errorMessage: String?,
     onOpenPicker: () -> Unit,
+    onCreateTemplate: () -> Unit,
     onRetry: () -> Unit
 ) {
     Card(
@@ -443,6 +594,7 @@ private fun TemplateQuickFillSection(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -479,6 +631,14 @@ private fun TemplateQuickFillSection(
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                IconButton(onClick = onCreateTemplate) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Tambah template kegiatan",
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
@@ -521,6 +681,253 @@ private fun TemplateQuickFillSection(
                         maxLines = 1
                     )
                 }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TemplateCreateBottomSheet(
+    kategoris: List<KategoriKegiatan>,
+    initialKategoriId: Int?,
+    initialName: String,
+    initialDescription: String,
+    initialTargetOutput: String,
+    initialLocation: String,
+    isSaving: Boolean,
+    onDismiss: () -> Unit,
+    onSubmit: (TemplateKegiatanCreateRequest) -> Unit
+) {
+    val firstKategoriId = kategoris.firstOrNull()?.kategoriId ?: 0
+    var nama by rememberSaveable { mutableStateOf(initialName) }
+    var deskripsi by rememberSaveable { mutableStateOf(initialDescription) }
+    var targetOutput by rememberSaveable { mutableStateOf(initialTargetOutput) }
+    var lokasi by rememberSaveable { mutableStateOf(initialLocation) }
+    var durasiText by rememberSaveable { mutableStateOf("60") }
+    var isPublic by rememberSaveable { mutableStateOf(false) }
+    var kategoriId by rememberSaveable {
+        mutableStateOf(
+            initialKategoriId
+                ?.takeIf { selectedId -> kategoris.any { it.kategoriId == selectedId } }
+                ?: firstKategoriId
+        )
+    }
+    var kategoriExpanded by rememberSaveable { mutableStateOf(false) }
+
+    val selectedKategoriName = kategoris.firstOrNull { it.kategoriId == kategoriId }?.namaKategori
+        ?: if (kategoriId > 0) "Kategori $kategoriId" else "Pilih kategori"
+    val canSubmit = nama.isNotBlank() && kategoriId > 0 && !isSaving
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "Tambah Template Kegiatan",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                        text = "Template baru akan disimpan lalu langsung dipakai untuk mengisi laporan ini.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                IconButton(
+                    onClick = onDismiss,
+                    enabled = !isSaving
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Tutup")
+                }
+            }
+
+            if (kategoris.isEmpty()) {
+                TemplatePickerMessage(
+                    icon = Icons.Default.Warning,
+                    title = "Kategori belum tersedia",
+                    message = "Muat ulang halaman atau coba beberapa saat lagi sebelum membuat template."
+                )
+            } else {
+                OutlinedTextField(
+                    value = nama,
+                    onValueChange = { nama = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Nama template*") },
+                    placeholder = { Text("Contoh: Rapat Koordinasi Mingguan") },
+                    singleLine = true,
+                    enabled = !isSaving,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
+                )
+
+                ExposedDropdownMenuBox(
+                    expanded = kategoriExpanded,
+                    onExpandedChange = { if (!isSaving) kategoriExpanded = !kategoriExpanded }
+                ) {
+                    OutlinedTextField(
+                        value = selectedKategoriName,
+                        onValueChange = {},
+                        readOnly = true,
+                        enabled = !isSaving,
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth(),
+                        label = { Text("Kategori*") },
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = kategoriExpanded)
+                        }
+                    )
+                    ExposedDropdownMenu(
+                        expanded = kategoriExpanded,
+                        onDismissRequest = { kategoriExpanded = false }
+                    ) {
+                        kategoris.forEach { kategori ->
+                            DropdownMenuItem(
+                                text = { Text(kategori.namaKategori) },
+                                onClick = {
+                                    kategoriId = kategori.kategoriId
+                                    kategoriExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = deskripsi,
+                    onValueChange = { deskripsi = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Catatan singkat") },
+                    placeholder = { Text("Contoh: Membahas progres pekerjaan dan tindak lanjut.") },
+                    enabled = !isSaving,
+                    minLines = 2
+                )
+
+                OutlinedTextField(
+                    value = targetOutput,
+                    onValueChange = { targetOutput = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Output bawaan") },
+                    placeholder = { Text("Contoh: Notulen rapat atau daftar tindak lanjut") },
+                    enabled = !isSaving
+                )
+
+                OutlinedTextField(
+                    value = lokasi,
+                    onValueChange = { lokasi = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Lokasi bawaan") },
+                    placeholder = { Text("Contoh: Ruang Rapat Lantai 2") },
+                    enabled = !isSaving,
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = durasiText,
+                    onValueChange = { value -> durasiText = value.filter { it.isDigit() }.take(4) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Perkiraan durasi (menit)") },
+                    placeholder = { Text("Contoh: 60") },
+                    enabled = !isSaving,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done
+                    )
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(
+                            text = "Jadikan template umum",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                        )
+                        Text(
+                            text = "Matikan agar template hanya menjadi template pribadi/unit kerja.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = isPublic,
+                        onCheckedChange = { isPublic = it },
+                        enabled = !isSaving
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        enabled = !isSaving,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Batal")
+                    }
+                    Button(
+                        onClick = {
+                            onSubmit(
+                                TemplateKegiatanCreateRequest(
+                                    namaTemplate = nama.trim(),
+                                    kategoriId = kategoriId,
+                                    deskripsiTemplate = deskripsi.trim().ifBlank { null },
+                                    targetOutputDefault = targetOutput.trim().ifBlank { null },
+                                    lokasiDefault = lokasi.trim().ifBlank { null },
+                                    durasiEstimasiMenit = durasiText.toIntOrNull() ?: 60,
+                                    isPublic = if (isPublic) 1 else 0,
+                                    unitKerjaAkses = null,
+                                    isActive = 1
+                                )
+                            )
+                        },
+                        enabled = canSubmit,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        if (isSaving) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text("Simpan")
+                    }
+                }
+
+                Text(
+                    text = "* wajib diisi",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
@@ -604,6 +1011,7 @@ private fun TemplatePickerBottomSheet(
                     onValueChange = { searchQuery = it },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Cari template") },
+                    placeholder = { Text("Contoh: rapat koordinasi") },
                     leadingIcon = {
                         Icon(Icons.Default.Search, contentDescription = null)
                     },
@@ -650,7 +1058,7 @@ private fun TemplatePickerBottomSheet(
                             icon = Icons.Default.SearchOff,
                             title = if (searchQuery.isBlank()) "Belum ada template" else "Template tidak ditemukan",
                             message = if (searchQuery.isBlank()) {
-                                "Buat template kegiatan terlebih dahulu dari menu Template."
+                                "Ketuk tombol tambah di section Pakai Template Kegiatan untuk membuat template baru."
                             } else {
                                 "Coba gunakan kata kunci lain."
                             }
@@ -1143,6 +1551,7 @@ private fun BasicInformationSection(
     deskripsiKegiatan: String,
     kategoris: List<KategoriKegiatan>,
     errors: Map<String, String>,
+    dateHelpText: String,
     onTanggalClick: () -> Unit,
     onKategoriChange: (String) -> Unit,
     onNamaChange: (String) -> Unit,
@@ -1185,10 +1594,18 @@ private fun BasicInformationSection(
                 Icon(Icons.Default.CalendarToday, contentDescription = null)
             }
         }
-        errors["tanggal_kegiatan"]?.let {
+        val tanggalError = errors["tanggal_kegiatan"]
+        if (tanggalError != null) {
             Text(
-                it,
+                tanggalError,
                 color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+            )
+        } else {
+            Text(
+                dateHelpText,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(start = 16.dp, top = 4.dp)
             )

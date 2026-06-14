@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Notifications
@@ -317,6 +318,7 @@ fun ProfileScreen(
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToDeveloper: () -> Unit,
+    onNavigateToAssistant: () -> Unit,
     isDarkTheme: Boolean,
     onToggleTheme: (Boolean) -> Unit,
     viewModel: ProfileViewModel
@@ -454,6 +456,11 @@ fun SettingsScreen(
             AccountSectionLabel("Bantuan")
             SettingsActionSection(
                 items = listOf(
+                    SettingActionItem(
+                        icon = Icons.Default.SmartToy,
+                        title = "Tanya Asisten",
+                        subtitle = "Tanya SOP dan panduan IZAKOD-ASN"
+                    ) { onNavigateToAssistant() },
                     SettingActionItem(
                         icon = Icons.Default.Info,
                         title = "Tentang",

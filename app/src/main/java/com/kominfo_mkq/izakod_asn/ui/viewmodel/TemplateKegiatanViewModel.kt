@@ -124,7 +124,10 @@ class TemplateKegiatanViewModel : ViewModel() {
         setActionMessage(null)
     }
 
-    fun createTemplate(request: TemplateKegiatanCreateRequest) {
+    fun createTemplate(
+        request: TemplateKegiatanCreateRequest,
+        onCreated: ((TemplateKegiatan) -> Unit)? = null
+    ) {
         viewModelScope.launch {
             try {
                 _uiState.value = _uiState.value.copy(isMutating = true, actionMessage = null)
@@ -133,8 +136,16 @@ class TemplateKegiatanViewModel : ViewModel() {
                 val body = res.body()
 
                 if (res.isSuccessful && body != null && body.success) {
-                    _uiState.value = _uiState.value.copy(isMutating = false, actionMessage = body.message)
-                    loadTemplates()
+                    val createdId = body.data?.templateId
+                    val refreshedTemplates = reloadTemplatesAfterMutation(body.message)
+                    val createdTemplate = refreshedTemplates.firstOrNull { it.templateId == createdId }
+                        ?: refreshedTemplates.firstOrNull { template ->
+                            template.namaTemplate == request.namaTemplate &&
+                                template.kategoriId == request.kategoriId
+                        }
+                    if (createdTemplate != null) {
+                        onCreated?.invoke(createdTemplate)
+                    }
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isMutating = false,
@@ -144,6 +155,38 @@ class TemplateKegiatanViewModel : ViewModel() {
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isMutating = false, actionMessage = e.message ?: "Error")
             }
+        }
+    }
+
+    private suspend fun reloadTemplatesAfterMutation(actionMessage: String): List<TemplateKegiatan> {
+        return try {
+            val response = repository.getAllTemplates()
+            val body = response.body()
+            if (response.isSuccessful && body != null && body.success) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    isError = false,
+                    errorMessage = null,
+                    templates = body.data,
+                    isMutating = false,
+                    actionMessage = actionMessage
+                )
+                body.data
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isMutating = false,
+                    actionMessage = actionMessage,
+                    isError = false
+                )
+                _uiState.value.templates
+            }
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(
+                isMutating = false,
+                actionMessage = actionMessage,
+                isError = false
+            )
+            _uiState.value.templates
         }
     }
 

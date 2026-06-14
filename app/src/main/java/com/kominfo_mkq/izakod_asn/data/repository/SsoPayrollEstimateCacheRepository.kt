@@ -6,8 +6,19 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.kominfo_mkq.izakod_asn.data.local.AppContextHolder
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
+import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnMeData
+import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnMeResponse
+import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnPegawaiInfo
 import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnPerhitungan
+import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnPeriodeInfo
+import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnStatus
+import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
+import com.kominfo_mkq.izakod_asn.data.model.TppMeData
+import com.kominfo_mkq.izakod_asn.data.model.TppMeResponse
+import com.kominfo_mkq.izakod_asn.data.model.TppMeStatus
 import com.kominfo_mkq.izakod_asn.data.model.TppNominal
+import com.kominfo_mkq.izakod_asn.data.model.TppPegawaiInfo
+import com.kominfo_mkq.izakod_asn.data.model.TppPeriodeInfo
 
 class SsoPayrollEstimateCacheRepository {
 
@@ -37,35 +48,7 @@ class SsoPayrollEstimateCacheRepository {
         )
         if (!matches) return null
 
-        val nominal = cache.estimate.findNestedObject("nominal_gaji")
-        Log.d(
-            TAG,
-            "Gaji cache payload: hasNominalGaji=${nominal != null}, " +
-                "hasDetail=${cache.estimate.objectOrNull("detail") != null}, " +
-                "totalEstimasi=${cache.estimate.doubleOrNull("total_estimasi")}"
-        )
-        if (nominal == null) {
-            val minimal = cache.estimate.toMinimalGajiEstimate()
-            Log.d(
-                TAG,
-                "Gaji cache minimal parsed: success=${minimal != null}, " +
-                    "totalDibayar=${minimal?.totalDibayar}, status=${minimal?.status}"
-            )
-            return minimal
-        }
-
-        return runCatching {
-            gson.fromJson(nominal, GajiNonAsnPerhitungan::class.java)
-                ?.withEstimateFallback(cache.estimate)
-        }.onSuccess { parsed ->
-            Log.d(
-                TAG,
-                "Gaji cache nominal parsed: success=${parsed != null}, " +
-                    "totalDibayar=${parsed?.totalDibayar}, status=${parsed?.status}"
-            )
-        }.onFailure { error ->
-            Log.w(TAG, "Gaji cache nominal parse failed: ${error.message}")
-        }.getOrNull()
+        return cache.parseGajiEstimate()
     }
 
     fun getTppEstimate(tahun: Int, bulan: Int): TppNominal? {
@@ -91,37 +74,114 @@ class SsoPayrollEstimateCacheRepository {
         )
         if (!matches) return null
 
-        val nominal = cache.estimate.findNestedObject("nominal_tpp")
-        Log.d(
-            TAG,
-            "TPP cache payload: hasNominalTpp=${nominal != null}, " +
-                "hasDetail=${cache.estimate.objectOrNull("detail") != null}, " +
-                "totalEstimasi=${cache.estimate.doubleOrNull("total_estimasi")}"
-        )
-        if (nominal == null) {
-            val minimal = cache.estimate.toMinimalTppEstimate()
-            Log.d(
-                TAG,
-                "TPP cache minimal parsed: success=${minimal != null}, " +
-                    "estimasiDiterima=${minimal?.estimasiDiterima}, totalDibayar=${minimal?.totalDibayar}, " +
-                    "status=${minimal?.status}"
-            )
-            return minimal
+        return cache.parseTppEstimate()
+    }
+
+    fun getGajiFallbackResponse(
+        tahun: Int,
+        bulan: Int,
+        message: String = SSO_FALLBACK_MESSAGE
+    ): GajiNonAsnMeResponse? {
+        val cache = readCache()
+        if (cache == null) {
+            Log.d(TAG, "Gaji fallback miss: no cached SSO payload for $tahun-$bulan")
+            return null
         }
 
-        return runCatching {
-            gson.fromJson(nominal, TppNominal::class.java)
-                ?.withEstimateFallback(cache.estimate)
-        }.onSuccess { parsed ->
-            Log.d(
-                TAG,
-                "TPP cache nominal parsed: success=${parsed != null}, " +
-                    "estimasiDiterima=${parsed?.estimasiDiterima}, totalDibayar=${parsed?.totalDibayar}, " +
-                    "status=${parsed?.status}"
+        val matches = cache.matches(
+            estimateKinds = setOf("gaji_non_asn"),
+            targetKinds = setOf("gaji", "gaji_non_asn"),
+            tahun = tahun,
+            bulan = bulan
+        )
+        Log.d(
+            TAG,
+            "Gaji fallback cache match check: requested=$tahun-$bulan, matches=$matches, " +
+                "estimateKind=${cache.estimate.stringOrNull("jenis_estimasi")}, " +
+                "targetKind=${cache.target?.stringOrNull("jenis")}, " +
+                "estimatePeriod=${cache.estimate.periodDebug()}, targetPeriod=${cache.target?.periodDebug()}"
+        )
+        if (!matches) return null
+
+        val calculation = cache.parseGajiEstimate() ?: return null
+        Log.d(
+            TAG,
+            "Gaji fallback response built from SSO cache: total=${calculation.totalDibayar}, " +
+                "status=${calculation.status}"
+        )
+
+        return GajiNonAsnMeResponse(
+            success = true,
+            message = message,
+            data = GajiNonAsnMeData(
+                periode = GajiNonAsnPeriodeInfo(
+                    tahun = tahun,
+                    bulan = bulan
+                ),
+                pegawai = cache.toGajiPegawaiInfo(),
+                perhitungan = calculation,
+                status = GajiNonAsnStatus(
+                    calculationAvailable = true,
+                    ready = false,
+                    issues = listOf(SSO_FALLBACK_ISSUE),
+                    label = SSO_FALLBACK_LABEL
+                )
             )
-        }.onFailure { error ->
-            Log.w(TAG, "TPP cache nominal parse failed: ${error.message}")
-        }.getOrNull()
+        )
+    }
+
+    fun getTppFallbackResponse(
+        tahun: Int,
+        bulan: Int,
+        message: String = SSO_FALLBACK_MESSAGE
+    ): TppMeResponse? {
+        val cache = readCache()
+        if (cache == null) {
+            Log.d(TAG, "TPP fallback miss: no cached SSO payload for $tahun-$bulan")
+            return null
+        }
+
+        val matches = cache.matches(
+            estimateKinds = setOf("tpp_asn"),
+            targetKinds = setOf("tpp", "tpp_asn"),
+            tahun = tahun,
+            bulan = bulan
+        )
+        Log.d(
+            TAG,
+            "TPP fallback cache match check: requested=$tahun-$bulan, matches=$matches, " +
+                "estimateKind=${cache.estimate.stringOrNull("jenis_estimasi")}, " +
+                "targetKind=${cache.target?.stringOrNull("jenis")}, " +
+                "estimatePeriod=${cache.estimate.periodDebug()}, targetPeriod=${cache.target?.periodDebug()}"
+        )
+        if (!matches) return null
+
+        val nominal = cache.parseTppEstimate() ?: return null
+        Log.d(
+            TAG,
+            "TPP fallback response built from SSO cache: estimasi=${nominal.estimasiDiterima}, " +
+                "totalDibayar=${nominal.totalDibayar}, status=${nominal.status}"
+        )
+
+        return TppMeResponse(
+            success = true,
+            message = message,
+            data = TppMeData(
+                periode = TppPeriodeInfo(
+                    tahun = tahun,
+                    bulan = bulan
+                ),
+                pegawai = cache.toTppPegawaiInfo(),
+                nominalTpp = nominal,
+                status = TppMeStatus(
+                    profileReadinessIssues = listOf(SSO_FALLBACK_ISSUE),
+                    perhitunganAvailable = true,
+                    siapDihitung = false,
+                    dataSource = "sso_payroll_estimate_cache",
+                    label = SSO_FALLBACK_LABEL
+                )
+            )
+        )
     }
 
     private fun readCache(): CachedEstimate? {
@@ -183,6 +243,148 @@ class SsoPayrollEstimateCacheRepository {
             ?: objectOrNull("detail")?.objectOrNull(name)
             ?: objectOrNull("data")?.objectOrNull(name)
             ?: objectOrNull("detail")?.objectOrNull("data")?.objectOrNull(name)
+    }
+
+    private fun CachedEstimate.parseGajiEstimate(): GajiNonAsnPerhitungan? {
+        val nominal = estimate.findNestedObject("nominal_gaji")
+        Log.d(
+            TAG,
+            "Gaji cache payload: hasNominalGaji=${nominal != null}, " +
+                "hasDetail=${estimate.objectOrNull("detail") != null}, " +
+                "totalEstimasi=${estimate.doubleOrNull("total_estimasi")}"
+        )
+        if (nominal == null) {
+            val minimal = estimate.toMinimalGajiEstimate()
+            Log.d(
+                TAG,
+                "Gaji cache minimal parsed: success=${minimal != null}, " +
+                    "totalDibayar=${minimal?.totalDibayar}, status=${minimal?.status}"
+            )
+            return minimal
+        }
+
+        return runCatching {
+            gson.fromJson(nominal, GajiNonAsnPerhitungan::class.java)
+                ?.withEstimateFallback(estimate)
+        }.onSuccess { parsed ->
+            Log.d(
+                TAG,
+                "Gaji cache nominal parsed: success=${parsed != null}, " +
+                    "totalDibayar=${parsed?.totalDibayar}, status=${parsed?.status}"
+            )
+        }.onFailure { error ->
+            Log.w(TAG, "Gaji cache nominal parse failed: ${error.message}")
+        }.getOrNull()
+    }
+
+    private fun CachedEstimate.parseTppEstimate(): TppNominal? {
+        val nominal = estimate.findNestedObject("nominal_tpp")
+        Log.d(
+            TAG,
+            "TPP cache payload: hasNominalTpp=${nominal != null}, " +
+                "hasDetail=${estimate.objectOrNull("detail") != null}, " +
+                "totalEstimasi=${estimate.doubleOrNull("total_estimasi")}"
+        )
+        if (nominal == null) {
+            val minimal = estimate.toMinimalTppEstimate()
+            Log.d(
+                TAG,
+                "TPP cache minimal parsed: success=${minimal != null}, " +
+                    "estimasiDiterima=${minimal?.estimasiDiterima}, totalDibayar=${minimal?.totalDibayar}, " +
+                    "status=${minimal?.status}"
+            )
+            return minimal
+        }
+
+        return runCatching {
+            gson.fromJson(nominal, TppNominal::class.java)
+                ?.withEstimateFallback(estimate)
+        }.onSuccess { parsed ->
+            Log.d(
+                TAG,
+                "TPP cache nominal parsed: success=${parsed != null}, " +
+                    "estimasiDiterima=${parsed?.estimasiDiterima}, totalDibayar=${parsed?.totalDibayar}, " +
+                    "status=${parsed?.status}"
+            )
+        }.onFailure { error ->
+            Log.w(TAG, "TPP cache nominal parse failed: ${error.message}")
+        }.getOrNull()
+    }
+
+    private fun CachedEstimate.toGajiPegawaiInfo(): GajiNonAsnPegawaiInfo {
+        val pegawai = estimate.findPayrollPegawai()
+        val profile = cachedProfile()
+        return GajiNonAsnPegawaiInfo(
+            pegawaiId = pegawai?.intOrNull("pegawai_id")
+                ?: pegawai?.intOrNull("id")
+                ?: profile?.pegawaiId
+                ?: 0,
+            pegawaiPin = pegawai?.stringOrNull("pegawai_pin")
+                ?: pegawai?.stringOrNull("pin")
+                ?: profile?.pegawaiPin,
+            pegawaiNip = pegawai?.stringOrNull("pegawai_nip")
+                ?: pegawai?.stringOrNull("nip")
+                ?: pegawai?.stringOrNull("nip_nik")
+                ?: profile?.pegawaiNip,
+            pegawaiNama = pegawai?.stringOrNull("pegawai_nama")
+                ?: pegawai?.stringOrNull("nama")
+                ?: profile?.pegawaiNama,
+            jabatan = pegawai?.stringOrNull("jabatan") ?: profile?.jabatan,
+            jenisNonAsn = estimate.stringOrNull("jenis_non_asn")
+                ?: pegawai?.stringOrNull("jenis_non_asn"),
+            skpdid = pegawai?.intOrNull("skpdid") ?: pegawai?.intOrNull("skpd_id"),
+            skpd = pegawai?.stringOrNull("skpd") ?: profile?.skpd,
+            photoPath = pegawai?.stringOrNull("photo_path")
+                ?: pegawai?.stringOrNull("foto")
+                ?: profile?.photoPath,
+            lastSync = estimate.stringOrNull("calculated_at")
+                ?: estimate.objectOrNull("detail")?.stringOrNull("calculated_at")
+        )
+    }
+
+    private fun CachedEstimate.toTppPegawaiInfo(): TppPegawaiInfo {
+        val pegawai = estimate.findPayrollPegawai()
+        val profile = cachedProfile()
+        return TppPegawaiInfo(
+            pegawaiId = pegawai?.intOrNull("pegawai_id")
+                ?: pegawai?.intOrNull("id")
+                ?: profile?.pegawaiId
+                ?: 0,
+            pegawaiPin = pegawai?.stringOrNull("pegawai_pin")
+                ?: pegawai?.stringOrNull("pin")
+                ?: profile?.pegawaiPin,
+            pegawaiNip = pegawai?.stringOrNull("pegawai_nip")
+                ?: pegawai?.stringOrNull("nip")
+                ?: pegawai?.stringOrNull("nip_nik")
+                ?: profile?.pegawaiNip,
+            pegawaiNama = pegawai?.stringOrNull("pegawai_nama")
+                ?: pegawai?.stringOrNull("nama")
+                ?: profile?.pegawaiNama,
+            jabatan = pegawai?.stringOrNull("jabatan") ?: profile?.jabatan,
+            skpdid = pegawai?.intOrNull("skpdid") ?: pegawai?.intOrNull("skpd_id"),
+            skpd = pegawai?.stringOrNull("skpd") ?: profile?.skpd,
+            photoPath = pegawai?.stringOrNull("photo_path")
+                ?: pegawai?.stringOrNull("foto")
+                ?: profile?.photoPath,
+            lastSync = estimate.stringOrNull("calculated_at")
+                ?: estimate.objectOrNull("detail")?.stringOrNull("calculated_at")
+        )
+    }
+
+    private fun cachedProfile(): PegawaiProfile? {
+        val context = AppContextHolder.get() ?: return null
+        return runCatching {
+            UserPreferences(context).getCachedPegawaiProfile()
+        }.onFailure { error ->
+            Log.w(TAG, "Read cached profile for SSO fallback failed: ${error.message}")
+        }.getOrNull()
+    }
+
+    private fun JsonObject.findPayrollPegawai(): JsonObject? {
+        return objectOrNull("pegawai")
+            ?: objectOrNull("detail")?.objectOrNull("pegawai")
+            ?: objectOrNull("data")?.objectOrNull("pegawai")
+            ?: objectOrNull("detail")?.objectOrNull("data")?.objectOrNull("pegawai")
     }
 
     private fun JsonObject.toMinimalGajiEstimate(): GajiNonAsnPerhitungan? {
@@ -312,5 +514,10 @@ class SsoPayrollEstimateCacheRepository {
 
     private companion object {
         private const val TAG = "IZAKOD_PAYROLL_CACHE"
+        private const val SSO_FALLBACK_LABEL = "Estimasi berjalan dari SSO"
+        private const val SSO_FALLBACK_MESSAGE =
+            "Menampilkan estimasi berjalan dari SSO karena data resmi belum berhasil dimuat."
+        private const val SSO_FALLBACK_ISSUE =
+            "Data resmi belum berhasil dimuat. Aplikasi menampilkan estimasi berjalan dari SSO E-NTAGO."
     }
 }
