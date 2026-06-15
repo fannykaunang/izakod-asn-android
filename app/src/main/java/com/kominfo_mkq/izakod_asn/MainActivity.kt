@@ -81,9 +81,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var userPrefs: UserPreferences
     private var externalRouteHandler: ((String) -> Unit)? = null
 
-    private data class PayrollDeepLink(
+    private data class ExternalRoute(
         val route: String,
-        val ssoTicket: String?
+        val ssoTicket: String? = null
     )
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -141,15 +141,15 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         userPrefs = prefs
-        val initialPayrollDeepLink = resolvePayrollDeepLink(intent)
-        val initialSsoTicket = initialPayrollDeepLink?.ssoTicket?.takeIf { it.isNotBlank() }
-        val initialSsoFallbackRoute = initialPayrollDeepLink?.route
+        val initialExternalRoute = resolveExternalRoute(intent)
+        val initialSsoTicket = initialExternalRoute?.ssoTicket?.takeIf { it.isNotBlank() }
+        val initialSsoFallbackRoute = initialExternalRoute?.route
 
         setContent {
             var isDarkTheme by remember { mutableStateOf(userPrefs.isDarkTheme()) }
             var pendingExternalRoute by rememberSaveable {
                 mutableStateOf(
-                    if (initialSsoTicket == null) initialPayrollDeepLink?.route else null
+                    if (initialSsoTicket == null) initialExternalRoute?.route else null
                 )
             }
             val startDestination = remember {
@@ -204,16 +204,16 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        resolvePayrollDeepLink(intent)?.let { deepLink ->
-            val route = deepLink.ssoTicket
+        resolveExternalRoute(intent)?.let { externalRoute ->
+            val route = externalRoute.ssoTicket
                 ?.takeIf { it.isNotBlank() }
                 ?.let { ticket ->
                     mobileSsoBridgeRoute(
                         ticket = ticket,
-                        fallbackRoute = deepLink.route
+                        fallbackRoute = externalRoute.route
                     )
                 }
-                ?: deepLink.route
+                ?: externalRoute.route
 
             externalRouteHandler?.invoke(route)
         }
@@ -305,7 +305,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun resolvePayrollDeepLink(intent: Intent?): PayrollDeepLink? {
+    private fun resolveExternalRoute(intent: Intent?): ExternalRoute? {
+        return resolvePayrollDeepLink(intent) ?: resolveNotificationRoute(intent)
+    }
+
+    private fun resolvePayrollDeepLink(intent: Intent?): ExternalRoute? {
         val uri = intent?.data ?: return null
         if (!uri.scheme.equals("izakod-asn", ignoreCase = true)) return null
         if (!uri.host.equals("payroll", ignoreCase = true)) return null
@@ -327,7 +331,48 @@ class MainActivity : ComponentActivity() {
             "Payroll deep link diterima: jenis=$jenis, tahun=$tahun, bulan=$bulan, sso=${ssoTicket != null}"
         )
 
-        return PayrollDeepLink(route = route, ssoTicket = ssoTicket)
+        return ExternalRoute(route = route, ssoTicket = ssoTicket)
+    }
+
+    private fun resolveNotificationRoute(intent: Intent?): ExternalRoute? {
+        val laporanId = intent?.getStringExtra("laporan_id")
+            ?.trim()
+            ?.toIntOrNull()
+            ?.takeIf { it > 0 }
+            ?: extractLaporanIdFromLink(intent?.getStringExtra("link_tujuan"))
+            ?: return null
+
+        Log.d(
+            "MainActivity",
+            "Notification route diterima: laporan_id=$laporanId"
+        )
+
+        return ExternalRoute(route = "laporan_detail/$laporanId")
+    }
+
+    private fun extractLaporanIdFromLink(link: String?): Int? {
+        val rawLink = link?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val uri = runCatching { Uri.parse(rawLink) }.getOrNull() ?: return null
+        val pathSegments = uri.pathSegments
+        val laporanSegmentIndex = pathSegments.indexOfFirst { segment ->
+            segment.equals("laporan-kegiatan", ignoreCase = true) ||
+                segment.equals("laporan_detail", ignoreCase = true) ||
+                segment.equals("laporan-detail", ignoreCase = true)
+        }
+
+        if (laporanSegmentIndex >= 0) {
+            pathSegments.getOrNull(laporanSegmentIndex + 1)
+                ?.toIntOrNull()
+                ?.takeIf { it > 0 }
+                ?.let { return it }
+        }
+
+        return uri.getQueryParameter("laporan_id")
+            ?.toIntOrNull()
+            ?.takeIf { it > 0 }
+            ?: uri.getQueryParameter("id")
+                ?.toIntOrNull()
+                ?.takeIf { it > 0 }
     }
 
     private fun Uri.queryInt(name: String): Int? {

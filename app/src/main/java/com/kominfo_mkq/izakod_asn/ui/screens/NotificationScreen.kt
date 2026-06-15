@@ -284,7 +284,7 @@ private fun NotificationCard(
 
                 // Message preview (first 2 lines of WhatsApp message)
                 val cleanMessage = notification.pesan
-                    .replace("🔔 *NOTIFIKASI VERIFIKASI LAPORAN*", "")
+                    .filterLegacyVerificationHeader()
                     .replace("*", "")
                     .replace("_", "")
                     .trim()
@@ -710,7 +710,7 @@ private fun notificationVisuals(
 
 private fun Notifikasi.cleanMessage(): String {
     return pesan
-        .replace("*NOTIFIKASI VERIFIKASI LAPORAN*", "")
+        .filterLegacyVerificationHeader()
         .replace("*", "")
         .replace("_", "")
         .trim()
@@ -719,6 +719,23 @@ private fun Notifikasi.cleanMessage(): String {
         .filter { it.isNotBlank() }
         .joinToString("\n")
         .ifBlank { pesan.trim().ifBlank { "-" } }
+}
+
+private fun String.filterLegacyVerificationHeader(): String {
+    return split("\n")
+        .filterNot { it.isLegacyVerificationHeader() }
+        .joinToString("\n")
+}
+
+private fun String.isLegacyVerificationHeader(): Boolean {
+    val normalized = replace("*", "")
+        .replace("_", "")
+        .trim()
+        .uppercase(Locale.ROOT)
+
+    return normalized.contains("NOTIFIKASI") &&
+            normalized.contains("VERIFIKASI") &&
+            normalized.contains("LAPORAN")
 }
 
 private fun formatNotificationDateTime(dateString: String): String {

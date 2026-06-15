@@ -1,6 +1,7 @@
 package com.kominfo_mkq.izakod_asn.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -46,8 +48,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -64,6 +66,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
@@ -100,6 +103,7 @@ fun ReportDetailScreen(
         topBar = {
             IZAKODHeaderBar(
                 title = "Detail Laporan",
+                subtitle = "Laporan kegiatan harian",
                 compact = true,
                 onBack = onNavigateBack
             )
@@ -124,10 +128,10 @@ fun ReportDetailScreen(
         ) {
             when {
                 uiState.isLoading -> {
-                    LoadingContent()
+                    DetailLoadingContent()
                 }
                 uiState.isError -> {
-                    ErrorContent(
+                    DetailErrorContent(
                         message = uiState.errorMessage ?: "Terjadi kesalahan",
                         onRetry = { viewModel.loadLaporan(laporanId.toInt()) }
                     )
@@ -156,13 +160,14 @@ private fun StickyActionButtons(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shadowElevation = 8.dp,
-        color = MaterialTheme.colorScheme.surface
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 3.dp,
+        shadowElevation = 6.dp
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // ✅ Verify Button (Primary - if can verify)
@@ -170,8 +175,9 @@ private fun StickyActionButtons(
                 Button(
                     onClick = onVerify,
                     modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF4CAF50)
+                        containerColor = StatusApproved
                     )
                 ) {
                     Icon(
@@ -193,7 +199,8 @@ private fun StickyActionButtons(
             if (canEdit) {
                 OutlinedButton(
                     onClick = onEdit,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp)
                 ) {
                     Icon(
                         Icons.Default.Edit,
@@ -207,12 +214,30 @@ private fun StickyActionButtons(
 
             // ✅ Info text if no actions available
             if (!canEdit && !canVerify) {
-                Text(
-                    statusLaporan.noActionMessage(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            statusLaporan.noActionMessage(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
             }
         }
     }
@@ -399,7 +424,7 @@ private fun ActivityDetailsSection(laporan: LaporanDetail) {
                 )
             }
 
-            Divider()
+            HorizontalDivider()
 
             // Deskripsi
             Column {
@@ -442,7 +467,7 @@ private fun TimeLocationSection(laporan: LaporanDetail) {
         }
 
         if (laporan.lokasiKegiatan != null) {
-            Divider()
+            HorizontalDivider()
 
             DetailRow(
                 icon = Icons.Default.Place,
@@ -556,35 +581,69 @@ private fun statusPresentation(status: String): StatusPresentation {
 private fun StatusHeroCard(laporan: LaporanDetail) {
     val statusUi = statusPresentation(laporan.statusLaporan)
 
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = statusUi.background)
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+        shadowElevation = 1.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
             ) {
-                Icon(
-                    imageVector = statusUi.icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                    tint = statusUi.foreground
-                )
-                Text(
-                    text = statusUi.title,
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = statusUi.foreground
-                )
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = statusUi.background
+                    ) {
+                        Icon(
+                            imageVector = statusUi.icon,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .padding(12.dp)
+                                .size(24.dp),
+                            tint = statusUi.foreground
+                        )
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = "Status Laporan",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = statusUi.title,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                            color = statusUi.foreground
+                        )
+                    }
+                }
+
+                StatusDot(color = statusUi.foreground)
             }
+
+            Text(
+                text = laporan.namaKegiatan,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
 
             Text(
                 text = statusUi.subtitle,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             StatusActionGuidance(
@@ -629,16 +688,27 @@ private fun StatusHeroCard(laporan: LaporanDetail) {
 }
 
 @Composable
+private fun StatusDot(color: Color) {
+    Box(
+        modifier = Modifier
+            .padding(top = 2.dp)
+            .size(12.dp)
+            .clip(CircleShape)
+            .background(color)
+    )
+}
+
+@Composable
 private fun StatusActionGuidance(
     presentation: StatusPresentation
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+        shape = RoundedCornerShape(18.dp),
+        color = presentation.foreground.copy(alpha = 0.08f)
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(14.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.Top
         ) {
@@ -669,7 +739,7 @@ private fun StatusActionGuidance(
                 Text(
                     text = presentation.actionText,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -681,11 +751,11 @@ private fun SupervisorActionNoteSection(laporan: LaporanDetail) {
     val statusUi = statusPresentation(laporan.statusLaporan)
     val note = laporan.catatanVerifikator?.takeIf { it.isNotBlank() } ?: return
 
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = statusUi.foreground.copy(alpha = 0.1f)
-        )
+        shape = RoundedCornerShape(24.dp),
+        color = statusUi.foreground.copy(alpha = 0.08f),
+        border = BorderStroke(1.dp, statusUi.foreground.copy(alpha = 0.16f))
     ) {
         Row(
             modifier = Modifier
@@ -721,7 +791,7 @@ private fun SupervisorActionNoteSection(laporan: LaporanDetail) {
                 Text(
                     text = note,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.86f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -730,33 +800,26 @@ private fun SupervisorActionNoteSection(laporan: LaporanDetail) {
 
 @Composable
 private fun MainReportSection(laporan: LaporanDetail) {
-    SectionCard(title = "Inti Laporan", icon = Icons.Default.Description) {
+    SectionCard(title = "Uraian Kegiatan", icon = Icons.Default.Description) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Column {
-                Text(
-                    "Nama Kegiatan",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    laporan.namaKegiatan,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-            }
+            ReportTextBlock(
+                label = "Nama Kegiatan",
+                value = laporan.namaKegiatan,
+                emphasized = true
+            )
 
-            Divider()
+            HorizontalDivider()
 
-            Column {
-                Text(
-                    "Deskripsi Kegiatan",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    laporan.deskripsiKegiatan,
-                    style = MaterialTheme.typography.bodyMedium
+            ReportTextBlock(
+                label = "Deskripsi Kegiatan",
+                value = laporan.deskripsiKegiatan
+            )
+
+            if (!laporan.targetDetailUraian.isNullOrBlank()) {
+                HorizontalDivider()
+                ReportTextBlock(
+                    label = "Terkait Target Kinerja",
+                    value = laporan.targetDetailUraian
                 )
             }
         }
@@ -820,74 +883,42 @@ private fun QuickFactsSection(laporan: LaporanDetail) {
 
 @Composable
 private fun TargetOutputSection(laporan: LaporanDetail) {
-    SectionCard(title = "Target & Hasil") {
+    SectionCard(title = "Target & Hasil", icon = Icons.Default.EventAvailable) {
         if (laporan.targetOutput != null) {
-            Column {
-                Text(
-                    "Target Output",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    laporan.targetOutput,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
+            ReportTextBlock(
+                label = "Target Output",
+                value = laporan.targetOutput
+            )
         }
 
         if (laporan.hasilOutput != null) {
-            if (laporan.targetOutput != null) Divider()
+            if (laporan.targetOutput != null) HorizontalDivider()
 
-            Column {
-                Text(
-                    "Hasil Output",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    laporan.hasilOutput,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
+            ReportTextBlock(
+                label = "Hasil Output",
+                value = laporan.hasilOutput
+            )
         }
     }
 }
 
 @Composable
 private fun ProblemsSolutionsSection(laporan: LaporanDetail) {
-    SectionCard(title = "Kendala & Solusi") {
+    SectionCard(title = "Kendala & Solusi", icon = Icons.Default.Info) {
         if (laporan.kendala != null) {
-            Column {
-                Text(
-                    "Kendala",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    laporan.kendala,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
+            ReportTextBlock(
+                label = "Kendala",
+                value = laporan.kendala
+            )
         }
 
         if (laporan.solusi != null) {
-            if (laporan.kendala != null) Divider()
+            if (laporan.kendala != null) HorizontalDivider()
 
-            Column {
-                Text(
-                    "Solusi",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    laporan.solusi,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
+            ReportTextBlock(
+                label = "Solusi",
+                value = laporan.solusi
+            )
         }
     }
 }
@@ -913,8 +944,9 @@ private fun LampiranCard(lampiran: LampiranKegiatan) {
 
     Surface(
         modifier = Modifier.width(188.dp),
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f)
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -981,7 +1013,7 @@ private fun VerificationSection(
             value = laporan.verifikatorNama?.takeIf { it.isNotBlank() } ?: "-"
         )
 
-        Divider()
+        HorizontalDivider()
 
         DetailRow(
             icon = Icons.Default.EventAvailable,
@@ -990,7 +1022,7 @@ private fun VerificationSection(
         )
 
         if (laporan.rating != null) {
-            Divider()
+            HorizontalDivider()
 
             DetailRow(
                 icon = Icons.Default.Star,
@@ -1000,7 +1032,7 @@ private fun VerificationSection(
         }
 
         if (showNote) {
-            Divider()
+            HorizontalDivider()
 
             Column {
                 Text(
@@ -1020,23 +1052,30 @@ private fun VerificationSection(
 
 @Composable
 private fun LinksSection(laporan: LaporanDetail) {
-    SectionCard(title = "Link Referensi") {
-        Row(
+    SectionCard(title = "Link Referensi", icon = Icons.Default.Link) {
+        Surface(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
         ) {
-            Icon(
-                Icons.Default.Link,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                laporan.linkReferensi ?: "",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
+            Row(
+                modifier = Modifier.padding(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Icon(
+                    Icons.Default.Link,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    laporan.linkReferensi ?: "",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 }
@@ -1067,34 +1106,70 @@ private fun SectionCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Default.Info,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+        shadowElevation = 1.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+                ) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .padding(9.dp)
+                            .size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
                 Text(
                     title,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold
-                    )
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.ExtraBold
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
             content()
         }
+    }
+}
+
+@Composable
+private fun ReportTextBlock(
+    label: String,
+    value: String,
+    emphasized: Boolean = false
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value.ifBlank { "-" },
+            style = if (emphasized) {
+                MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold)
+            } else {
+                MaterialTheme.typography.bodyMedium
+            },
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 
@@ -1109,22 +1184,30 @@ private fun DetailRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Top
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Surface(
+            shape = RoundedCornerShape(13.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier
+                    .padding(8.dp)
+                    .size(18.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 label,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(3.dp))
             Text(
-                value,
-                style = MaterialTheme.typography.bodyMedium
+                value.ifBlank { "-" },
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }
@@ -1136,26 +1219,31 @@ private fun MetaPill(
     text: String,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    Surface(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-        )
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
-            maxLines = 1
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = text.ifBlank { "-" },
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -1168,8 +1256,9 @@ private fun FactTile(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
@@ -1189,7 +1278,10 @@ private fun FactTile(
                 )
                 Text(
                     text = value,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -1199,15 +1291,29 @@ private fun FactTile(
 @Composable
 private fun DetailLoadingContent() {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 1.dp,
+            shadowElevation = 1.dp
         ) {
-            CircularProgressIndicator()
-            Text("Memuat detail laporan...")
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                CircularProgressIndicator()
+                Text(
+                    text = "Memuat detail laporan...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -1218,34 +1324,48 @@ private fun DetailErrorContent(
     onRetry: () -> Unit
 ) {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.padding(32.dp)
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 1.dp,
+            shadowElevation = 1.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
         ) {
-            Icon(
-                Icons.Default.Error,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.error
-            )
-            Text(
-                "Terjadi Kesalahan",
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.padding(24.dp)
+            ) {
+                Icon(
+                    Icons.Default.Error,
+                    contentDescription = null,
+                    modifier = Modifier.size(54.dp),
+                    tint = MaterialTheme.colorScheme.error
                 )
-            )
-            Text(
-                message,
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Button(onClick = onRetry) {
-                Icon(Icons.Default.Refresh, null)
-                Spacer(Modifier.width(8.dp))
-                Text("Coba Lagi")
+                Text(
+                    "Terjadi Kesalahan",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+                Text(
+                    message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Button(
+                    onClick = onRetry,
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.Refresh, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Coba Lagi")
+                }
             }
         }
     }
@@ -1302,7 +1422,7 @@ private fun formatDate(dateString: String): String {
         val datePart = dateString.split("T")[0] // "2025-12-29T00:00:00.000Z" -> "2025-12-29"
 
         val inputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val outputFormat = SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID"))
+        val outputFormat = SimpleDateFormat("dd MMMM yyyy", Locale.forLanguageTag("id-ID"))
 
         val date = inputFormat.parse(datePart)
         date?.let { outputFormat.format(it) } ?: dateString
@@ -1316,7 +1436,7 @@ private fun formatDateTime(dateTimeString: String): String {
     return try {
         val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
         inputFormat.timeZone = TimeZone.getTimeZone("UTC")
-        val outputFormat = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale("id", "ID"))
+        val outputFormat = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.forLanguageTag("id-ID"))
         val date = inputFormat.parse(dateTimeString)
         date?.let { outputFormat.format(it) } ?: dateTimeString
     } catch (e: Exception) {

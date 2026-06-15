@@ -83,13 +83,19 @@ class IzakodFirebaseMessagingService : FirebaseMessagingService() {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("notifikasi_id", data["notifikasi_id"] ?: "")
+            putExtra("laporan_id", data["laporan_id"] ?: "")
             putExtra("link_tujuan", data["link_tujuan"] ?: "")
             putExtra("tipe_notifikasi", data["tipe_notifikasi"] ?: "")
+            putExtra("action_required", data["action_required"] ?: "")
         }
+
+        val requestCode = data["notifikasi_id"]?.toIntOrNull()
+            ?: data["laporan_id"]?.toIntOrNull()
+            ?: System.currentTimeMillis().toInt()
 
         val pendingIntent = PendingIntent.getActivity(
             this,
-            0,
+            requestCode,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or
                     (PendingIntent.FLAG_IMMUTABLE)
