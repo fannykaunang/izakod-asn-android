@@ -39,6 +39,8 @@ data class DashboardUiState(
     val assessmentSummary: AssessmentSummaryData? = null,
     val targetSummary: DashboardTargetSummaryData? = null,
     val actionAlerts: DashboardActionAlertsData? = null,
+    val isDashboardOverviewLoading: Boolean = false,
+    val hasDashboardOverviewLoaded: Boolean = false,
     val tertundaCount: Int? = null,
     val targetItems: List<TargetKinerjaItem> = emptyList(),
     val currentPegawaiId: Int? = null,
@@ -303,7 +305,8 @@ class DashboardViewModel : ViewModel() {
         _uiState.update {
             it.copy(
                 targetPeriodYear = tahun,
-                targetPeriodMonth = bulan
+                targetPeriodMonth = bulan,
+                hasDashboardOverviewLoaded = false
             )
         }
         loadAssessmentSummary(tahun = tahun, bulan = bulan)
@@ -316,23 +319,36 @@ class DashboardViewModel : ViewModel() {
     ) {
         viewModelScope.launch {
             try {
+                _uiState.update { it.copy(isDashboardOverviewLoading = true) }
+
                 val response = ApiClient.eabsenApiService.getDashboardOverview(
                     tahun = tahun,
                     bulan = bulan
                 )
+                val body = response.body()
+                val data = body?.data
 
-                if (response.isSuccessful && response.body()?.success == true) {
+                if (response.isSuccessful && body?.success == true && data != null) {
                     _uiState.update {
                         it.copy(
-                            assessmentSummary = response.body()?.data?.assessmentSummary,
-                            targetSummary = response.body()?.data?.targetSummary,
-                            actionAlerts = response.body()?.data?.actionAlerts,
+                            assessmentSummary = data.assessmentSummary,
+                            targetSummary = data.targetSummary,
+                            actionAlerts = data.actionAlerts,
+                            isDashboardOverviewLoading = false,
+                            hasDashboardOverviewLoaded = true,
                             targetPeriodYear = tahun,
                             targetPeriodMonth = bulan
                         )
                     }
+                } else {
+                    _uiState.update {
+                        it.copy(isDashboardOverviewLoading = false)
+                    }
                 }
             } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(isDashboardOverviewLoading = false)
+                }
                 android.util.Log.e(
                     "DashboardViewModel",
                     "❌ Error loading assessment summary: ${e.message}"

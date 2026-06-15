@@ -289,6 +289,10 @@ fun DashboardScreen(
     val sessionData = remember { userPreferences.getSessionData() }
     val isPayrollProfileReady = uiState.pegawaiProfile != null
     val isNonAsnPayroll = uiState.pegawaiProfile?.isNonAsnPegawai() == true
+    val isDashboardOverviewReady = uiState.hasDashboardOverviewLoaded &&
+        uiState.assessmentSummary != null &&
+        uiState.targetSummary != null &&
+        uiState.actionAlerts != null
 
     LaunchedEffect(
         requestedTabIndex,
@@ -364,7 +368,7 @@ fun DashboardScreen(
         }
     }
 
-    val coachmarkPrompt = if (!uiState.isLoading && !uiState.isError) {
+    val coachmarkPrompt = if (!uiState.isLoading && !uiState.isError && isDashboardOverviewReady) {
         buildDashboardCoachmarkPrompt(
             alerts = uiState.actionAlerts,
             targetSummary = uiState.targetSummary,
@@ -421,6 +425,9 @@ fun DashboardScreen(
                 !isPayrollProfileReady -> LoadingContent(
                     message = "Memuat profil pegawai..."
                 )
+                !isDashboardOverviewReady && uiState.isDashboardOverviewLoading -> LoadingContent(
+                    message = "Memuat ringkasan dashboard..."
+                )
                 else -> {
                     DashboardContent(
                         metrics = uiState.metrics,
@@ -428,6 +435,7 @@ fun DashboardScreen(
                         assessmentSummary = uiState.assessmentSummary,
                         targetSummary = uiState.targetSummary,
                         actionAlerts = uiState.actionAlerts,
+                        isOverviewReady = isDashboardOverviewReady,
                         tertundaCount = uiState.tertundaCount,
                         targetItems = uiState.targetItems,
                         tppUiState = tppUiState,
@@ -498,6 +506,7 @@ private fun DashboardContent(
     assessmentSummary: AssessmentSummaryData?,
     targetSummary: DashboardTargetSummaryData?,
     actionAlerts: DashboardActionAlertsData?,
+    isOverviewReady: Boolean,
     tertundaCount: Int?,
     targetItems: List<TargetKinerjaItem>,
     tppUiState: TppSayaUiState,
@@ -651,6 +660,7 @@ private fun DashboardContent(
                                     alerts = actionAlerts,
                                     targetSummary = targetSummary,
                                     assessmentSummary = assessmentSummary,
+                                    isOverviewReady = isOverviewReady,
                                     targetItems = targetItems,
                                     currentPegawaiId = currentPegawaiId,
                                     targetPeriodYear = targetPeriodYear,
@@ -1765,7 +1775,7 @@ private fun buildDashboardCoachmarkPrompt(
         }
     }
 
-    if (shouldShowStartTargetGuidance(targetSummary, assessmentSummary)) {
+    if (!canReviewSubordinates && shouldShowStartTargetGuidance(targetSummary, assessmentSummary)) {
         return DashboardCoachmarkPrompt(
             key = "$contextPrefix|pegawai-baru",
             title = "Mulai dari Sini",
@@ -2044,6 +2054,7 @@ private fun DashboardFocusSection(
     alerts: DashboardActionAlertsData?,
     targetSummary: DashboardTargetSummaryData?,
     assessmentSummary: AssessmentSummaryData?,
+    isOverviewReady: Boolean,
     targetItems: List<TargetKinerjaItem>,
     currentPegawaiId: Int?,
     targetPeriodYear: Int?,
@@ -2057,7 +2068,10 @@ private fun DashboardFocusSection(
     onOpenReview: () -> Unit,
     onOpenPenilaianBelumDibuat: () -> Unit
 ) {
-    val showStarter = shouldShowStartTargetGuidance(targetSummary, assessmentSummary)
+    if (!isOverviewReady) return
+
+    val showStarter = !canReviewSubordinates &&
+        shouldShowStartTargetGuidance(targetSummary, assessmentSummary)
     val pendingSubordinateTargetReview = pendingSubordinateTargetReview(
         targetItems = targetItems,
         currentPegawaiId = currentPegawaiId,
