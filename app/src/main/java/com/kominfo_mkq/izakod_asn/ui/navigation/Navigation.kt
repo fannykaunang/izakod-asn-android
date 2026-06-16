@@ -59,6 +59,7 @@ import com.kominfo_mkq.izakod_asn.ui.screens.TemplateKegiatanScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.TertundaScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.TppSayaDetailScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.TppSayaScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.VerifikasiAtasanBawahanScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.VerifikasiLaporanScreen
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.CreateLaporanViewModel
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.ProfileViewModel
@@ -77,6 +78,7 @@ sealed class Screen(val route: String) {
     object PenilaianKinerja : Screen("penilaian_kinerja")
     object PenilaianBelumDibuat : Screen("penilaian_belum_dibuat")
     object BawahanSaya : Screen("bawahan_saya")
+    object VerifikasiAtasanBawahan : Screen("verifikasi_atasan_bawahan")
     object Tertunda : Screen("tertunda")
     object TppSaya : Screen("tpp_saya")
     object GajiSaya : Screen("gaji_saya")
@@ -339,6 +341,7 @@ fun IZAKODNavigation(
                     onNavigateToPenilaianBawahan = { navController.navigate(penilaianKinerjaRoute("subordinate")) },
                     onNavigateToPenilaianBelumDibuat = { navController.navigate(Screen.PenilaianBelumDibuat.route) },
                     onNavigateToBawahan = { navController.navigate(Screen.BawahanSaya.route) },
+                    onNavigateToVerifikasi = { navController.navigate(Screen.VerifikasiAtasanBawahan.route) },
                     onNavigateToTertunda = { navController.navigate(Screen.Tertunda.route) },
                     onNavigateToTppDetail = { tahun, bulan ->
                         navController.navigate("tpp_saya_detail/$tahun/$bulan")
@@ -488,6 +491,12 @@ fun IZAKODNavigation(
 
             composable(Screen.BawahanSaya.route) {
                 BawahanSayaScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(Screen.VerifikasiAtasanBawahan.route) {
+                VerifikasiAtasanBawahanScreen(
                     onNavigateBack = { navController.popBackStack() }
                 )
             }

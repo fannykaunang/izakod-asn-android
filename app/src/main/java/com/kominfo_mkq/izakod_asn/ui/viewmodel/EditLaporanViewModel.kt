@@ -249,6 +249,7 @@ class EditLaporanViewModel : ViewModel() {
                         isUpdating = false,
                         isSuccess = true
                     )
+                    DashboardRefreshNotifier.markDirty()
                 } else {
                     val errorBody = response.errorBody()?.string()
                     _uiState.value = _uiState.value.copy(

@@ -111,6 +111,7 @@ class VerifikasiLaporanViewModel : ViewModel() {
                         isSuccess = true,
                         successMessage = successMsg
                     )
+                    DashboardRefreshNotifier.markDirty()
                 } else {
                     val errorBody = response.errorBody()?.string()
                     android.util.Log.e("VerifikasiViewModel", "❌ Error: $errorBody")

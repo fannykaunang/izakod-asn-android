@@ -59,6 +59,14 @@ class DashboardViewModel : ViewModel() {
     private val initialCalendar = Calendar.getInstance()
     private var selectedTargetYear: Int = initialCalendar.get(Calendar.YEAR)
     private var selectedTargetMonth: Int = initialCalendar.get(Calendar.MONTH) + 1
+    private var hasStartedInitialLoad = false
+    private var lastStatistikLoadedAt = 0L
+    private var lastNotificationLoadedAt = 0L
+    private var lastOverviewLoadedAt = 0L
+    private var lastDashboardTargetsLoadedAt = 0L
+    private var lastTertundaLoadedAt = 0L
+    private var lastProfileLoadedAt = 0L
+    private var handledRefreshVersion = 0
 
     // UI State
     private val _uiState = MutableStateFlow(
@@ -76,9 +84,31 @@ class DashboardViewModel : ViewModel() {
         _currentTabIndex.value = index
     }
 
+    fun consumeExternalRefreshVersion(version: Int): Boolean {
+        if (version <= 0 || version <= handledRefreshVersion) {
+            return false
+        }
+        handledRefreshVersion = version
+        return true
+    }
+
     /**
      * Load pegawai profile
      */
+    fun loadPegawaiProfileIfNeeded(
+        pin: String,
+        force: Boolean = false
+    ) {
+        if (pin.isBlank()) return
+
+        val shouldLoad = force ||
+            _uiState.value.pegawaiProfile == null ||
+            isStale(lastProfileLoadedAt, PROFILE_REFRESH_TTL_MS)
+        if (!shouldLoad) return
+
+        loadPegawaiProfile(pin)
+    }
+
     fun loadPegawaiProfile(pin: String) {
         viewModelScope.launch {
             try {
@@ -100,6 +130,7 @@ class DashboardViewModel : ViewModel() {
                             isLoadingProfile = false
                         )
                     }
+                    lastProfileLoadedAt = now()
                 } else {
                     applyCachedProfileFallback()
                 }
@@ -107,11 +138,6 @@ class DashboardViewModel : ViewModel() {
                 applyCachedProfileFallback()
             }
         }
-    }
-
-    init {
-        // Load statistik saat ViewModel dibuat
-        loadStatistik()
     }
 
     fun loadNotificationCount() {
@@ -133,6 +159,7 @@ class DashboardViewModel : ViewModel() {
                         _uiState.value = _uiState.value.copy(
                             unreadNotificationCount = body.unread
                         )
+                        lastNotificationLoadedAt = now()
                     }
                 }
             } catch (e: Exception) {
@@ -145,7 +172,38 @@ class DashboardViewModel : ViewModel() {
      * ✅ PUBLIC refresh function
      * Call this when returning to Dashboard to reload data
      */
+    fun refreshIfNeeded(
+        context: Context? = null,
+        force: Boolean = false
+    ) {
+        val state = _uiState.value
+        val needsInitialLoad = !hasStartedInitialLoad ||
+            state.metrics == null ||
+            !state.hasDashboardOverviewLoaded ||
+            state.tertundaCount == null
+
+        if (needsInitialLoad) {
+            refresh(
+                context = context,
+                showFullLoading = state.metrics == null && !state.hasDashboardOverviewLoaded
+            )
+            return
+        }
+
+        val needsRefresh = force ||
+            isStale(lastStatistikLoadedAt) ||
+            isStale(lastNotificationLoadedAt) ||
+            isStale(lastOverviewLoadedAt) ||
+            isStale(lastDashboardTargetsLoadedAt) ||
+            isStale(lastTertundaLoadedAt)
+
+        if (needsRefresh) {
+            refresh(context = context, showFullLoading = false)
+        }
+    }
+
     fun refresh(context: Context? = null, showFullLoading: Boolean = true) {
+        hasStartedInitialLoad = true
         loadStatistik(showFullLoading = showFullLoading)
         loadNotificationCount()
         loadAssessmentSummary(
@@ -171,6 +229,7 @@ class DashboardViewModel : ViewModel() {
                     isLoadingProfile = false
                 )
             }
+            lastProfileLoadedAt = now()
         } else {
             _uiState.update { it.copy(isLoadingProfile = false) }
         }
@@ -242,6 +301,7 @@ class DashboardViewModel : ViewModel() {
                             isAdmin = response.data.data.isAdmin
                         )
                     }
+                    lastStatistikLoadedAt = now()
                 } else {
                     _uiState.update {
                         it.copy(
@@ -269,16 +329,7 @@ class DashboardViewModel : ViewModel() {
      * Retry load statistik
      */
     fun retry(context: Context? = null) {
-        loadStatistik()
-        loadAssessmentSummary(
-            tahun = selectedTargetYear,
-            bulan = selectedTargetMonth
-        )
-        loadDashboardTargets(
-            tahun = selectedTargetYear,
-            bulan = selectedTargetMonth
-        )
-        context?.let { loadTertundaCount(it.applicationContext) }
+        refresh(context = context, showFullLoading = true)
     }
 
     fun loadTertundaCount(context: Context) {
@@ -288,6 +339,7 @@ class DashboardViewModel : ViewModel() {
                 _uiState.update {
                     it.copy(tertundaCount = snapshot.total)
                 }
+                lastTertundaLoadedAt = now()
             } catch (e: Exception) {
                 android.util.Log.e(
                     "DashboardViewModel",
@@ -340,6 +392,7 @@ class DashboardViewModel : ViewModel() {
                             targetPeriodMonth = bulan
                         )
                     }
+                    lastOverviewLoadedAt = now()
                 } else {
                     _uiState.update {
                         it.copy(isDashboardOverviewLoading = false)
@@ -378,6 +431,7 @@ class DashboardViewModel : ViewModel() {
                             targetPeriodMonth = bulan
                         )
                     }
+                    lastDashboardTargetsLoadedAt = now()
                 }
             } catch (e: Exception) {
                 android.util.Log.e(
@@ -386,5 +440,19 @@ class DashboardViewModel : ViewModel() {
                 )
             }
         }
+    }
+
+    private fun now(): Long = System.currentTimeMillis()
+
+    private fun isStale(
+        loadedAt: Long,
+        ttlMillis: Long = DASHBOARD_REFRESH_TTL_MS
+    ): Boolean {
+        return loadedAt <= 0L || now() - loadedAt >= ttlMillis
+    }
+
+    private companion object {
+        private const val DASHBOARD_REFRESH_TTL_MS = 60_000L
+        private const val PROFILE_REFRESH_TTL_MS = 60_000L
     }
 }

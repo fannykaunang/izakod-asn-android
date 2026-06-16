@@ -74,6 +74,7 @@ class PenilaianKinerjaListViewModel : ViewModel() {
             )
 
             if (response.success && response.data?.data != null) {
+                DashboardRefreshNotifier.markDirty()
                 onSuccess(response.data.data.id)
             } else {
                 onError(response.error ?: "Gagal membuat draft penilaian")
@@ -159,6 +160,7 @@ class PenilaianBelumDibuatViewModel : ViewModel() {
             )
 
             if (response.success && response.data?.data != null) {
+                DashboardRefreshNotifier.markDirty()
                 onSuccess(response.data.data.id)
                 refresh(tahun = item.tahun, bulan = item.bulan)
             } else {
@@ -238,6 +240,7 @@ class PenilaianKinerjaDetailViewModel : ViewModel() {
             _uiState.value = _uiState.value.copy(isSaving = false)
 
             if (response.success) {
+                DashboardRefreshNotifier.markDirty()
                 onSuccess(response.data?.message ?: "Penilaian berhasil disimpan")
                 loadDetail(assessmentId)
             } else {
@@ -259,6 +262,7 @@ class PenilaianKinerjaDetailViewModel : ViewModel() {
             _uiState.value = _uiState.value.copy(isFinalizing = false)
 
             if (response.success) {
+                DashboardRefreshNotifier.markDirty()
                 onSuccess(response.data?.message ?: "Penilaian berhasil difinalkan")
                 loadDetail(assessmentId)
             } else {

@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.FactCheck
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.AccessTime
@@ -133,6 +134,7 @@ import com.kominfo_mkq.izakod_asn.ui.theme.StatusPending
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusRejected
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusRevised
 import com.kominfo_mkq.izakod_asn.ui.theme.TertiaryLight
+import com.kominfo_mkq.izakod_asn.ui.viewmodel.DashboardRefreshNotifier
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.DashboardViewModel
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.GajiSayaUiState
 import com.kominfo_mkq.izakod_asn.ui.viewmodel.GajiSayaViewModel
@@ -277,6 +279,7 @@ fun DashboardScreen(
     onNavigateToPenilaianBawahan: () -> Unit,
     onNavigateToPenilaianBelumDibuat: () -> Unit,
     onNavigateToBawahan: () -> Unit,
+    onNavigateToVerifikasi: () -> Unit,
     onNavigateToTertunda: () -> Unit,
     onNavigateToTppDetail: (Int, Int) -> Unit,
     onNavigateToGajiDetail: (Int, Int) -> Unit,
@@ -296,6 +299,7 @@ fun DashboardScreen(
     val uiState by viewModel.uiState.collectAsState()
     val tppUiState by tppViewModel.uiState.collectAsState()
     val gajiUiState by gajiViewModel.uiState.collectAsState()
+    val dashboardRefreshVersion by DashboardRefreshNotifier.version.collectAsState()
     val context = LocalContext.current
     val userPreferences = remember { UserPreferences(context) }
 
@@ -357,15 +361,15 @@ fun DashboardScreen(
     )
 
     LaunchedEffect(Unit) {
-        viewModel.refresh(context)
+        viewModel.refreshIfNeeded(context)
     }
 
     LaunchedEffect(uiState.pegawaiProfile?.pegawaiId, isNonAsnPayroll) {
         if (uiState.pegawaiProfile != null) {
             if (isNonAsnPayroll) {
-                gajiViewModel.refresh()
+                gajiViewModel.refreshIfNeeded()
             } else {
-                tppViewModel.refresh()
+                tppViewModel.refreshIfNeeded()
             }
         }
     }
@@ -377,7 +381,25 @@ fun DashboardScreen(
     LaunchedEffect(Unit) {
         val pin = sessionData?.pin
         if (!pin.isNullOrEmpty()) {
-            viewModel.loadPegawaiProfile(pin)
+            viewModel.loadPegawaiProfileIfNeeded(pin)
+        }
+    }
+
+    LaunchedEffect(dashboardRefreshVersion) {
+        if (!viewModel.consumeExternalRefreshVersion(dashboardRefreshVersion)) {
+            return@LaunchedEffect
+        }
+
+        viewModel.refreshIfNeeded(context = context, force = true)
+        sessionData?.pin?.takeIf { it.isNotEmpty() }?.let { pin ->
+            viewModel.loadPegawaiProfileIfNeeded(pin = pin, force = true)
+        }
+        if (isPayrollProfileReady) {
+            if (isNonAsnPayroll) {
+                gajiViewModel.refresh()
+            } else {
+                tppViewModel.refresh()
+            }
         }
     }
 
@@ -473,6 +495,7 @@ fun DashboardScreen(
                         onPenilaianBawahan = onNavigateToPenilaianBawahan,
                         onPenilaianBelumDibuat = onNavigateToPenilaianBelumDibuat,
                         onBawahanSaya = onNavigateToBawahan,
+                        onVerifikasi = onNavigateToVerifikasi,
                         onTertunda = onNavigateToTertunda,
                         onTppPreviousMonth = { tppViewModel.moveMonth(-1) },
                         onTppNextMonth = { tppViewModel.moveMonth(1) },
@@ -546,6 +569,7 @@ private fun DashboardContent(
     onPenilaianBawahan: () -> Unit,
     onPenilaianBelumDibuat: () -> Unit,
     onBawahanSaya: () -> Unit,
+    onVerifikasi: () -> Unit,
     onTertunda: () -> Unit,
     onTppPreviousMonth: () -> Unit,
     onTppNextMonth: () -> Unit,
@@ -578,6 +602,10 @@ private fun DashboardContent(
     val canReviewSubordinates = assessmentSummary?.canReviewSubordinates == true
     val canUseSubordinateProposalMenu = canReviewSubordinates ||
         assessmentSummary?.canProposeSubordinates == true
+    val canVerifySupervisionProposals =
+        assessmentSummary?.canVerifySupervisionProposals == true
+    val verificationProposalPendingCount =
+        actionAlerts?.supervisionProposalPendingCount ?: 0
 
     val pagerState = rememberPagerState(
         initialPage = selectedTabIndex,
@@ -709,7 +737,10 @@ private fun DashboardContent(
                                 onTemplates = onTemplates,
                                 onReminder = onReminder,
                                 canShowBawahan = canUseSubordinateProposalMenu,
-                                onBawahanSaya = onBawahanSaya
+                                onBawahanSaya = onBawahanSaya,
+                                canShowVerifikasi = canVerifySupervisionProposals,
+                                verifikasiPendingCount = verificationProposalPendingCount,
+                                onVerifikasi = onVerifikasi
                             )
                         }
                         item {
@@ -2618,12 +2649,20 @@ private fun MinimalQuickActionsSection(
     onTemplates: () -> Unit,
     onReminder: () -> Unit,
     canShowBawahan: Boolean,
-    onBawahanSaya: () -> Unit
+    onBawahanSaya: () -> Unit,
+    canShowVerifikasi: Boolean,
+    verifikasiPendingCount: Int?,
+    onVerifikasi: () -> Unit
 ) {
     val tertundaBadge = when {
         tertundaCount == null || tertundaCount <= 0 -> null
         tertundaCount > 99 -> "99+"
         else -> tertundaCount.toString()
+    }
+    val verifikasiBadge = when {
+        verifikasiPendingCount == null || verifikasiPendingCount <= 0 -> null
+        verifikasiPendingCount > 99 -> "99+"
+        else -> verifikasiPendingCount.toString()
     }
 
     val actions = buildList {
@@ -2631,6 +2670,17 @@ private fun MinimalQuickActionsSection(
         add(CompactQuickActionData("Target", Icons.Default.TaskAlt, PrimaryLight, onTargetKinerja))
         if (canShowBawahan) {
             add(CompactQuickActionData("Bawahan", Icons.Default.Groups, PrimaryLight, onBawahanSaya))
+        }
+        if (canShowVerifikasi) {
+            add(
+                CompactQuickActionData(
+                    label = "Verifikasi",
+                    icon = Icons.AutoMirrored.Filled.FactCheck,
+                    color = StatusApproved,
+                    onClick = onVerifikasi,
+                    badgeText = verifikasiBadge
+                )
+            )
         }
         add(CompactQuickActionData("Template", Icons.Default.AssignmentTurnedIn, TertiaryLight, onTemplates))
         add(CompactQuickActionData(

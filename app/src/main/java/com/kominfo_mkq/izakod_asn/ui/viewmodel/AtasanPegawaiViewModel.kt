@@ -7,6 +7,7 @@ import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiData
 import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiUsulanItem
 import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiUsulanRequest
+import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiUsulanVerifyRequest
 import com.kominfo_mkq.izakod_asn.data.model.KandidatBawahanItem
 import com.kominfo_mkq.izakod_asn.data.repository.AtasanPegawaiRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,6 +70,31 @@ class AtasanPegawaiViewModel : ViewModel() {
         }
     }
 
+    fun loadVerificationQueue(context: Context, silent: Boolean = false) {
+        val appContext = context.applicationContext
+        viewModelScope.launch {
+            val currentPegawaiId = UserPreferences(appContext).getPegawaiId()
+            _uiState.update {
+                it.copy(
+                    isLoading = !silent,
+                    isRefreshing = silent,
+                    currentPegawaiId = currentPegawaiId,
+                    errorMessage = null
+                )
+            }
+
+            val usulanResult = repository.getUsulan(limit = 200)
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    isRefreshing = false,
+                    usulan = usulanResult.data.orEmpty(),
+                    errorMessage = usulanResult.error
+                )
+            }
+        }
+    }
+
     fun saveProposal(
         context: Context,
         request: AtasanPegawaiUsulanRequest,
@@ -88,6 +114,7 @@ class AtasanPegawaiViewModel : ViewModel() {
             }
 
             if (result.success) {
+                DashboardRefreshNotifier.markDirty()
                 _uiState.update {
                     it.copy(
                         isMutating = false,
@@ -127,6 +154,7 @@ class AtasanPegawaiViewModel : ViewModel() {
 
             val result = repository.cancelUsulan(item.id)
             if (result.success) {
+                DashboardRefreshNotifier.markDirty()
                 _uiState.update {
                     it.copy(
                         isMutating = false,
@@ -139,6 +167,53 @@ class AtasanPegawaiViewModel : ViewModel() {
                     it.copy(
                         isMutating = false,
                         errorMessage = result.error ?: "Gagal membatalkan usulan"
+                    )
+                }
+            }
+        }
+    }
+
+    fun verifyProposal(
+        context: Context,
+        item: AtasanPegawaiUsulanItem,
+        keputusan: String,
+        catatan: String? = null,
+        verificationOnly: Boolean = false
+    ) {
+        val appContext = context.applicationContext
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(isMutating = true, errorMessage = null, actionMessage = null)
+            }
+
+            val request = AtasanPegawaiUsulanVerifyRequest(
+                keputusan = keputusan,
+                catatanVerifikasi = catatan?.trim()?.takeIf { it.isNotBlank() }
+            )
+            val result = repository.verifyUsulan(item.id, request)
+            if (result.success) {
+                DashboardRefreshNotifier.markDirty()
+                _uiState.update {
+                    it.copy(
+                        isMutating = false,
+                        actionMessage = result.data?.message
+                            ?: if (keputusan == "setuju") {
+                                "Usulan berhasil disetujui"
+                            } else {
+                                "Usulan berhasil ditolak"
+                            }
+                    )
+                }
+                if (verificationOnly) {
+                    loadVerificationQueue(appContext, silent = true)
+                } else {
+                    load(appContext, silent = true)
+                }
+            } else {
+                _uiState.update {
+                    it.copy(
+                        isMutating = false,
+                        errorMessage = result.error ?: "Gagal memverifikasi usulan"
                     )
                 }
             }

@@ -8,6 +8,7 @@ import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiResponse
 import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiUsulanListResponse
 import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiUsulanMutationResponse
 import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiUsulanRequest
+import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiUsulanVerifyRequest
 import com.kominfo_mkq.izakod_asn.data.model.BasicActionResponse
 import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanResponse
@@ -341,6 +342,12 @@ interface EabsenApiService {
     @POST("api/atasan-pegawai/usulan/{id}/cancel")
     suspend fun cancelAtasanPegawaiUsulan(
         @Path("id") id: Int
+    ): Response<AtasanPegawaiUsulanMutationResponse>
+
+    @POST("api/atasan-pegawai/usulan/{id}/verify")
+    suspend fun verifyAtasanPegawaiUsulan(
+        @Path("id") id: Int,
+        @Body request: AtasanPegawaiUsulanVerifyRequest
     ): Response<AtasanPegawaiUsulanMutationResponse>
 
     // CREATE

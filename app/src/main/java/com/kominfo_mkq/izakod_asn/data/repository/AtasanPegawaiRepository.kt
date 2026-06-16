@@ -5,6 +5,7 @@ import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiData
 import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiUsulanItem
 import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiUsulanMutationResponse
 import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiUsulanRequest
+import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiUsulanVerifyRequest
 import com.kominfo_mkq.izakod_asn.data.model.KandidatBawahanItem
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
 import kotlinx.coroutines.Dispatchers
@@ -126,6 +127,17 @@ class AtasanPegawaiRepository {
                 ApiResponse(success = false, error = e.message ?: "Koneksi bermasalah")
             }
         }
+
+    suspend fun verifyUsulan(
+        id: Int,
+        request: AtasanPegawaiUsulanVerifyRequest
+    ): ApiResponse<AtasanPegawaiUsulanMutationResponse> = withContext(Dispatchers.IO) {
+        try {
+            handleMutation(apiService.verifyAtasanPegawaiUsulan(id, request))
+        } catch (e: Exception) {
+            ApiResponse(success = false, error = e.message ?: "Koneksi bermasalah")
+        }
+    }
 
     private fun handleMutation(
         response: Response<AtasanPegawaiUsulanMutationResponse>

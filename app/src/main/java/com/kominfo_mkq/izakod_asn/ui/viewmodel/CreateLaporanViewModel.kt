@@ -478,6 +478,7 @@ class CreateLaporanViewModel : ViewModel() {
                         isLoading = false,
                         isSuccess = true
                     )
+                    DashboardRefreshNotifier.markDirty()
                 } else {
                     // Parse error
                     val errorBody = response.errorBody()?.string()

@@ -236,7 +236,10 @@ data class AssessmentSummaryData(
     val canReviewSubordinates: Boolean? = null,
 
     @SerializedName("canProposeSubordinates")
-    val canProposeSubordinates: Boolean? = null
+    val canProposeSubordinates: Boolean? = null,
+
+    @SerializedName("canVerifySupervisionProposals")
+    val canVerifySupervisionProposals: Boolean? = null
 )
 
 data class DashboardTargetSummaryData(
@@ -303,5 +306,8 @@ data class DashboardActionAlertsData(
     val subordinateLaporanPendingCount: Int? = null,
 
     @SerializedName("subordinateRealisasiIncompleteCount")
-    val subordinateRealisasiIncompleteCount: Int? = null
+    val subordinateRealisasiIncompleteCount: Int? = null,
+
+    @SerializedName("supervisionProposalPendingCount")
+    val supervisionProposalPendingCount: Int? = null
 )

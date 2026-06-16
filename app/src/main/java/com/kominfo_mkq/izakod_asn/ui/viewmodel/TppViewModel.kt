@@ -24,9 +24,20 @@ data class TppSayaUiState(
 class TppSayaViewModel : ViewModel() {
 
     private val repository = TppRepository()
+    private var lastLoadedAt = 0L
 
     private val _uiState = MutableStateFlow(TppSayaUiState(isLoading = true))
     val uiState: StateFlow<TppSayaUiState> = _uiState.asStateFlow()
+
+    fun refreshIfNeeded() {
+        val state = _uiState.value
+        val shouldRefresh = state.data == null ||
+            lastLoadedAt <= 0L ||
+            System.currentTimeMillis() - lastLoadedAt >= PAYROLL_REFRESH_TTL_MS
+        if (shouldRefresh) {
+            refresh()
+        }
+    }
 
     fun refresh() {
         Log.d(
@@ -124,6 +135,7 @@ class TppSayaViewModel : ViewModel() {
                     errorMessage = null,
                     data = response.data.data
                 )
+                lastLoadedAt = System.currentTimeMillis()
             } else {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -137,5 +149,6 @@ class TppSayaViewModel : ViewModel() {
 
     private companion object {
         private const val TAG = "IZAKOD_TPP_VM"
+        private const val PAYROLL_REFRESH_TTL_MS = 60_000L
     }
 }

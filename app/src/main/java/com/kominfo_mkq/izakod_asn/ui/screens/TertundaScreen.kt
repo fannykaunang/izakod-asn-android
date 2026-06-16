@@ -29,9 +29,10 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,6 +46,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -53,6 +55,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
+import com.kominfo_mkq.izakod_asn.ui.theme.GradientEndLight
+import com.kominfo_mkq.izakod_asn.ui.theme.GradientStartLight
 import com.kominfo_mkq.izakod_asn.ui.theme.PrimaryLight
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusApproved
 import com.kominfo_mkq.izakod_asn.ui.theme.StatusPending
@@ -248,66 +252,66 @@ private fun TertundaContent(
 
 @Composable
 private fun TertundaHeroCard(uiState: TertundaUiState) {
-    Surface(
+    ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+        colors = CardDefaults.elevatedCardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 8.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Brush.linearGradient(listOf(GradientStartLight, GradientEndLight)))
+                .padding(22.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Pekerjaan tertunda",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold)
-                    )
-                    Text(
-                        text = "${uiState.total} item perlu perhatian",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Surface(
-                    shape = CircleShape,
-                    color = if (uiState.total > 0) StatusRevised.copy(alpha = 0.16f)
-                    else StatusApproved.copy(alpha = 0.16f)
+            Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Icon(
-                        imageVector = if (uiState.total > 0) Icons.Default.AccessTime else Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        tint = if (uiState.total > 0) StatusRevised else StatusApproved,
-                        modifier = Modifier
-                            .padding(14.dp)
-                            .size(26.dp)
-                    )
-                }
-            }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Pekerjaan Tertunda",
+                            style = MaterialTheme.typography.headlineSmall.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = Color.White
+                        )
+                        Text(
+                            text = if (uiState.total > 0) {
+                                "${uiState.total} item perlu ditindaklanjuti agar alur kerja tidak tertahan."
+                            } else {
+                                "Semua laporan, target, dan penilaian dalam kondisi aman."
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.86f)
+                        )
+                    }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                TertundaSummaryPill(
-                    label = "Laporan",
-                    value = uiState.laporan.size,
-                    color = StatusRevised,
-                    modifier = Modifier.weight(1f)
-                )
-                TertundaSummaryPill(
-                    label = "Target",
-                    value = uiState.target.size,
-                    color = StatusPending,
-                    modifier = Modifier.weight(1f)
-                )
-                TertundaSummaryPill(
-                    label = "Penilaian",
-                    value = uiState.penilaian.size,
-                    color = PrimaryLight,
-                    modifier = Modifier.weight(1f)
-                )
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White.copy(alpha = 0.16f)
+                    ) {
+                        Icon(
+                            imageVector = if (uiState.total > 0) Icons.Default.AccessTime else Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier
+                                .padding(14.dp)
+                                .size(30.dp)
+                        )
+                    }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TertundaSummaryPill(value = uiState.laporan.size, label = "Laporan")
+                    TertundaSummaryPill(value = uiState.target.size, label = "Target")
+                    TertundaSummaryPill(value = uiState.penilaian.size, label = "Penilaian")
+                }
             }
         }
     }
@@ -315,26 +319,27 @@ private fun TertundaHeroCard(uiState: TertundaUiState) {
 
 @Composable
 private fun TertundaSummaryPill(
-    label: String,
     value: Int,
-    color: Color,
-    modifier: Modifier = Modifier
+    label: String
 ) {
     Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
-        color = color.copy(alpha = 0.10f)
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White.copy(alpha = 0.16f)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
             Text(
                 text = value.toString(),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
-                color = color
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = Color.White
             )
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White.copy(alpha = 0.88f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -459,93 +464,89 @@ private fun TertundaItemCard(
     body: String,
     onClick: () -> Unit
 ) {
-    Surface(
+    ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-        shadowElevation = 1.dp
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalAlignment = Alignment.Top
             ) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = accent.copy(alpha = 0.12f)
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = accent,
-                        modifier = Modifier
-                            .padding(10.dp)
-                            .size(22.dp)
-                    )
-                }
+                TertundaIconBadge(
+                    icon = icon,
+                    color = accent,
+                    background = accent.copy(alpha = 0.12f)
+                )
 
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
                     Text(
                         text = title,
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                AssistChip(
-                    onClick = {},
-                    label = {
-                        Text(
-                            text = status,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                )
+                TertundaStatusPill(text = status, color = accent)
             }
 
-            Text(
-                text = body,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis
-            )
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+            ) {
+                Text(
+                    text = body,
+                    modifier = Modifier.padding(12.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun TertundaMiniEmptyCard(message: String) {
-    Surface(
+    ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.CheckCircle,
-                contentDescription = null,
-                tint = StatusApproved,
-                modifier = Modifier.size(20.dp)
+            TertundaIconBadge(
+                icon = Icons.Default.CheckCircle,
+                color = StatusApproved,
+                background = StatusApproved.copy(alpha = 0.12f)
             )
             Text(
                 text = message,
@@ -565,27 +566,30 @@ private fun TertundaStateCard(
     onAction: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
+    val accent = if (icon == Icons.Default.Warning) StatusRejected else StatusApproved
+
+    ElevatedCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-        shadowElevation = 1.dp
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp)
     ) {
         Column(
             modifier = Modifier.padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
             horizontalAlignment = Alignment.Start
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = StatusApproved,
-                modifier = Modifier.size(30.dp)
+            TertundaIconBadge(
+                icon = icon,
+                color = accent,
+                background = accent.copy(alpha = 0.12f)
             )
             Text(
                 text = title,
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold)
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = message,
@@ -596,6 +600,44 @@ private fun TertundaStateCard(
                 Text(actionText)
             }
         }
+    }
+}
+
+@Composable
+private fun TertundaIconBadge(
+    icon: ImageVector,
+    color: Color,
+    background: Color
+) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = background
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier
+                .padding(13.dp)
+                .size(26.dp),
+            tint = color
+        )
+    }
+}
+
+@Composable
+private fun TertundaStatusPill(text: String, color: Color) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = color.copy(alpha = 0.13f)
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

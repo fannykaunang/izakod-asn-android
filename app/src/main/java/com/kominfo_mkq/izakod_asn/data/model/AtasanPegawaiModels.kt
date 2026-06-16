@@ -118,3 +118,8 @@ data class AtasanPegawaiUsulanRequest(
     @SerializedName("keterangan") val keterangan: String? = null,
     @SerializedName("submit") val submit: Boolean = false
 )
+
+data class AtasanPegawaiUsulanVerifyRequest(
+    @SerializedName("keputusan") val keputusan: String,
+    @SerializedName("catatan_verifikasi") val catatanVerifikasi: String? = null
+)

@@ -205,6 +205,7 @@ class TargetKinerjaDetailViewModel : ViewModel() {
         viewModelScope.launch {
             val response = repository.submitTargetKinerja(targetId)
             if (response.success) {
+                DashboardRefreshNotifier.markDirty()
                 onSuccess()
                 loadTarget(targetId)
             } else {
@@ -217,6 +218,7 @@ class TargetKinerjaDetailViewModel : ViewModel() {
         viewModelScope.launch {
             val response = repository.deleteTargetKinerja(targetId)
             if (response.success) {
+                DashboardRefreshNotifier.markDirty()
                 onSuccess()
             } else {
                 onError(response.error ?: "Gagal menghapus target")
@@ -235,6 +237,7 @@ class TargetKinerjaDetailViewModel : ViewModel() {
         viewModelScope.launch {
             val response = repository.reviewTargetKinerja(targetId, aksi, catatanAtasan)
             if (response.success) {
+                DashboardRefreshNotifier.markDirty()
                 onSuccess()
                 loadTarget(targetId)
             } else {
@@ -265,6 +268,7 @@ class TargetKinerjaDetailViewModel : ViewModel() {
             )
             _uiState.value = _uiState.value.copy(savingRealisasiDetailId = null)
             if (response.success) {
+                DashboardRefreshNotifier.markDirty()
                 refreshSupportingData(target)
                 onSuccess(response.data?.message ?: "Realisasi berhasil disimpan")
             } else {
@@ -295,6 +299,7 @@ class TargetKinerjaDetailViewModel : ViewModel() {
             val response = repository.linkLaporanToRealisasi(realisasi.id, laporanId)
             _uiState.value = _uiState.value.copy(linkingDetailId = null)
             if (response.success) {
+                DashboardRefreshNotifier.markDirty()
                 refreshSupportingData(target)
                 onSuccess(response.data ?: "Laporan berhasil ditautkan")
             } else {
@@ -326,6 +331,7 @@ class TargetKinerjaDetailViewModel : ViewModel() {
             val response = repository.unlinkLaporanFromRealisasi(realisasi.id, laporanId)
             _uiState.value = _uiState.value.copy(unlinkingKey = null)
             if (response.success) {
+                DashboardRefreshNotifier.markDirty()
                 refreshSupportingData(target)
                 onSuccess(response.data ?: "Tautan laporan berhasil dilepas")
             } else {
@@ -392,6 +398,7 @@ class TargetKinerjaFormViewModel : ViewModel() {
             _uiState.value = _uiState.value.copy(isSaving = false)
 
             if (response.success) {
+                DashboardRefreshNotifier.markDirty()
                 onSuccess(response.data?.data?.id ?: 0)
             } else {
                 onError(response.error ?: "Gagal membuat target")
@@ -424,6 +431,7 @@ class TargetKinerjaFormViewModel : ViewModel() {
             _uiState.value = _uiState.value.copy(isSaving = false)
 
             if (response.success) {
+                DashboardRefreshNotifier.markDirty()
                 onSuccess()
             } else {
                 onError(response.error ?: "Gagal memperbarui target")
