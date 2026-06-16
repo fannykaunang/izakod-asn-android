@@ -245,6 +245,17 @@ private data class TargetPeriodGroup(
     val targets: List<TargetKinerjaItem>
 )
 
+private data class DashboardActionCarouselItem(
+    val key: String,
+    val title: String,
+    val description: String,
+    val actionLabel: String,
+    val icon: ImageVector,
+    val accentColor: Color,
+    val isStarter: Boolean = false,
+    val onClick: () -> Unit
+)
+
 private data class DashboardCoachmarkPrompt(
     val key: String,
     val title: String,
@@ -264,6 +275,7 @@ fun DashboardScreen(
     onNavigateToPenilaianKinerja: () -> Unit,
     onNavigateToPenilaianBawahan: () -> Unit,
     onNavigateToPenilaianBelumDibuat: () -> Unit,
+    onNavigateToBawahan: () -> Unit,
     onNavigateToTertunda: () -> Unit,
     onNavigateToTppDetail: (Int, Int) -> Unit,
     onNavigateToGajiDetail: (Int, Int) -> Unit,
@@ -458,6 +470,7 @@ fun DashboardScreen(
                         onPenilaianKinerja = onNavigateToPenilaianKinerja,
                         onPenilaianBawahan = onNavigateToPenilaianBawahan,
                         onPenilaianBelumDibuat = onNavigateToPenilaianBelumDibuat,
+                        onBawahanSaya = onNavigateToBawahan,
                         onTertunda = onNavigateToTertunda,
                         onTppPreviousMonth = { tppViewModel.moveMonth(-1) },
                         onTppNextMonth = { tppViewModel.moveMonth(1) },
@@ -529,6 +542,7 @@ private fun DashboardContent(
     onPenilaianKinerja: () -> Unit,
     onPenilaianBawahan: () -> Unit,
     onPenilaianBelumDibuat: () -> Unit,
+    onBawahanSaya: () -> Unit,
     onTertunda: () -> Unit,
     onTppPreviousMonth: () -> Unit,
     onTppNextMonth: () -> Unit,
@@ -559,6 +573,8 @@ private fun DashboardContent(
     }
 
     val canReviewSubordinates = assessmentSummary?.canReviewSubordinates == true
+    val canUseSubordinateProposalMenu = canReviewSubordinates ||
+        assessmentSummary?.canProposeSubordinates == true
 
     val pagerState = rememberPagerState(
         initialPage = selectedTabIndex,
@@ -686,7 +702,9 @@ private fun DashboardContent(
                                 onPayrollSaya = { viewModel.updateTabIndex(tabs.indexOf(payrollTabTitle)) },
                                 payrollLabel = payrollTabTitle,
                                 onTemplates = onTemplates,
-                                onReminder = onReminder
+                                onReminder = onReminder,
+                                canShowBawahan = canUseSubordinateProposalMenu,
+                                onBawahanSaya = onBawahanSaya
                             )
                         }
                         item {
@@ -1586,6 +1604,9 @@ private fun hasDashboardActionToShow(
     val realisasiNeedAttention = alerts?.realisasiNeedAttentionCount ?: 0
     val subordinateReview = alerts?.subordinateReviewCount ?: 0
     val missingAssessment = alerts?.missingAssessmentCount ?: 0
+    val subordinateTargetSubmitted = alerts?.subordinateTargetSubmittedCount ?: 0
+    val subordinateLaporanPending = alerts?.subordinateLaporanPendingCount ?: 0
+    val subordinateRealisasiIncomplete = alerts?.subordinateRealisasiIncompleteCount ?: 0
     val hasOwnAssessmentAction = assessmentSummary.hasOwnAssessmentAction(alerts)
     val isAssessmentPeriodFinal = assessmentSummary?.activePeriodStatus
         ?.equals("Final", ignoreCase = true) == true
@@ -1598,8 +1619,11 @@ private fun hasDashboardActionToShow(
 
     return hasTargetStatusAttention ||
         hasOwnAssessmentAction ||
+        (canReviewSubordinates && subordinateTargetSubmitted > 0) ||
+        (canReviewSubordinates && subordinateLaporanPending > 0) ||
         (canReviewSubordinates && missingAssessment > 0) ||
         (canReviewSubordinates && subordinateReview > 0) ||
+        (canReviewSubordinates && subordinateRealisasiIncomplete > 0) ||
         hasTargetAttention
 }
 
@@ -2049,6 +2073,233 @@ private fun pendingSubordinateTargetReview(
     )
 }
 
+private fun buildDashboardActionCarouselItems(
+    alerts: DashboardActionAlertsData?,
+    targetSummary: DashboardTargetSummaryData?,
+    assessmentSummary: AssessmentSummaryData?,
+    pendingSubordinateTargetReview: PendingSubordinateTargetReview?,
+    canReviewSubordinates: Boolean,
+    isTargetPeriodLocked: Boolean,
+    targetPeriodYear: Int?,
+    targetPeriodMonth: Int?,
+    onOpenReports: () -> Unit,
+    onOpenTarget: () -> Unit,
+    onCreateTarget: (Int?, Int?) -> Unit,
+    onOpenSubordinateTargetPeriod: (Int, Int) -> Unit,
+    onOpenPenilaian: () -> Unit,
+    onOpenReview: () -> Unit,
+    onOpenPenilaianBelumDibuat: () -> Unit
+): List<DashboardActionCarouselItem> {
+    val items = mutableListOf<DashboardActionCarouselItem>()
+    val targetNeedAttention = alerts?.targetNeedAttentionCount ?: 0
+    val realisasiNeedAttention = alerts?.realisasiNeedAttentionCount ?: 0
+    val subordinateReview = alerts?.subordinateReviewCount ?: 0
+    val missingAssessment = alerts?.missingAssessmentCount ?: 0
+    val subordinateTargetSubmitted = alerts?.subordinateTargetSubmittedCount ?: 0
+    val subordinateLaporanPending = alerts?.subordinateLaporanPendingCount ?: 0
+    val subordinateRealisasiIncomplete = alerts?.subordinateRealisasiIncompleteCount ?: 0
+    val hasOwnAssessmentAction = assessmentSummary.hasOwnAssessmentAction(alerts)
+    val targetPeriodMonthLabel = targetSummary?.activePeriodLabel.periodMonthOnly() ?: "bulan ini"
+    val periodLabel = targetSummary?.activePeriodLabel
+        ?.takeIf { it.isNotBlank() }
+        ?: if (targetPeriodYear != null && targetPeriodMonth != null) {
+            monthYearLabel(targetPeriodYear, targetPeriodMonth)
+        } else {
+            "periode aktif"
+        }
+    val targetStatus = targetSummary?.status
+        .orEmpty()
+        .trim()
+        .replace('_', ' ')
+        .lowercase(Locale.getDefault())
+    val isAssessmentPeriodFinal = assessmentSummary?.activePeriodStatus
+        ?.equals("Final", ignoreCase = true) == true
+    val targetActionLocked = isAssessmentPeriodFinal || isTargetPeriodLocked
+    val hasTargetStatusAttention = targetSummary.hasTargetStatusAttention(
+        isTargetPeriodLocked = targetActionLocked
+    )
+    val openSubordinateTargetPeriod = {
+        if (targetPeriodYear != null && targetPeriodMonth != null) {
+            onOpenSubordinateTargetPeriod(targetPeriodYear, targetPeriodMonth)
+        } else {
+            onOpenTarget()
+        }
+    }
+
+    if (pendingSubordinateTargetReview != null) {
+        val title = if (pendingSubordinateTargetReview.count == 1) {
+            "1 target bawahan menunggu review"
+        } else {
+            "${pendingSubordinateTargetReview.count} target bawahan menunggu review"
+        }
+        items += DashboardActionCarouselItem(
+            key = "subordinate-target-review",
+            title = title,
+            description = "Tinjau target bawahan periode ${pendingSubordinateTargetReview.periodLabel}.",
+            actionLabel = "Review Target",
+            icon = Icons.Default.TaskAlt,
+            accentColor = StatusPending,
+            onClick = {
+                onOpenSubordinateTargetPeriod(
+                    pendingSubordinateTargetReview.tahun,
+                    pendingSubordinateTargetReview.bulan
+                )
+            }
+        )
+    } else if (canReviewSubordinates && subordinateTargetSubmitted > 0) {
+        items += DashboardActionCarouselItem(
+            key = "subordinate-target-submitted",
+            title = if (subordinateTargetSubmitted == 1) {
+                "1 target bawahan menunggu review"
+            } else {
+                "$subordinateTargetSubmitted target bawahan menunggu review"
+            },
+            description = "Target bawahan perlu disetujui atau dikembalikan dengan catatan.",
+            actionLabel = "Review Target",
+            icon = Icons.Default.TaskAlt,
+            accentColor = StatusPending,
+            onClick = openSubordinateTargetPeriod
+        )
+    }
+
+    if (canReviewSubordinates && subordinateLaporanPending > 0) {
+        items += DashboardActionCarouselItem(
+            key = "subordinate-laporan-pending",
+            title = if (subordinateLaporanPending == 1) {
+                "1 laporan bawahan perlu review"
+            } else {
+                "$subordinateLaporanPending laporan bawahan perlu review"
+            },
+            description = "Verifikasi laporan bawahan agar realisasi dan penilaian tidak tertahan.",
+            actionLabel = "Buka Laporan",
+            icon = Icons.Default.AssignmentTurnedIn,
+            accentColor = PrimaryLight,
+            onClick = onOpenReports
+        )
+    }
+
+    if (hasTargetStatusAttention) {
+        items += DashboardActionCarouselItem(
+            key = "own-target-status",
+            title = if (targetStatus == "revisi") "Target perlu revisi" else "Target masih draft",
+            description = if (targetStatus == "revisi") {
+                "Perbaiki target bulan $targetPeriodMonthLabel sesuai catatan review."
+            } else {
+                "Ajukan target bulan $targetPeriodMonthLabel agar bisa diproses atasan."
+            },
+            actionLabel = "Buka Target",
+            icon = Icons.Default.Checklist,
+            accentColor = StatusRejected,
+            onClick = onOpenTarget
+        )
+    } else if (!targetActionLocked && targetNeedAttention > 0) {
+        items += DashboardActionCarouselItem(
+            key = "own-target-attention",
+            title = if (targetNeedAttention == 1) {
+                "1 target perlu perhatian"
+            } else {
+                "$targetNeedAttention target perlu perhatian"
+            },
+            description = "Buka target bulan $targetPeriodMonthLabel untuk melanjutkan proses.",
+            actionLabel = "Buka Target",
+            icon = Icons.Default.Checklist,
+            accentColor = StatusRejected,
+            onClick = onOpenTarget
+        )
+    }
+
+    if (!targetActionLocked && realisasiNeedAttention > 0) {
+        items += DashboardActionCarouselItem(
+            key = "own-realisasi-attention",
+            title = if (realisasiNeedAttention == 1) {
+                "1 item perlu realisasi"
+            } else {
+                "$realisasiNeedAttention item perlu realisasi"
+            },
+            description = "Isi realisasi atau tautkan laporan kegiatan untuk bulan $targetPeriodMonthLabel.",
+            actionLabel = "Buka Target",
+            icon = Icons.Default.PlaylistAddCheckCircle,
+            accentColor = StatusPending,
+            onClick = onOpenTarget
+        )
+    }
+
+    if (canReviewSubordinates && missingAssessment > 0) {
+        items += DashboardActionCarouselItem(
+            key = "missing-assessment",
+            title = if (missingAssessment == 1) {
+                "1 penilaian belum dibuat"
+            } else {
+                "$missingAssessment penilaian belum dibuat"
+            },
+            description = "Target bawahan siap dinilai, draft penilaian belum ada.",
+            actionLabel = "Lihat Daftar",
+            icon = Icons.Default.Bookmark,
+            accentColor = StatusPending,
+            onClick = onOpenPenilaianBelumDibuat
+        )
+    }
+
+    if (canReviewSubordinates && subordinateReview > 0) {
+        items += DashboardActionCarouselItem(
+            key = "subordinate-assessment-review",
+            title = if (subordinateReview == 1) {
+                "1 penilaian bawahan belum final"
+            } else {
+                "$subordinateReview penilaian bawahan belum final"
+            },
+            description = "Tinjau penilaian bawahan periode aktif sampai statusnya selesai.",
+            actionLabel = "Buka Penilaian",
+            icon = Icons.Default.Groups,
+            accentColor = StatusRejected,
+            onClick = onOpenReview
+        )
+    }
+
+    if (canReviewSubordinates && subordinateRealisasiIncomplete > 0) {
+        items += DashboardActionCarouselItem(
+            key = "subordinate-realisasi-incomplete",
+            title = if (subordinateRealisasiIncomplete == 1) {
+                "1 target bawahan belum lengkap"
+            } else {
+                "$subordinateRealisasiIncomplete target bawahan belum lengkap"
+            },
+            description = "Pantau realisasi target bawahan agar siap sebelum penilaian akhir.",
+            actionLabel = "Buka Target",
+            icon = Icons.AutoMirrored.Filled.TrendingUp,
+            accentColor = StatusPending,
+            onClick = openSubordinateTargetPeriod
+        )
+    }
+
+    if (hasOwnAssessmentAction) {
+        items += DashboardActionCarouselItem(
+            key = "own-assessment-action",
+            title = "Penilaian saya belum final",
+            description = "Lengkapi atau finalkan penilaian periode aktif.",
+            actionLabel = "Buka Penilaian",
+            icon = Icons.Default.Bookmark,
+            accentColor = StatusRejected,
+            onClick = onOpenPenilaian
+        )
+    }
+
+    if (shouldShowStartTargetGuidance(targetSummary, assessmentSummary)) {
+        items += DashboardActionCarouselItem(
+            key = "starter-guidance",
+            title = "Mulai dari Sini",
+            description = "Buat target kerja untuk $periodLabel terlebih dahulu agar laporan dan penilaian mudah dipantau.",
+            actionLabel = "Buat Target",
+            icon = Icons.Filled.PlaylistAddCheckCircle,
+            accentColor = StatusApproved,
+            isStarter = true,
+            onClick = { onCreateTarget(targetPeriodYear, targetPeriodMonth) }
+        )
+    }
+
+    return items
+}
+
 @Composable
 private fun DashboardFocusSection(
     alerts: DashboardActionAlertsData?,
@@ -2070,8 +2321,6 @@ private fun DashboardFocusSection(
 ) {
     if (!isOverviewReady) return
 
-    val showStarter = !canReviewSubordinates &&
-        shouldShowStartTargetGuidance(targetSummary, assessmentSummary)
     val pendingSubordinateTargetReview = pendingSubordinateTargetReview(
         targetItems = targetItems,
         currentPegawaiId = currentPegawaiId,
@@ -2086,67 +2335,43 @@ private fun DashboardFocusSection(
         targetPeriodYear = targetPeriodYear,
         targetPeriodMonth = targetPeriodMonth
     )
-    val showGeneralAction = hasDashboardActionToShow(
+    val actionItems = buildDashboardActionCarouselItems(
         alerts = alerts,
         targetSummary = targetSummary,
         assessmentSummary = assessmentSummary,
+        pendingSubordinateTargetReview = pendingSubordinateTargetReview,
         canReviewSubordinates = canReviewSubordinates,
-        isTargetPeriodLocked = isTargetPeriodLocked
+        isTargetPeriodLocked = isTargetPeriodLocked,
+        targetPeriodYear = targetPeriodYear,
+        targetPeriodMonth = targetPeriodMonth,
+        onOpenReports = onOpenReports,
+        onOpenTarget = onOpenTarget,
+        onCreateTarget = onCreateTarget,
+        onOpenSubordinateTargetPeriod = onOpenSubordinateTargetPeriod,
+        onOpenPenilaian = onOpenPenilaian,
+        onOpenReview = onOpenReview,
+        onOpenPenilaianBelumDibuat = onOpenPenilaianBelumDibuat
     )
-    val showAction = pendingSubordinateTargetReview != null || showGeneralAction
 
-    if (!showAction && !showStarter) return
+    if (actionItems.isEmpty()) return
+
+    val hasUrgentAction = actionItems.any { !it.isStarter }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        if (showAction) {
-            DashboardFocusHeader(
-                title = "Perlu Tindakan",
-                subtitle = "Prioritas yang perlu diproses sekarang.",
-                showPulse = true,
-                pulseColor = StatusRejected
-            )
-            if (pendingSubordinateTargetReview != null) {
-                SubordinateTargetReviewActionSection(
-                    review = pendingSubordinateTargetReview,
-                    onOpenReview = {
-                        onOpenSubordinateTargetPeriod(
-                            pendingSubordinateTargetReview.tahun,
-                            pendingSubordinateTargetReview.bulan
-                        )
-                    }
-                )
+        DashboardFocusHeader(
+            title = if (hasUrgentAction) "Perlu Tindakan" else "Pegawai Baru",
+            subtitle = if (hasUrgentAction) {
+                "Prioritas yang perlu diproses sekarang."
             } else {
-                MinimalActionFocusSection(
-                    alerts = alerts,
-                    targetSummary = targetSummary,
-                    assessmentSummary = assessmentSummary,
-                    canReviewSubordinates = canReviewSubordinates,
-                    isTargetPeriodLocked = isTargetPeriodLocked,
-                    onOpenReports = onOpenReports,
-                    onOpenTarget = onOpenTarget,
-                    onOpenPenilaian = onOpenPenilaian,
-                    onOpenReview = onOpenReview,
-                    onOpenPenilaianBelumDibuat = onOpenPenilaianBelumDibuat
-                )
-            }
-        } else {
-            DashboardFocusHeader(
-                title = "Pegawai Baru",
-                subtitle = "Mulai alur kerja periode aktif dari target kerja.",
-                showPulse = true,
-                pulseColor = PrimaryLight
-            )
-            StarterGuidanceSection(
-                targetSummary = targetSummary,
-                assessmentSummary = assessmentSummary,
-                targetPeriodYear = targetPeriodYear,
-                targetPeriodMonth = targetPeriodMonth,
-                onCreateTarget = onCreateTarget
-            )
-        }
+                "Mulai alur kerja periode aktif dari target kerja."
+            },
+            showPulse = true,
+            pulseColor = if (hasUrgentAction) StatusRejected else PrimaryLight
+        )
+        DashboardActionCarousel(items = actionItems)
     }
 }
 
@@ -2192,88 +2417,78 @@ private fun DashboardFocusHeader(
 }
 
 @Composable
-private fun SubordinateTargetReviewActionSection(
-    review: PendingSubordinateTargetReview,
-    onOpenReview: () -> Unit
+private fun DashboardActionCarousel(
+    items: List<DashboardActionCarouselItem>
 ) {
-    val title = if (review.count == 1) {
-        "1 target bawahan menunggu review"
-    } else {
-        "${review.count} target bawahan menunggu review"
+    if (items.isEmpty()) return
+
+    val pagerState = rememberPagerState(pageCount = { items.size })
+
+    LaunchedEffect(items.size) {
+        if (items.isNotEmpty() && pagerState.currentPage > items.lastIndex) {
+            pagerState.scrollToPage(items.lastIndex)
+        }
     }
 
-    ElevatedCard(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        elevation = 1.dp,
-        cornerRadius = 24.dp
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Row(
+        HorizontalPager(
+            state = pagerState,
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+            contentPadding = if (items.size > 1) {
+                PaddingValues(end = 28.dp)
+            } else {
+                PaddingValues(0.dp)
+            },
+            pageSpacing = 12.dp
+        ) { page ->
+            DashboardActionCarouselCard(item = items[page])
+        }
+
+        if (items.size > 1) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 15.sp
-                    ),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "Tinjau target bawahan periode ${review.periodLabel}.",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                items.indices.forEach { index ->
+                    val selected = pagerState.currentPage == index
+                    Surface(
+                        modifier = Modifier
+                            .padding(horizontal = 3.dp)
+                            .width(if (selected) 18.dp else 7.dp)
+                            .height(7.dp),
+                        shape = CircleShape,
+                        color = if (selected) {
+                            PrimaryLight
+                        } else {
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)
+                        },
+                        content = {}
+                    )
+                }
             }
-            Surface(
-                modifier = Modifier.clickable(onClick = onOpenReview),
-                shape = RoundedCornerShape(16.dp),
-                color = StatusPending.copy(alpha = 0.14f)
-            ) {
-                Text(
-                    text = "Review Target",
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
-                    color = StatusPending,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            Text(
+                text = "Geser untuk melihat tindakan lainnya",
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
 
 @Composable
-private fun StarterGuidanceSection(
-    targetSummary: DashboardTargetSummaryData?,
-    assessmentSummary: AssessmentSummaryData?,
-    targetPeriodYear: Int?,
-    targetPeriodMonth: Int?,
-    onCreateTarget: (Int?, Int?) -> Unit
+private fun DashboardActionCarouselCard(
+    item: DashboardActionCarouselItem
 ) {
-    if (!shouldShowStartTargetGuidance(targetSummary, assessmentSummary)) return
-
-    val periodLabel = targetSummary?.activePeriodLabel
-        ?.takeIf { it.isNotBlank() }
-        ?: if (targetPeriodYear != null && targetPeriodMonth != null) {
-            monthYearLabel(targetPeriodYear, targetPeriodMonth)
-        } else {
-            "periode aktif"
-        }
-
     ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 156.dp),
         elevation = 1.dp,
         cornerRadius = 24.dp
     ) {
@@ -2284,233 +2499,64 @@ private fun StarterGuidanceSection(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
                 Surface(
                     shape = RoundedCornerShape(18.dp),
-                    color = StatusApproved.copy(alpha = 0.14f)
+                    color = item.accentColor.copy(alpha = 0.14f)
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.PlaylistAddCheckCircle,
+                        imageVector = item.icon,
                         contentDescription = null,
                         modifier = Modifier
                             .padding(12.dp)
                             .size(26.dp),
-                        tint = StatusApproved
+                        tint = item.accentColor
                     )
                 }
+
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = "Mulai dari Sini",
+                        text = item.title,
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 15.sp
-                        )
+                        ),
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "Buat target kerja untuk $periodLabel terlebih dahulu.",
+                        text = item.description,
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 13.sp
                         ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
-            Text(
-                text = "Setelah target dibuat, laporan kegiatan dan penilaian periode ini akan lebih mudah dipantau.",
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onCreateTarget(targetPeriodYear, targetPeriodMonth) },
-                shape = RoundedCornerShape(18.dp),
-                color = PrimaryLight.copy(alpha = 0.14f),
-                border = BorderStroke(1.dp, PrimaryLight.copy(alpha = 0.28f))
-            ) {
-                Text(
-                    text = "Buat Target",
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = FontWeight.ExtraBold
-                    ),
-                    color = PrimaryLight,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun MinimalActionFocusSection(
-    alerts: DashboardActionAlertsData?,
-    targetSummary: DashboardTargetSummaryData?,
-    assessmentSummary: AssessmentSummaryData?,
-    canReviewSubordinates: Boolean,
-    isTargetPeriodLocked: Boolean,
-    onOpenReports: () -> Unit,
-    onOpenTarget: () -> Unit,
-    onOpenPenilaian: () -> Unit,
-    onOpenReview: () -> Unit,
-    onOpenPenilaianBelumDibuat: () -> Unit
-) {
-    val targetNeedAttention = alerts?.targetNeedAttentionCount ?: 0
-    val realisasiNeedAttention = alerts?.realisasiNeedAttentionCount ?: 0
-    val subordinateReview = alerts?.subordinateReviewCount ?: 0
-    val missingAssessment = alerts?.missingAssessmentCount ?: 0
-    val hasOwnAssessmentAction = assessmentSummary.hasOwnAssessmentAction(alerts)
-    val targetPeriodMonth = targetSummary?.activePeriodLabel.periodMonthOnly() ?: "bulan ini"
-    val targetStatus = targetSummary?.status
-        .orEmpty()
-        .trim()
-        .replace('_', ' ')
-        .lowercase(Locale.getDefault())
-    val isAssessmentPeriodFinal = assessmentSummary?.activePeriodStatus
-        ?.equals("Final", ignoreCase = true) == true
-    val targetActionLocked = isAssessmentPeriodFinal || isTargetPeriodLocked
-    val hasTargetStatusAttention = targetSummary.hasTargetStatusAttention(
-        isTargetPeriodLocked = targetActionLocked
-    )
-    val hasTargetAttention = !targetActionLocked &&
-        (targetNeedAttention > 0 || realisasiNeedAttention > 0)
-    val hasActionToShow = hasDashboardActionToShow(
-        alerts = alerts,
-        targetSummary = targetSummary,
-        assessmentSummary = assessmentSummary,
-        canReviewSubordinates = canReviewSubordinates,
-        isTargetPeriodLocked = isTargetPeriodLocked
-    )
-
-    if (!hasActionToShow) return
-
-    val primaryText = when {
-        hasTargetStatusAttention -> {
-            if (targetStatus == "revisi") "Target perlu revisi" else "Target masih draft"
-        }
-        hasOwnAssessmentAction -> "Penilaian saya belum final"
-        canReviewSubordinates && missingAssessment > 0 -> {
-            if (missingAssessment == 1) "1 penilaian belum dibuat" else "$missingAssessment penilaian belum dibuat"
-        }
-        canReviewSubordinates && subordinateReview > 0 -> {
-            if (subordinateReview == 1) "1 penilaian bawahan belum final" else "$subordinateReview penilaian bawahan belum final"
-        }
-        hasTargetAttention -> {
-            val totalAttention = targetNeedAttention + realisasiNeedAttention
-            when {
-                realisasiNeedAttention > 0 && targetNeedAttention <= 0 -> {
-                    if (realisasiNeedAttention == 1) {
-                        "1 item perlu realisasi"
-                    } else {
-                        "$realisasiNeedAttention item perlu realisasi"
-                    }
-                }
-                targetNeedAttention > 0 && realisasiNeedAttention <= 0 -> {
-                    if (targetNeedAttention == 1) {
-                        "1 target perlu perhatian"
-                    } else {
-                        "$targetNeedAttention target perlu perhatian"
-                    }
-                }
-                totalAttention == 1 -> "1 pekerjaan target perlu perhatian"
-                else -> "$totalAttention pekerjaan target perlu perhatian"
-            }
-        }
-        isAssessmentPeriodFinal -> "Periode target sudah final"
-        else -> "Tidak ada tindakan mendesak saat ini"
-    }
-
-    val secondaryText = when {
-        hasTargetStatusAttention -> {
-            if (targetStatus == "revisi") {
-                "Perbaiki target bulan $targetPeriodMonth sesuai catatan review."
-            } else {
-                "Ajukan target bulan $targetPeriodMonth agar bisa diproses atasan."
-            }
-        }
-        hasOwnAssessmentAction -> "Lengkapi atau finalkan penilaian periode aktif."
-        canReviewSubordinates && missingAssessment > 0 -> "Target siap dinilai, draft penilaian belum ada."
-        canReviewSubordinates && subordinateReview > 0 -> "Tidak termasuk penilaian saya"
-        hasTargetAttention -> {
-            if (realisasiNeedAttention > 0) {
-                "Isi realisasi atau tautkan laporan kegiatan untuk bulan $targetPeriodMonth."
-            } else {
-                "Buka target bulan $targetPeriodMonth untuk melanjutkan."
-            }
-        }
-        isAssessmentPeriodFinal -> "Target dan realisasi bulan $targetPeriodMonth hanya bisa dilihat."
-        else -> "Semua ringkasan utama terlihat aman"
-    }
-
-    val actionLabel = when {
-        hasTargetStatusAttention -> "Buka Target"
-        hasOwnAssessmentAction -> "Buka Penilaian"
-        canReviewSubordinates && missingAssessment > 0 -> "Lihat Daftar"
-        canReviewSubordinates && subordinateReview > 0 -> "Buka Penilaian"
-        hasTargetAttention -> "Buka Target"
-        isAssessmentPeriodFinal -> "Lihat Target"
-        else -> "Lihat Target"
-    }
-
-    val actionHandler = when {
-        hasTargetStatusAttention -> onOpenTarget
-        hasOwnAssessmentAction -> onOpenPenilaian
-        canReviewSubordinates && missingAssessment > 0 -> onOpenPenilaianBelumDibuat
-        canReviewSubordinates && subordinateReview > 0 -> onOpenReview
-        hasTargetAttention -> onOpenTarget
-        isAssessmentPeriodFinal -> onOpenTarget
-        else -> onOpenTarget
-    }
-
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = 1.dp,
-        cornerRadius = 24.dp
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = primaryText,
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 15.sp
-                    ),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = secondaryText,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Surface(
-                modifier = Modifier.clickable(onClick = actionHandler),
+                    .clickable(onClick = item.onClick),
                 shape = RoundedCornerShape(16.dp),
-                color = StatusPending.copy(alpha = 0.14f)
+                color = item.accentColor.copy(alpha = 0.14f),
+                border = BorderStroke(1.dp, item.accentColor.copy(alpha = 0.18f))
             ) {
                 Text(
-                    text = actionLabel,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    text = item.actionLabel,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 13.dp, vertical = 12.dp),
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
-                    color = StatusPending,
+                    color = item.accentColor,
+                    textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -2529,7 +2575,9 @@ private fun MinimalQuickActionsSection(
     onPayrollSaya: () -> Unit,
     payrollLabel: String,
     onTemplates: () -> Unit,
-    onReminder: () -> Unit
+    onReminder: () -> Unit,
+    canShowBawahan: Boolean,
+    onBawahanSaya: () -> Unit
 ) {
     val tertundaBadge = when {
         tertundaCount == null || tertundaCount <= 0 -> null
@@ -2537,21 +2585,24 @@ private fun MinimalQuickActionsSection(
         else -> tertundaCount.toString()
     }
 
-    val actions = listOf(
-        CompactQuickActionData("Laporan", Icons.AutoMirrored.Filled.List, SecondaryLight, onViewReports),
-        CompactQuickActionData("Target", Icons.Default.TaskAlt, PrimaryLight, onTargetKinerja),
-        CompactQuickActionData("Template", Icons.Default.AssignmentTurnedIn, TertiaryLight, onTemplates),
-        CompactQuickActionData(
+    val actions = buildList {
+        add(CompactQuickActionData("Laporan", Icons.AutoMirrored.Filled.List, SecondaryLight, onViewReports))
+        add(CompactQuickActionData("Target", Icons.Default.TaskAlt, PrimaryLight, onTargetKinerja))
+        if (canShowBawahan) {
+            add(CompactQuickActionData("Bawahan", Icons.Default.Groups, PrimaryLight, onBawahanSaya))
+        }
+        add(CompactQuickActionData("Template", Icons.Default.AssignmentTurnedIn, TertiaryLight, onTemplates))
+        add(CompactQuickActionData(
             label = "Tertunda",
             icon = Icons.Default.AccessTime,
             color = StatusRevised,
             onClick = onTertunda,
             badgeText = tertundaBadge
-        ),
-        CompactQuickActionData("Penilaian", Icons.Default.Bookmark, StatusApproved, onPenilaianKinerja),
-        CompactQuickActionData(payrollLabel, Icons.Default.PlaylistAddCheckCircle, StatusPending, onPayrollSaya),
-        CompactQuickActionData("Pengingat", Icons.Default.AlarmOn, StatusApproved, onReminder)
-    )
+        ))
+        add(CompactQuickActionData("Penilaian", Icons.Default.Bookmark, StatusApproved, onPenilaianKinerja))
+        add(CompactQuickActionData(payrollLabel, Icons.Default.PlaylistAddCheckCircle, StatusPending, onPayrollSaya))
+        add(CompactQuickActionData("Pengingat", Icons.Default.AlarmOn, StatusApproved, onReminder))
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(

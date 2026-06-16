@@ -3,7 +3,11 @@ package com.kominfo_mkq.izakod_asn.data.remote
 import com.google.gson.JsonObject
 import com.kominfo_mkq.izakod_asn.data.model.AiPanduanRequest
 import com.kominfo_mkq.izakod_asn.data.model.AiPanduanResponse
+import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiListResponse
 import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiResponse
+import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiUsulanListResponse
+import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiUsulanMutationResponse
+import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiUsulanRequest
 import com.kominfo_mkq.izakod_asn.data.model.BasicActionResponse
 import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanRequest
 import com.kominfo_mkq.izakod_asn.data.model.CreateLaporanResponse
@@ -17,6 +21,7 @@ import com.kominfo_mkq.izakod_asn.data.model.EntagoLoginResponse
 import com.kominfo_mkq.izakod_asn.data.model.FcmRegisterRequest
 import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnMeResponse
 import com.kominfo_mkq.izakod_asn.data.model.KategoriListResponse
+import com.kominfo_mkq.izakod_asn.data.model.KandidatBawahanResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanKegiatanSettingsResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanCetakResponse
 import com.kominfo_mkq.izakod_asn.data.model.LaporanDetailResponse
@@ -299,6 +304,43 @@ interface EabsenApiService {
     suspend fun getAtasanPegawaiByBawahan(
         @Path("pegawaiId") pegawaiId: Int
     ): Response<AtasanPegawaiResponse>
+
+    @GET("api/atasan-pegawai/bawahan-saya")
+    suspend fun getBawahanSaya(): Response<AtasanPegawaiListResponse>
+
+    @GET("api/atasan-pegawai/kandidat-bawahan")
+    suspend fun getKandidatBawahan(
+        @Query("search") search: String? = null,
+        @Query("limit") limit: Int = 100
+    ): Response<KandidatBawahanResponse>
+
+    @GET("api/atasan-pegawai/usulan")
+    suspend fun getAtasanPegawaiUsulan(
+        @Query("status") status: String? = null,
+        @Query("limit") limit: Int = 100
+    ): Response<AtasanPegawaiUsulanListResponse>
+
+    @POST("api/atasan-pegawai/usulan")
+    suspend fun createAtasanPegawaiUsulan(
+        @Body request: AtasanPegawaiUsulanRequest
+    ): Response<AtasanPegawaiUsulanMutationResponse>
+
+    @PATCH("api/atasan-pegawai/usulan/{id}")
+    suspend fun updateAtasanPegawaiUsulan(
+        @Path("id") id: Int,
+        @Body request: AtasanPegawaiUsulanRequest
+    ): Response<AtasanPegawaiUsulanMutationResponse>
+
+    @POST("api/atasan-pegawai/usulan/{id}/submit")
+    suspend fun submitAtasanPegawaiUsulan(
+        @Path("id") id: Int,
+        @Body request: AtasanPegawaiUsulanRequest
+    ): Response<AtasanPegawaiUsulanMutationResponse>
+
+    @POST("api/atasan-pegawai/usulan/{id}/cancel")
+    suspend fun cancelAtasanPegawaiUsulan(
+        @Path("id") id: Int
+    ): Response<AtasanPegawaiUsulanMutationResponse>
 
     // CREATE
     @POST("api/template-kegiatan")

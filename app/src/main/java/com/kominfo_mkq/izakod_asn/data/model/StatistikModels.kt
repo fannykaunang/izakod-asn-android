@@ -233,7 +233,10 @@ data class AssessmentSummaryData(
     val missingSubordinateAssessments: Int? = null,
 
     @SerializedName("canReviewSubordinates")
-    val canReviewSubordinates: Boolean? = null
+    val canReviewSubordinates: Boolean? = null,
+
+    @SerializedName("canProposeSubordinates")
+    val canProposeSubordinates: Boolean? = null
 )
 
 data class DashboardTargetSummaryData(
@@ -279,5 +282,17 @@ data class DashboardActionAlertsData(
     val subordinateReviewCount: Int? = null,
 
     @SerializedName("missingAssessmentCount")
-    val missingAssessmentCount: Int? = null
+    val missingAssessmentCount: Int? = null,
+
+    @SerializedName("subordinateTargetSubmittedCount")
+    val subordinateTargetSubmittedCount: Int? = null,
+
+    @SerializedName("subordinateTargetRevisionCount")
+    val subordinateTargetRevisionCount: Int? = null,
+
+    @SerializedName("subordinateLaporanPendingCount")
+    val subordinateLaporanPendingCount: Int? = null,
+
+    @SerializedName("subordinateRealisasiIncompleteCount")
+    val subordinateRealisasiIncompleteCount: Int? = null
 )

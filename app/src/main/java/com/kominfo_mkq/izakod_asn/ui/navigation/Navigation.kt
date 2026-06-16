@@ -30,6 +30,7 @@ import com.kominfo_mkq.izakod_asn.data.local.AuthSessionManager
 import com.kominfo_mkq.izakod_asn.data.model.TemplateKegiatan
 import com.kominfo_mkq.izakod_asn.ui.components.IZAKODBottomNavigationBar
 import com.kominfo_mkq.izakod_asn.ui.screens.AiPanduanChatScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.BawahanSayaScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.CreateLaporanScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.DashboardScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.DeveloperScreen
@@ -74,6 +75,7 @@ sealed class Screen(val route: String) {
     object TargetKinerjaCreate : Screen("target_kinerja_create")
     object PenilaianKinerja : Screen("penilaian_kinerja")
     object PenilaianBelumDibuat : Screen("penilaian_belum_dibuat")
+    object BawahanSaya : Screen("bawahan_saya")
     object Tertunda : Screen("tertunda")
     object TppSaya : Screen("tpp_saya")
     object GajiSaya : Screen("gaji_saya")
@@ -326,6 +328,7 @@ fun IZAKODNavigation(
                     onNavigateToPenilaianKinerja = { navController.navigate(penilaianKinerjaRoute("mine")) },
                     onNavigateToPenilaianBawahan = { navController.navigate(penilaianKinerjaRoute("subordinate")) },
                     onNavigateToPenilaianBelumDibuat = { navController.navigate(Screen.PenilaianBelumDibuat.route) },
+                    onNavigateToBawahan = { navController.navigate(Screen.BawahanSaya.route) },
                     onNavigateToTertunda = { navController.navigate(Screen.Tertunda.route) },
                     onNavigateToTppDetail = { tahun, bulan ->
                         navController.navigate("tpp_saya_detail/$tahun/$bulan")
@@ -444,6 +447,12 @@ fun IZAKODNavigation(
                     onNavigateToDetail = { assessmentId ->
                         navController.navigate("penilaian_kinerja_detail/$assessmentId")
                     }
+                )
+            }
+
+            composable(Screen.BawahanSaya.route) {
+                BawahanSayaScreen(
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
 
