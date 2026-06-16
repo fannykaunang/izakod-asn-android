@@ -120,10 +120,13 @@ import android.graphics.Color as GColor
 
 enum class FilterType { ALL, DRAFT, PENDING, APPROVED, REJECTED, REVISED }
 
+private enum class ReportOwnerScope { MINE, SUBORDINATES }
+
 /** UI model yang dipakai list + PDF (jangan pakai API model langsung di UI) */
 private data class ReportUi(
     val id: Int,
     val tanggalLabel: String,
+    val pegawaiNama: String?,
     val namaKegiatan: String,
     val kategoriLabel: String,
     val jamLabel: String,
@@ -148,6 +151,8 @@ fun ReportListScreen(
     onCreateReport: () -> Unit,
     showBackButton: Boolean = true,
     showCreateFab: Boolean = true,
+    includeSubordinates: Boolean = false,
+    initialFilterKey: String = "all",
     viewModel: LaporanListViewModel = viewModel()
 ) {
     @Suppress("UNUSED_PARAMETER")
@@ -156,7 +161,16 @@ fun ReportListScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var selectedFilter by remember { mutableStateOf(FilterType.ALL) }
+    val initialFilter = remember(initialFilterKey) { filterTypeFromRoute(initialFilterKey) }
+    val initialOwnerScope = remember(includeSubordinates) {
+        if (includeSubordinates) ReportOwnerScope.SUBORDINATES else ReportOwnerScope.MINE
+    }
+    var selectedOwnerScope by remember(includeSubordinates) {
+        mutableStateOf(initialOwnerScope)
+    }
+    var selectedFilter by remember(initialFilterKey, includeSubordinates) {
+        mutableStateOf(initialFilter)
+    }
     var showFilterDialog by remember { mutableStateOf(false) }
     var showOverflowMenu by remember { mutableStateOf(false) }
 
@@ -165,19 +179,36 @@ fun ReportListScreen(
     var pdfFile by remember { mutableStateOf<File?>(null) }
     var isGeneratingPdf by remember { mutableStateOf(false) }
     var pdfError by remember { mutableStateOf<String?>(null) }
+    val isSubordinateMode = selectedOwnerScope == ReportOwnerScope.SUBORDINATES
+    val showOwnerTabs = uiState.hasActiveSubordinates || isSubordinateMode
 
     // Load data when screen opens
-    LaunchedEffect(Unit) {
-        viewModel.loadLaporanList(context)
-        viewModel.loadAtasanPegawai(context)
+    LaunchedEffect(includeSubordinates, initialFilterKey) {
+        selectedFilter = initialFilter
+        selectedOwnerScope = initialOwnerScope
     }
 
-    val doRefresh = remember(uiState.filterBulan, uiState.filterTahun) {
+    LaunchedEffect(selectedOwnerScope) {
+        val loadSubordinates = selectedOwnerScope == ReportOwnerScope.SUBORDINATES
+        viewModel.loadLaporanList(
+            context = context,
+            includeSubordinates = loadSubordinates
+        )
+        if (!loadSubordinates) {
+            viewModel.loadAtasanPegawai(context)
+        }
+    }
+
+    val doRefresh = remember(uiState.filterBulan, uiState.filterTahun, selectedOwnerScope) {
         {
-            if (uiState.filterBulan != null && uiState.filterTahun != null) {
+            val loadSubordinates = selectedOwnerScope == ReportOwnerScope.SUBORDINATES
+            if (!loadSubordinates && uiState.filterBulan != null && uiState.filterTahun != null) {
                 viewModel.loadLaporanBulanan(context, uiState.filterBulan!!, uiState.filterTahun!!)
             } else {
-                viewModel.loadLaporanList(context)
+                viewModel.loadLaporanList(
+                    context = context,
+                    includeSubordinates = loadSubordinates
+                )
             }
         }
     }
@@ -208,9 +239,15 @@ fun ReportListScreen(
     val approvedCount = remember(allReports) { allReports.count { it.status == StatusType.APPROVED } }
     val attentionCount = remember(allReports) { allReports.count { it.needsEmployeeAttention() } }
 
-    val actionReports = remember(filteredReports, selectedFilter) {
+    val actionReports = remember(filteredReports, selectedFilter, isSubordinateMode) {
         if (selectedFilter == FilterType.ALL) {
-            filteredReports.filter { it.needsEmployeeAttention() }
+            filteredReports.filter {
+                if (isSubordinateMode) {
+                    it.needsSupervisorAttention()
+                } else {
+                    it.needsEmployeeAttention()
+                }
+            }
         } else {
             emptyList()
         }
@@ -239,18 +276,24 @@ fun ReportListScreen(
     Scaffold(
         topBar = {
             IZAKODHeaderBar(
-                title = "Laporan Kegiatan",
-                subtitle = "Pantau draft, revisi, dan riwayat laporan",
+                title = if (isSubordinateMode) "Laporan Bawahan" else "Laporan Kegiatan",
+                subtitle = if (isSubordinateMode) {
+                    "Review dan pantau laporan bawahan langsung"
+                } else {
+                    "Pantau draft, revisi, dan riwayat laporan"
+                },
                 compact = true,
                 onBack = if (showBackButton) onBack else null,
                 actions = {
                     // ✅ PRINT button
-                    IconButton(onClick = onOpenSearch) {
-                        Icon(Icons.Default.Search, contentDescription = "Cari")
+                    if (!isSubordinateMode) {
+                        IconButton(onClick = onOpenSearch) {
+                            Icon(Icons.Default.Search, contentDescription = "Cari")
+                        }
                     }
 
                     val isFilterActive = (uiState.filterBulan != null && uiState.filterTahun != null)
-                    Box {
+                    if (!isSubordinateMode) Box {
                         IconButton(onClick = { showOverflowMenu = true }) {
                             BadgedBox(
                                 badge = {
@@ -296,7 +339,7 @@ fun ReportListScreen(
             )
         },
         floatingActionButton = {
-            if (showCreateFab) {
+            if (showCreateFab && !isSubordinateMode) {
                 ExtendedFloatingActionButton(
                     onClick = onCreateReport,
                     icon = { Icon(Icons.Default.Add, contentDescription = null) },
@@ -329,15 +372,30 @@ fun ReportListScreen(
                             attentionCount = attentionCount
                         )
 
+                        if (showOwnerTabs) {
+                            ReportOwnerTabs(
+                                selected = selectedOwnerScope,
+                                subordinateActionCount = uiState.subordinateActionCount,
+                                onSelect = { nextScope ->
+                                    if (nextScope != selectedOwnerScope) {
+                                        selectedOwnerScope = nextScope
+                                        selectedFilter = FilterType.ALL
+                                    }
+                                }
+                            )
+                        }
+
                         FilterChipsRow(
                             selected = selectedFilter,
                             onSelect = { selectedFilter = it }
                         )
 
                         ReportListHeaderBar(
+                            title = if (isSubordinateMode) "Laporan Bawahan" else "Semua Laporan",
                             totalDisplayed = filteredReports.size,
                             periodLabel = activePeriodLabel ?: "Periode",
                             isFiltered = activePeriodLabel != null,
+                            showPeriodFilter = !isSubordinateMode,
                             onOpenFilter = { showFilterDialog = true }
                         )
 
@@ -350,9 +408,10 @@ fun ReportListScreen(
                                 EmptyState(
                                     message = emptyReportMessage(
                                         selectedFilter = selectedFilter,
-                                        activePeriodLabel = activePeriodLabel
+                                        activePeriodLabel = activePeriodLabel,
+                                        isSubordinateMode = isSubordinateMode
                                     ),
-                                    onAction = if (selectedFilter == FilterType.ALL || selectedFilter == FilterType.DRAFT) {
+                                    onAction = if (!isSubordinateMode && (selectedFilter == FilterType.ALL || selectedFilter == FilterType.DRAFT)) {
                                         onCreateReport
                                     } else {
                                         null
@@ -375,6 +434,8 @@ fun ReportListScreen(
                                         items(actionReports, key = { it.id }) { report ->
                                             ReportCard(
                                                 report = report,
+                                                showEmployeeName = isSubordinateMode,
+                                                isSupervisorMode = isSubordinateMode,
                                                 onClick = { onReportClick(report.id.toString()) }
                                             )
                                         }
@@ -394,6 +455,8 @@ fun ReportListScreen(
                                         items(regularReports, key = { "regular-${it.id}" }) { report ->
                                             ReportCard(
                                                 report = report,
+                                                showEmployeeName = isSubordinateMode,
+                                                isSupervisorMode = isSubordinateMode,
                                                 onClick = { onReportClick(report.id.toString()) }
                                             )
                                         }
@@ -401,6 +464,8 @@ fun ReportListScreen(
                                         items(regularReports, key = { it.id }) { report ->
                                             ReportCard(
                                                 report = report,
+                                                showEmployeeName = isSubordinateMode,
+                                                isSupervisorMode = isSubordinateMode,
                                                 onClick = { onReportClick(report.id.toString()) }
                                             )
                                         }
@@ -421,7 +486,7 @@ fun ReportListScreen(
     }
 
     // Filter dialog (bulan/tahun)
-    if (showFilterDialog) {
+    if (showFilterDialog && !isSubordinateMode) {
         MonthYearFilterDialog(
             initialMonth = uiState.filterBulan,
             initialYear = uiState.filterTahun,
@@ -432,13 +497,13 @@ fun ReportListScreen(
             },
             onClear = {
                 showFilterDialog = false
-                viewModel.clearFilter(context)
+                viewModel.clearFilter(context, false)
             }
         )
     }
 
     // ✅ PRINT PREVIEW
-    if (showPrintPreview) {
+    if (showPrintPreview && !isSubordinateMode) {
         val bulan = uiState.filterBulan ?: (Calendar.getInstance().get(Calendar.MONTH) + 1)
         val tahun = uiState.filterTahun ?: Calendar.getInstance().get(Calendar.YEAR)
 
@@ -881,9 +946,11 @@ private fun SummaryStatCard(
 
 @Composable
 private fun ReportListHeaderBar(
+    title: String,
     totalDisplayed: Int,
     periodLabel: String,
     isFiltered: Boolean,
+    showPeriodFilter: Boolean,
     onOpenFilter: () -> Unit
 ) {
     Row(
@@ -898,7 +965,7 @@ private fun ReportListHeaderBar(
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
-                text = "Semua Laporan",
+                text = title,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
             )
             Text(
@@ -908,24 +975,90 @@ private fun ReportListHeaderBar(
             )
         }
 
-        FilterChip(
-            selected = isFiltered,
-            onClick = onOpenFilter,
-            label = {
-                Text(
-                    text = periodLabel,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.CalendarToday,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
+        if (showPeriodFilter) {
+            FilterChip(
+                selected = isFiltered,
+                onClick = onOpenFilter,
+                label = {
+                    Text(
+                        text = periodLabel,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.CalendarToday,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReportOwnerTabs(
+    selected: ReportOwnerScope,
+    subordinateActionCount: Int,
+    onSelect: (ReportOwnerScope) -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf(
+                ReportOwnerScope.MINE to "Saya",
+                ReportOwnerScope.SUBORDINATES to "Bawahan"
+            ).forEach { (scope, label) ->
+                val isSelected = selected == scope
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
+                    onClick = { onSelect(scope) }
+                ) {
+                    Box(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.onSurface
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                            if (scope == ReportOwnerScope.SUBORDINATES && subordinateActionCount > 0) {
+                                Badge(containerColor = StatusRejected) {
+                                    Text(
+                                        text = if (subordinateActionCount > 99) "99+" else subordinateActionCount.toString(),
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
-        )
+        }
     }
 }
 
@@ -1058,9 +1191,15 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
 @Composable
 private fun ReportCard(
     report: ReportUi,
+    showEmployeeName: Boolean = false,
+    isSupervisorMode: Boolean = false,
     onClick: () -> Unit
 ) {
-    val needsAttention = report.needsEmployeeAttention()
+    val needsAttention = if (isSupervisorMode) {
+        report.needsSupervisorAttention()
+    } else {
+        report.needsEmployeeAttention()
+    }
     val accentColor = when (report.status) {
         StatusType.DRAFT -> MaterialTheme.colorScheme.secondary
         StatusType.REJECTED -> StatusRejected
@@ -1086,7 +1225,7 @@ private fun ReportCard(
                             .background(accentColor)
                     )
                     Text(
-                        text = report.attentionLabel(),
+                        text = report.attentionLabel(isSupervisorMode),
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = accentColor
                     )
@@ -1106,6 +1245,17 @@ private fun ReportCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
+
+                    if (showEmployeeName && !report.pegawaiNama.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = report.pegawaiNama,
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
@@ -1154,7 +1304,8 @@ private fun ReportCard(
 
             NextActionHint(
                 report = report,
-                accentColor = accentColor
+                accentColor = accentColor,
+                isSupervisorMode = isSupervisorMode
             )
 
             if (needsAttention && !report.catatanAtasan.isNullOrBlank()) {
@@ -1175,7 +1326,8 @@ private fun ReportCard(
 @Composable
 private fun NextActionHint(
     report: ReportUi,
-    accentColor: Color
+    accentColor: Color,
+    isSupervisorMode: Boolean = false
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -1207,12 +1359,12 @@ private fun NextActionHint(
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
-                    text = report.nextActionTitle(),
+                    text = report.nextActionTitle(isSupervisorMode),
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = accentColor
                 )
                 Text(
-                    text = report.nextActionText(),
+                    text = report.nextActionText(isSupervisorMode),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f)
                 )
@@ -1862,6 +2014,7 @@ private fun LaporanKegiatan.toUi(): ReportUi {
     return ReportUi(
         id = laporanId,
         tanggalLabel = tanggalLabel,
+        pegawaiNama = pegawaiNama,
         namaKegiatan = namaKegiatan,
         kategoriLabel = kategori,
         jamLabel = jam,
@@ -1872,13 +2025,37 @@ private fun LaporanKegiatan.toUi(): ReportUi {
     )
 }
 
+private fun filterTypeFromRoute(value: String?): FilterType {
+    return when (value?.trim()?.lowercase(Locale.getDefault())) {
+        "draft" -> FilterType.DRAFT
+        "pending", "diajukan" -> FilterType.PENDING
+        "approved", "diverifikasi", "disetujui" -> FilterType.APPROVED
+        "rejected", "ditolak" -> FilterType.REJECTED
+        "revised", "revisi" -> FilterType.REVISED
+        else -> FilterType.ALL
+    }
+}
+
 private fun ReportUi.needsEmployeeAttention(): Boolean {
     return status == StatusType.DRAFT ||
         status == StatusType.REJECTED ||
         status == StatusType.REVISED
 }
 
-private fun ReportUi.attentionLabel(): String {
+private fun ReportUi.needsSupervisorAttention(): Boolean {
+    return status == StatusType.PENDING || status == StatusType.REVISED
+}
+
+private fun ReportUi.attentionLabel(isSupervisorMode: Boolean = false): String {
+    if (isSupervisorMode) {
+        return when (status) {
+            StatusType.PENDING -> "Perlu review"
+            StatusType.REVISED -> "Menunggu perbaikan"
+            StatusType.REJECTED -> "Sudah ditolak"
+            StatusType.DRAFT -> "Masih draft"
+            StatusType.APPROVED -> "Sudah disetujui"
+        }
+    }
     return when (status) {
         StatusType.DRAFT -> "Belum diajukan"
         StatusType.REVISED -> "Perlu revisi"
@@ -1887,7 +2064,16 @@ private fun ReportUi.attentionLabel(): String {
     }
 }
 
-private fun ReportUi.nextActionText(): String {
+private fun ReportUi.nextActionText(isSupervisorMode: Boolean = false): String {
+    if (isSupervisorMode) {
+        return when (status) {
+            StatusType.DRAFT -> "Laporan bawahan masih draft dan belum diajukan."
+            StatusType.PENDING -> "Buka detail untuk memverifikasi atau mengembalikan laporan dengan catatan."
+            StatusType.APPROVED -> "Laporan bawahan sudah disetujui. Tidak ada aksi lanjutan."
+            StatusType.REJECTED -> "Laporan bawahan sudah ditolak."
+            StatusType.REVISED -> "Laporan sudah dikembalikan. Pantau sampai bawahan mengajukan ulang."
+        }
+    }
     return when (status) {
         StatusType.DRAFT -> "Laporan masih draft. Buka detail, lengkapi data, lalu ajukan."
         StatusType.PENDING -> "Laporan sudah dikirim ke atasan. Tunggu verifikasi."
@@ -1897,7 +2083,16 @@ private fun ReportUi.nextActionText(): String {
     }
 }
 
-private fun ReportUi.nextActionTitle(): String {
+private fun ReportUi.nextActionTitle(isSupervisorMode: Boolean = false): String {
+    if (isSupervisorMode) {
+        return when (status) {
+            StatusType.DRAFT -> "Belum diajukan"
+            StatusType.PENDING -> "Perlu diverifikasi"
+            StatusType.APPROVED -> "Sudah selesai"
+            StatusType.REJECTED -> "Sudah ditolak"
+            StatusType.REVISED -> "Menunggu perbaikan bawahan"
+        }
+    }
     return when (status) {
         StatusType.DRAFT -> "Belum dikirim ke atasan"
         StatusType.PENDING -> "Menunggu verifikasi"
@@ -1927,9 +2122,20 @@ private fun ReportUi.supervisorNoteTitle(): String {
 
 private fun emptyReportMessage(
     selectedFilter: FilterType,
-    activePeriodLabel: String?
+    activePeriodLabel: String?,
+    isSubordinateMode: Boolean = false
 ): String {
     val periodSuffix = activePeriodLabel?.let { " pada $it" }.orEmpty()
+    if (isSubordinateMode) {
+        return when (selectedFilter) {
+            FilterType.ALL -> "Belum ada laporan bawahan"
+            FilterType.DRAFT -> "Belum ada laporan bawahan yang masih draft"
+            FilterType.PENDING -> "Belum ada laporan bawahan yang sedang diajukan"
+            FilterType.APPROVED -> "Belum ada laporan bawahan yang sudah disetujui"
+            FilterType.REJECTED -> "Belum ada laporan bawahan yang ditolak"
+            FilterType.REVISED -> "Belum ada laporan bawahan yang perlu revisi"
+        }
+    }
     return when (selectedFilter) {
         FilterType.ALL -> "Belum ada laporan kegiatan$periodSuffix"
         FilterType.DRAFT -> "Belum ada laporan draft$periodSuffix"

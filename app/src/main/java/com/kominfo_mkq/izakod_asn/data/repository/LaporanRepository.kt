@@ -47,11 +47,17 @@ class LaporanRepository {
         return apiService.verifikasiLaporan(laporanId, request, pegawaiId)
     }
 
-    suspend fun getLaporanList(context: Context): Response<LaporanListResponse> {
+    suspend fun getLaporanList(
+        context: Context,
+        includeSubordinates: Boolean = false
+    ): Response<LaporanListResponse> {
         val pegawaiId = UserPreferences(context).getPegawaiId()
             ?: throw Exception("Session expired: pegawai_id tidak ditemukan")
 
-        return apiService.getLaporanList(pegawaiId)
+        return apiService.getLaporanList(
+            pegawaiId = pegawaiId,
+            scope = if (includeSubordinates) "subordinates" else null
+        )
     }
 
     suspend fun getLaporanBulananCetak(

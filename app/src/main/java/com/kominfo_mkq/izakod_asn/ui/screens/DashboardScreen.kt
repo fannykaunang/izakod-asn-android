@@ -268,6 +268,7 @@ private data class DashboardCoachmarkPrompt(
 @Composable
 fun DashboardScreen(
     onNavigateToReports: () -> Unit,
+    onNavigateToSubordinateReports: (String) -> Unit,
     onNavigateToTargetKinerja: () -> Unit,
     onNavigateToTargetCreate: (Int?, Int?) -> Unit,
     onNavigateToTargetDetail: (Int, Boolean) -> Unit,
@@ -463,6 +464,7 @@ fun DashboardScreen(
                         unreadNotificationCount = uiState.unreadNotificationCount,
                         isDarkTheme = isDarkTheme,
                         onViewReports = onNavigateToReports,
+                        onViewSubordinateReports = onNavigateToSubordinateReports,
                         onTargetKinerja = onNavigateToTargetKinerja,
                         onTargetCreate = onNavigateToTargetCreate,
                         onTargetDetail = onNavigateToTargetDetail,
@@ -535,6 +537,7 @@ private fun DashboardContent(
     unreadNotificationCount: Int,
     isDarkTheme: Boolean,
     onViewReports: () -> Unit,
+    onViewSubordinateReports: (String) -> Unit,
     onTargetKinerja: () -> Unit,
     onTargetCreate: (Int?, Int?) -> Unit,
     onTargetDetail: (Int, Boolean) -> Unit,
@@ -673,6 +676,7 @@ private fun DashboardContent(
                                 }
                             ) {
                                 DashboardFocusSection(
+                                    metrics = metrics,
                                     alerts = actionAlerts,
                                     targetSummary = targetSummary,
                                     assessmentSummary = assessmentSummary,
@@ -683,6 +687,7 @@ private fun DashboardContent(
                                     targetPeriodMonth = targetPeriodMonth,
                                     canReviewSubordinates = canReviewSubordinates,
                                     onOpenReports = onViewReports,
+                                    onOpenSubordinateReports = onViewSubordinateReports,
                                     onOpenTarget = onTargetKinerja,
                                     onCreateTarget = onTargetCreate,
                                     onOpenSubordinateTargetPeriod = onSubordinateTargetPeriod,
@@ -1606,6 +1611,9 @@ private fun hasDashboardActionToShow(
     val missingAssessment = alerts?.missingAssessmentCount ?: 0
     val subordinateTargetSubmitted = alerts?.subordinateTargetSubmittedCount ?: 0
     val subordinateLaporanPending = alerts?.subordinateLaporanPendingCount ?: 0
+    val ownLaporanRevision = alerts?.ownLaporanRevisionCount ?: 0
+    val subordinateLaporanRevision = alerts?.subordinateLaporanRevisionCount ?: 0
+    val scopedLaporanRevision = alerts?.scopedLaporanRevisionCount ?: 0
     val subordinateRealisasiIncomplete = alerts?.subordinateRealisasiIncompleteCount ?: 0
     val hasOwnAssessmentAction = assessmentSummary.hasOwnAssessmentAction(alerts)
     val isAssessmentPeriodFinal = assessmentSummary?.activePeriodStatus
@@ -1621,6 +1629,9 @@ private fun hasDashboardActionToShow(
         hasOwnAssessmentAction ||
         (canReviewSubordinates && subordinateTargetSubmitted > 0) ||
         (canReviewSubordinates && subordinateLaporanPending > 0) ||
+        ownLaporanRevision > 0 ||
+        (canReviewSubordinates && subordinateLaporanRevision > 0) ||
+        scopedLaporanRevision > 0 ||
         (canReviewSubordinates && missingAssessment > 0) ||
         (canReviewSubordinates && subordinateReview > 0) ||
         (canReviewSubordinates && subordinateRealisasiIncomplete > 0) ||
@@ -2074,15 +2085,16 @@ private fun pendingSubordinateTargetReview(
 }
 
 private fun buildDashboardActionCarouselItems(
+    laporanRevisionCount: Int,
     alerts: DashboardActionAlertsData?,
     targetSummary: DashboardTargetSummaryData?,
     assessmentSummary: AssessmentSummaryData?,
-    pendingSubordinateTargetReview: PendingSubordinateTargetReview?,
     canReviewSubordinates: Boolean,
     isTargetPeriodLocked: Boolean,
     targetPeriodYear: Int?,
     targetPeriodMonth: Int?,
     onOpenReports: () -> Unit,
+    onOpenSubordinateReports: (String) -> Unit,
     onOpenTarget: () -> Unit,
     onCreateTarget: (Int?, Int?) -> Unit,
     onOpenSubordinateTargetPeriod: (Int, Int) -> Unit,
@@ -2092,11 +2104,16 @@ private fun buildDashboardActionCarouselItems(
 ): List<DashboardActionCarouselItem> {
     val items = mutableListOf<DashboardActionCarouselItem>()
     val targetNeedAttention = alerts?.targetNeedAttentionCount ?: 0
-    val realisasiNeedAttention = alerts?.realisasiNeedAttentionCount ?: 0
+    val realisasiNeedAttention = alerts?.realisasiNeedAttentionCount
+        ?: targetSummary?.itemBelumRealisasi
+        ?: 0
     val subordinateReview = alerts?.subordinateReviewCount ?: 0
     val missingAssessment = alerts?.missingAssessmentCount ?: 0
     val subordinateTargetSubmitted = alerts?.subordinateTargetSubmittedCount ?: 0
     val subordinateLaporanPending = alerts?.subordinateLaporanPendingCount ?: 0
+    val ownLaporanRevision = alerts?.ownLaporanRevisionCount ?: laporanRevisionCount
+    val subordinateLaporanRevision = alerts?.subordinateLaporanRevisionCount ?: 0
+    val scopedLaporanRevision = alerts?.scopedLaporanRevisionCount ?: 0
     val subordinateRealisasiIncomplete = alerts?.subordinateRealisasiIncompleteCount ?: 0
     val hasOwnAssessmentAction = assessmentSummary.hasOwnAssessmentAction(alerts)
     val targetPeriodMonthLabel = targetSummary?.activePeriodLabel.periodMonthOnly() ?: "bulan ini"
@@ -2126,27 +2143,7 @@ private fun buildDashboardActionCarouselItems(
         }
     }
 
-    if (pendingSubordinateTargetReview != null) {
-        val title = if (pendingSubordinateTargetReview.count == 1) {
-            "1 target bawahan menunggu review"
-        } else {
-            "${pendingSubordinateTargetReview.count} target bawahan menunggu review"
-        }
-        items += DashboardActionCarouselItem(
-            key = "subordinate-target-review",
-            title = title,
-            description = "Tinjau target bawahan periode ${pendingSubordinateTargetReview.periodLabel}.",
-            actionLabel = "Review Target",
-            icon = Icons.Default.TaskAlt,
-            accentColor = StatusPending,
-            onClick = {
-                onOpenSubordinateTargetPeriod(
-                    pendingSubordinateTargetReview.tahun,
-                    pendingSubordinateTargetReview.bulan
-                )
-            }
-        )
-    } else if (canReviewSubordinates && subordinateTargetSubmitted > 0) {
+    if (canReviewSubordinates && subordinateTargetSubmitted > 0) {
         items += DashboardActionCarouselItem(
             key = "subordinate-target-submitted",
             title = if (subordinateTargetSubmitted == 1) {
@@ -2174,7 +2171,7 @@ private fun buildDashboardActionCarouselItems(
             actionLabel = "Buka Laporan",
             icon = Icons.Default.AssignmentTurnedIn,
             accentColor = PrimaryLight,
-            onClick = onOpenReports
+            onClick = { onOpenSubordinateReports("pending") }
         )
     }
 
@@ -2224,6 +2221,54 @@ private fun buildDashboardActionCarouselItems(
         )
     }
 
+    val laporanRevisionItem = when {
+        ownLaporanRevision > 0 -> Triple(
+            "own-laporan-revision",
+            if (ownLaporanRevision == 1) {
+                "1 laporan pribadi perlu revisi"
+            } else {
+                "$ownLaporanRevision laporan pribadi perlu revisi"
+            },
+            "Perbaiki laporan kegiatan yang dikembalikan agar bisa diproses kembali."
+        )
+        canReviewSubordinates && subordinateLaporanRevision > 0 -> Triple(
+            "subordinate-laporan-revision",
+            if (subordinateLaporanRevision == 1) {
+                "1 laporan bawahan perlu revisi"
+            } else {
+                "$subordinateLaporanRevision laporan bawahan perlu revisi"
+            },
+            "Pantau laporan bawahan yang sudah dikembalikan agar segera diperbaiki."
+        )
+        scopedLaporanRevision > 0 -> Triple(
+            "scoped-laporan-revision",
+            if (scopedLaporanRevision == 1) {
+                "1 laporan dalam cakupan perlu revisi"
+            } else {
+                "$scopedLaporanRevision laporan dalam cakupan perlu revisi"
+            },
+            "Ada laporan pada cakupan akses Anda yang perlu diperbaiki."
+        )
+        else -> null
+    }
+
+    if (laporanRevisionItem != null) {
+        items += DashboardActionCarouselItem(
+            key = laporanRevisionItem.first,
+            title = laporanRevisionItem.second,
+            description = laporanRevisionItem.third,
+            actionLabel = "Buka Laporan",
+            icon = Icons.Default.AssignmentTurnedIn,
+            accentColor = StatusRejected,
+            onClick = when (laporanRevisionItem.first) {
+                "own-laporan-revision" -> onOpenReports
+                else -> {
+                    { onOpenSubordinateReports("revised") }
+                }
+            }
+        )
+    }
+
     if (canReviewSubordinates && missingAssessment > 0) {
         items += DashboardActionCarouselItem(
             key = "missing-assessment",
@@ -2256,6 +2301,18 @@ private fun buildDashboardActionCarouselItems(
         )
     }
 
+    if (hasOwnAssessmentAction) {
+        items += DashboardActionCarouselItem(
+            key = "own-assessment-action",
+            title = "Penilaian saya belum final",
+            description = "Lengkapi atau finalkan penilaian periode aktif.",
+            actionLabel = "Buka Penilaian",
+            icon = Icons.Default.Bookmark,
+            accentColor = StatusRejected,
+            onClick = onOpenPenilaian
+        )
+    }
+
     if (canReviewSubordinates && subordinateRealisasiIncomplete > 0) {
         items += DashboardActionCarouselItem(
             key = "subordinate-realisasi-incomplete",
@@ -2269,18 +2326,6 @@ private fun buildDashboardActionCarouselItems(
             icon = Icons.AutoMirrored.Filled.TrendingUp,
             accentColor = StatusPending,
             onClick = openSubordinateTargetPeriod
-        )
-    }
-
-    if (hasOwnAssessmentAction) {
-        items += DashboardActionCarouselItem(
-            key = "own-assessment-action",
-            title = "Penilaian saya belum final",
-            description = "Lengkapi atau finalkan penilaian periode aktif.",
-            actionLabel = "Buka Penilaian",
-            icon = Icons.Default.Bookmark,
-            accentColor = StatusRejected,
-            onClick = onOpenPenilaian
         )
     }
 
@@ -2302,6 +2347,7 @@ private fun buildDashboardActionCarouselItems(
 
 @Composable
 private fun DashboardFocusSection(
+    metrics: MetricsData?,
     alerts: DashboardActionAlertsData?,
     targetSummary: DashboardTargetSummaryData?,
     assessmentSummary: AssessmentSummaryData?,
@@ -2312,6 +2358,7 @@ private fun DashboardFocusSection(
     targetPeriodMonth: Int?,
     canReviewSubordinates: Boolean,
     onOpenReports: () -> Unit,
+    onOpenSubordinateReports: (String) -> Unit,
     onOpenTarget: () -> Unit,
     onCreateTarget: (Int?, Int?) -> Unit,
     onOpenSubordinateTargetPeriod: (Int, Int) -> Unit,
@@ -2321,13 +2368,6 @@ private fun DashboardFocusSection(
 ) {
     if (!isOverviewReady) return
 
-    val pendingSubordinateTargetReview = pendingSubordinateTargetReview(
-        targetItems = targetItems,
-        currentPegawaiId = currentPegawaiId,
-        targetPeriodYear = targetPeriodYear,
-        targetPeriodMonth = targetPeriodMonth,
-        canReviewSubordinates = canReviewSubordinates
-    )
     val isTargetPeriodLocked = isOwnTargetPeriodLocked(
         assessmentSummary = assessmentSummary,
         targetItems = targetItems,
@@ -2336,15 +2376,16 @@ private fun DashboardFocusSection(
         targetPeriodMonth = targetPeriodMonth
     )
     val actionItems = buildDashboardActionCarouselItems(
+        laporanRevisionCount = metrics?.totalRevisi.toIntSafe(),
         alerts = alerts,
         targetSummary = targetSummary,
         assessmentSummary = assessmentSummary,
-        pendingSubordinateTargetReview = pendingSubordinateTargetReview,
         canReviewSubordinates = canReviewSubordinates,
         isTargetPeriodLocked = isTargetPeriodLocked,
         targetPeriodYear = targetPeriodYear,
         targetPeriodMonth = targetPeriodMonth,
         onOpenReports = onOpenReports,
+        onOpenSubordinateReports = onOpenSubordinateReports,
         onOpenTarget = onOpenTarget,
         onCreateTarget = onCreateTarget,
         onOpenSubordinateTargetPeriod = onOpenSubordinateTargetPeriod,

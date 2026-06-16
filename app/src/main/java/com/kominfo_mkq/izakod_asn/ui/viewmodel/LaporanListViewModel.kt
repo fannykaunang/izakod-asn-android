@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiData
 import com.kominfo_mkq.izakod_asn.data.model.LaporanKegiatan
+import com.kominfo_mkq.izakod_asn.data.model.LaporanMeta
 import com.kominfo_mkq.izakod_asn.data.repository.LaporanRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +25,9 @@ data class LaporanListUiState(
     val filterBulan: Int? = null,
     val filterTahun: Int? = null,
     val totalFiltered: Int? = null,
+    val laporanMeta: LaporanMeta? = null,
+    val hasActiveSubordinates: Boolean = false,
+    val subordinateActionCount: Int = 0,
     val atasanPegawai: AtasanPegawaiData? = null,
     val isLoadingAtasan: Boolean = false,
     val errorAtasan: String? = null
@@ -133,24 +137,44 @@ class LaporanListViewModel : ViewModel() {
         }
     }
 
-    fun loadLaporanList(context: Context) {
+    fun loadLaporanList(
+        context: Context,
+        includeSubordinates: Boolean = false
+    ) {
         viewModelScope.launch {
             try {
                 _uiState.value = _uiState.value.copy(isLoading = true, isError = false, errorMessage = null)
 
-                val response = repository.getLaporanList(context)
+                val response = repository.getLaporanList(
+                    context = context,
+                    includeSubordinates = includeSubordinates
+                )
 
                 if (response.isSuccessful && response.body() != null) {
                     val body = response.body()!!
                     if (!body.success) throw Exception("Gagal memuat laporan")
+                    val hasActiveSubordinates = body.meta?.isAtasan == true ||
+                        body.meta?.supervisedPegawaiIds?.isNotEmpty() == true ||
+                        _uiState.value.hasActiveSubordinates
+                    val subordinateActionCount = if (includeSubordinates) {
+                        body.data.count { it.isSubordinateActionReport() }
+                    } else {
+                        _uiState.value.subordinateActionCount
+                    }
 
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         laporanList = body.data,
+                        laporanMeta = body.meta,
+                        hasActiveSubordinates = hasActiveSubordinates,
+                        subordinateActionCount = subordinateActionCount,
                         filterBulan = null,
                         filterTahun = null,
                         totalFiltered = null
                     )
+                    if (!includeSubordinates && hasActiveSubordinates) {
+                        refreshSubordinateActionCount(context)
+                    }
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
@@ -195,7 +219,37 @@ class LaporanListViewModel : ViewModel() {
         }
     }
 
-    fun clearFilter(context: Context) {
-        loadLaporanList(context)
+    fun clearFilter(
+        context: Context,
+        includeSubordinates: Boolean = false
+    ) {
+        loadLaporanList(context, includeSubordinates)
+    }
+
+    private suspend fun refreshSubordinateActionCount(context: Context) {
+        try {
+            val response = repository.getLaporanList(
+                context = context,
+                includeSubordinates = true
+            )
+            val body = response.body()
+            if (response.isSuccessful && body?.success == true) {
+                _uiState.value = _uiState.value.copy(
+                    subordinateActionCount = body.data.count { it.isSubordinateActionReport() },
+                    hasActiveSubordinates = body.meta?.isAtasan == true ||
+                        body.meta?.supervisedPegawaiIds?.isNotEmpty() == true ||
+                        _uiState.value.hasActiveSubordinates
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "refreshSubordinateActionCount failed: ${e.message}")
+        }
+    }
+}
+
+private fun LaporanKegiatan.isSubordinateActionReport(): Boolean {
+    return when (statusLaporan.trim().lowercase()) {
+        "diajukan", "pending", "revisi", "perlu revisi", "revised", "revision" -> true
+        else -> false
     }
 }

@@ -269,6 +269,15 @@ data class DashboardActionAlertsData(
     @SerializedName("laporanPendingCount")
     val laporanPendingCount: Int? = null,
 
+    @SerializedName("ownLaporanRevisionCount")
+    val ownLaporanRevisionCount: Int? = null,
+
+    @SerializedName("subordinateLaporanRevisionCount")
+    val subordinateLaporanRevisionCount: Int? = null,
+
+    @SerializedName("scopedLaporanRevisionCount")
+    val scopedLaporanRevisionCount: Int? = null,
+
     @SerializedName("targetNeedAttentionCount")
     val targetNeedAttentionCount: Int? = null,
 

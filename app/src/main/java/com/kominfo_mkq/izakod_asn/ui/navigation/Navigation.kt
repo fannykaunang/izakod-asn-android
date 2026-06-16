@@ -67,6 +67,7 @@ sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Dashboard : Screen("dashboard")
     object ReportList : Screen("report_list")
+    object ReportListSubordinate : Screen("report_list_subordinate/{filter}")
     object ReportSearch : Screen("report_search")
     object Statistics : Screen("statistics")
     object Templates : Screen("templates")
@@ -111,6 +112,10 @@ private fun isPayrollDetailRoute(route: String): Boolean {
 
 private fun penilaianKinerjaRoute(mode: String = "mine"): String {
     return "${Screen.PenilaianKinerja.route}?mode=$mode"
+}
+
+private fun subordinateReportListRoute(filter: String = "all"): String {
+    return "report_list_subordinate/${Uri.encode(filter)}"
 }
 
 fun NavHostController.backToDashboardAlways() {
@@ -307,6 +312,11 @@ fun IZAKODNavigation(
                             launchSingleTop = true
                         }
                     },
+                    onNavigateToSubordinateReports = { filter ->
+                        navController.navigate(subordinateReportListRoute(filter)) {
+                            launchSingleTop = true
+                        }
+                    },
                     onNavigateToTargetKinerja = { navController.navigate(Screen.TargetKinerja.route) },
                     onNavigateToTargetCreate = { tahun, bulan ->
                         val route = if (tahun != null && bulan != null) {
@@ -375,6 +385,32 @@ fun IZAKODNavigation(
                     onCreateReport = navigateToCreateReport,
                     showBackButton = false,
                     showCreateFab = false
+                )
+            }
+
+            composable(
+                route = Screen.ReportListSubordinate.route,
+                arguments = listOf(
+                    navArgument("filter") {
+                        type = NavType.StringType
+                        defaultValue = "all"
+                    }
+                )
+            ) { backStackEntry ->
+                val initialFilter = backStackEntry.arguments?.getString("filter") ?: "all"
+                ReportListScreen(
+                    onBack = { navController.popBackStack() },
+                    onReportClick = { reportId ->
+                        navController.navigate("laporan_detail/$reportId")
+                    },
+                    onOpenSearch = {
+                        navController.navigate(Screen.ReportSearch.route)
+                    },
+                    onCreateReport = navigateToCreateReport,
+                    showBackButton = true,
+                    showCreateFab = false,
+                    includeSubordinates = true,
+                    initialFilterKey = initialFilter
                 )
             }
 

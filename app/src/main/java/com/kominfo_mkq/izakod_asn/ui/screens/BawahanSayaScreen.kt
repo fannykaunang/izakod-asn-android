@@ -52,8 +52,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -315,7 +313,7 @@ private fun BawahanHeroCard(
                             color = Color.White
                         )
                         Text(
-                            text = "Ajukan perubahan relasi tanpa menunggu input manual dari admin.",
+                            text = "Ajukan perubahan daftar atasan-bawahan Anda secara mandiri di sini.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color.White.copy(alpha = 0.86f)
                         )
@@ -340,18 +338,6 @@ private fun BawahanHeroCard(
                     HeroStatChip("${uiState.bawahan.size}", "Aktif")
                     HeroStatChip("$directCount", "Langsung")
                     HeroStatChip("${pendingCount + draftCount}", "Usulan")
-                }
-
-                FilledTonalButton(
-                    onClick = onAdd,
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = Color.White.copy(alpha = 0.18f),
-                        contentColor = Color.White
-                    )
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Buat Usulan")
                 }
             }
         }
@@ -391,22 +377,41 @@ private fun BawahanTabs(
     proposalCount: Int
 ) {
     val tabs = listOf("Aktif ($activeCount)", "Usulan ($proposalCount)")
-    TabRow(
-        selectedTabIndex = selectedTab,
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = PrimaryLight
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
     ) {
-        tabs.forEachIndexed { index, title ->
-            Tab(
-                selected = selectedTab == index,
-                onClick = { onTabSelected(index) },
-                text = {
-                    Text(
-                        text = title,
-                        fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Medium
-                    )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            tabs.forEachIndexed { index, title ->
+                val selected = selectedTab == index
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (selected) MaterialTheme.colorScheme.surface else Color.Transparent,
+                    onClick = { onTabSelected(index) }
+                ) {
+                    Box(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.onSurface
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
                 }
-            )
+            }
         }
     }
 }
@@ -525,6 +530,9 @@ private fun BawahanProposalCard(
     onCancel: () -> Unit
 ) {
     val statusColor = item.statusColor()
+    val alasanPengajuan = item.alasanPengajuan?.takeIf { it.isNotBlank() }
+    val diajukanAt = item.diajukanAt?.takeIf { it.isNotBlank() }
+
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -565,14 +573,15 @@ private fun BawahanProposalCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Text(
-                        text = item.alasanPengajuan?.takeIf { it.isNotBlank() }
-                            ?: "Alasan belum diisi.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    if (alasanPengajuan != null) {
+                        Text(
+                            text = alasanPengajuan,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
 
                 StatusPill(text = item.statusLabel(), color = statusColor)
@@ -580,7 +589,13 @@ private fun BawahanProposalCard(
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 InfoPill("Jenis", item.jenisAtasan)
-                InfoPill("Mulai", item.tanggalMulai.orDash())
+                InfoPill("Mulai", item.tanggalMulai.toDisplayDate())
+            }
+
+            if (diajukanAt != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    InfoPill("Diajukan", diajukanAt.toDisplayDateTime())
+                }
             }
 
             if (!item.catatanVerifikasi.isNullOrBlank()) {
@@ -1168,8 +1183,12 @@ private data class BawahanProposalFormState(
                 pegawaiName = relation.displayPegawaiName(),
                 pegawaiSubtitle = relation.pegawaiJabatan.orEmpty(),
                 jenisAtasan = relation.jenisAtasan,
-                tanggalMulai = relation.tanggalMulai?.take(10) ?: todayString(),
-                tanggalSelesai = if (isDeactivate) todayString() else relation.tanggalSelesai?.take(10).orEmpty(),
+                tanggalMulai = relation.tanggalMulai.toInputDate() ?: todayString(),
+                tanggalSelesai = if (isDeactivate) {
+                    todayString()
+                } else {
+                    relation.tanggalSelesai.toInputDate().orEmpty()
+                },
                 keterangan = relation.keterangan.orEmpty()
             )
         }
@@ -1189,8 +1208,8 @@ private data class BawahanProposalFormState(
                 pegawaiName = item.pegawaiNama ?: "Pegawai #${item.pegawaiId}",
                 pegawaiSubtitle = item.pegawaiJabatan.orEmpty(),
                 jenisAtasan = item.jenisAtasan,
-                tanggalMulai = item.tanggalMulai?.take(10) ?: todayString(),
-                tanggalSelesai = item.tanggalSelesai?.take(10).orEmpty(),
+                tanggalMulai = item.tanggalMulai.toInputDate() ?: todayString(),
+                tanggalSelesai = item.tanggalSelesai.toInputDate().orEmpty(),
                 alasan = item.alasanPengajuan.orEmpty(),
                 keterangan = item.keterangan.orEmpty()
             )
@@ -1203,8 +1222,8 @@ private fun AtasanPegawaiData.displayPegawaiName(): String {
 }
 
 private fun AtasanPegawaiData.periodText(): String {
-    val start = tanggalMulai?.take(10).orDash()
-    val end = tanggalSelesai?.take(10)?.takeIf { it.isNotBlank() } ?: "Sekarang"
+    val start = tanggalMulai.toDisplayDate()
+    val end = tanggalSelesai?.takeIf { it.isNotBlank() }?.toDisplayDate() ?: "Sekarang"
     return "$start - $end"
 }
 
@@ -1262,10 +1281,55 @@ private fun String?.orDash(): String {
     return this?.takeIf { it.isNotBlank() } ?: "-"
 }
 
+private fun String?.toDisplayDate(): String {
+    val raw = this?.trim()?.takeIf { it.isNotBlank() } ?: return "-"
+    val parsed = raw.parseApiDate() ?: return raw
+    return SimpleDateFormat("d MMM yyyy", Locale.forLanguageTag("id-ID")).format(parsed)
+}
+
+private fun String?.toDisplayDateTime(): String {
+    val raw = this?.trim()?.takeIf { it.isNotBlank() } ?: return "-"
+    val parsed = raw.parseApiDate() ?: return raw
+    return SimpleDateFormat("d MMM yyyy, HH:mm", Locale.forLanguageTag("id-ID")).format(parsed)
+}
+
+private fun String?.toInputDate(): String? {
+    val raw = this?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    val parsed = raw.parseApiDate()
+    if (parsed != null) {
+        return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(parsed)
+    }
+    return raw.take(10).takeIf { it.isValidDate() }
+}
+
+private fun String.parseApiDate(): Date? {
+    val raw = trim()
+    val patterns = listOf(
+        "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+        "yyyy-MM-dd'T'HH:mm:ssXXX",
+        "yyyy-MM-dd"
+    )
+
+    for (pattern in patterns) {
+        val formatter = SimpleDateFormat(pattern, Locale.US).apply {
+            isLenient = false
+            if (pattern.endsWith("'Z'")) {
+                timeZone = java.util.TimeZone.getTimeZone("UTC")
+            }
+        }
+        val parsed = runCatching { formatter.parse(raw) }.getOrNull()
+        if (parsed != null) return parsed
+    }
+
+    return null
+}
+
 private fun String.isValidDate(): Boolean {
     return matches(Regex("^\\d{4}-\\d{2}-\\d{2}$"))
 }
 
 private fun todayString(): String {
-    return SimpleDateFormat("yyyy-MM-dd", Locale("id", "ID")).format(Date())
+    return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 }

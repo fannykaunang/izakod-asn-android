@@ -192,7 +192,8 @@ interface EabsenApiService {
      */
     @GET("api/laporan-kegiatan")
     suspend fun getLaporanList(
-        @Query("pegawai_id") pegawaiId: Int? = null
+        @Query("pegawai_id") pegawaiId: Int? = null,
+        @Query("scope") scope: String? = null
     ): Response<LaporanListResponse>
 
     /**
