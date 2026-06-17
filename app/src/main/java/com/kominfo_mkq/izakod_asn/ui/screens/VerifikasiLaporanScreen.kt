@@ -773,7 +773,7 @@ private fun formatDate(dateString: String): String {
         val outputFormat = SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID"))
         val date = inputFormat.parse(datePart)
         date?.let { outputFormat.format(it) } ?: dateString
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         dateString.split("T")[0]
     }
 }

@@ -17,12 +17,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.FactCheck
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.EventAvailable
-import androidx.compose.material.icons.filled.FactCheck
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -386,7 +386,7 @@ private fun TppPeriodSelector(
                 enabled = !isRefreshing
             ) {
                 Icon(
-                    imageVector = Icons.Default.KeyboardArrowLeft,
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                     contentDescription = "Bulan sebelumnya"
                 )
             }
@@ -414,7 +414,7 @@ private fun TppPeriodSelector(
                 enabled = !isRefreshing
             ) {
                 Icon(
-                    imageVector = Icons.Default.KeyboardArrowRight,
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = "Bulan berikutnya"
                 )
             }
@@ -637,7 +637,7 @@ private fun TppRekapSummaryCard(
                 label = "Hadir Sah",
                 value = "${rekap?.hadirSahValue() ?: 0} / ${rekap?.totalHariKerja ?: 0}",
                 subtitle = "Scan ${rekap?.hadirScanLengkap ?: 0} + Resmi ${rekap?.hadirPengecualianResmi ?: 0}",
-                icon = Icons.Default.FactCheck,
+                icon = Icons.AutoMirrored.Filled.FactCheck,
                 color = StatusApproved,
                 modifier = Modifier.weight(1f)
             )
@@ -740,7 +740,7 @@ private fun TppReadinessCard(data: TppMeData) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = if (data.status.siapDihitung) Icons.Default.FactCheck else Icons.Default.Warning,
+                imageVector = if (data.status.siapDihitung) Icons.AutoMirrored.Filled.FactCheck else Icons.Default.Warning,
                 contentDescription = null,
                 tint = if (data.status.siapDihitung) StatusApproved else StatusPending
             )

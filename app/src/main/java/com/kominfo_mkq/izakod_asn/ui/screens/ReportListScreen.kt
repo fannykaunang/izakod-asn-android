@@ -253,9 +253,26 @@ fun ReportListScreen(
         }
     }
 
+    val supervisorReviewReports = remember(actionReports, isSubordinateMode) {
+        if (isSubordinateMode) {
+            actionReports.filter { it.status == StatusType.PENDING }
+        } else {
+            emptyList()
+        }
+    }
+
+    val supervisorMonitoringReports = remember(actionReports, isSubordinateMode) {
+        if (isSubordinateMode) {
+            actionReports.filter { it.status == StatusType.REVISED }
+        } else {
+            emptyList()
+        }
+    }
+
     val regularReports = remember(filteredReports, actionReports, selectedFilter) {
         if (selectedFilter == FilterType.ALL && actionReports.isNotEmpty()) {
-            filteredReports.filterNot { it.needsEmployeeAttention() }
+            val actionReportIds = actionReports.mapTo(mutableSetOf()) { it.id }
+            filteredReports.filterNot { it.id in actionReportIds }
         } else {
             filteredReports
         }
@@ -375,6 +392,7 @@ fun ReportListScreen(
                         if (showOwnerTabs) {
                             ReportOwnerTabs(
                                 selected = selectedOwnerScope,
+                                ownActionCount = uiState.ownActionCount,
                                 subordinateActionCount = uiState.subordinateActionCount,
                                 onSelect = { nextScope ->
                                     if (nextScope != selectedOwnerScope) {
@@ -424,20 +442,58 @@ fun ReportListScreen(
                                     verticalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
                                     if (actionReports.isNotEmpty()) {
-                                        item {
-                                            SectionHeading(
-                                                title = "Perlu Tindakan",
-                                                subtitle = "${actionReports.size} laporan perlu perhatian"
-                                            )
-                                        }
+                                        if (isSubordinateMode) {
+                                            if (supervisorReviewReports.isNotEmpty()) {
+                                                item {
+                                                    SectionHeading(
+                                                        title = "Perlu Tindakan",
+                                                        subtitle = "${supervisorReviewReports.size} laporan perlu direview"
+                                                    )
+                                                }
 
-                                        items(actionReports, key = { it.id }) { report ->
-                                            ReportCard(
-                                                report = report,
-                                                showEmployeeName = isSubordinateMode,
-                                                isSupervisorMode = isSubordinateMode,
-                                                onClick = { onReportClick(report.id.toString()) }
-                                            )
+                                                items(supervisorReviewReports, key = { it.id }) { report ->
+                                                    ReportCard(
+                                                        report = report,
+                                                        showEmployeeName = true,
+                                                        isSupervisorMode = true,
+                                                        onClick = { onReportClick(report.id.toString()) }
+                                                    )
+                                                }
+                                            }
+
+                                            if (supervisorMonitoringReports.isNotEmpty()) {
+                                                item {
+                                                    SectionHeading(
+                                                        title = "Perlu Dipantau",
+                                                        subtitle = "${supervisorMonitoringReports.size} laporan menunggu perbaikan bawahan"
+                                                    )
+                                                }
+
+                                                items(supervisorMonitoringReports, key = { it.id }) { report ->
+                                                    ReportCard(
+                                                        report = report,
+                                                        showEmployeeName = true,
+                                                        isSupervisorMode = true,
+                                                        onClick = { onReportClick(report.id.toString()) }
+                                                    )
+                                                }
+                                            }
+                                        } else {
+                                            item {
+                                                SectionHeading(
+                                                    title = "Perlu Tindakan",
+                                                    subtitle = "${actionReports.size} laporan perlu perhatian"
+                                                )
+                                            }
+
+                                            items(actionReports, key = { it.id }) { report ->
+                                                ReportCard(
+                                                    report = report,
+                                                    showEmployeeName = false,
+                                                    isSupervisorMode = false,
+                                                    onClick = { onReportClick(report.id.toString()) }
+                                                )
+                                            }
                                         }
 
                                         item {
@@ -1001,6 +1057,7 @@ private fun ReportListHeaderBar(
 @Composable
 private fun ReportOwnerTabs(
     selected: ReportOwnerScope,
+    ownActionCount: Int,
     subordinateActionCount: Int,
     onSelect: (ReportOwnerScope) -> Unit
 ) {
@@ -1022,6 +1079,10 @@ private fun ReportOwnerTabs(
                 ReportOwnerScope.SUBORDINATES to "Bawahan"
             ).forEach { (scope, label) ->
                 val isSelected = selected == scope
+                val badgeCount = when (scope) {
+                    ReportOwnerScope.MINE -> ownActionCount
+                    ReportOwnerScope.SUBORDINATES -> subordinateActionCount
+                }
                 Surface(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp),
@@ -1045,10 +1106,10 @@ private fun ReportOwnerTabs(
                                     MaterialTheme.colorScheme.onSurfaceVariant
                                 }
                             )
-                            if (scope == ReportOwnerScope.SUBORDINATES && subordinateActionCount > 0) {
+                            if (badgeCount > 0) {
                                 Badge(containerColor = StatusRejected) {
                                     Text(
-                                        text = if (subordinateActionCount > 99) "99+" else subordinateActionCount.toString(),
+                                        text = if (badgeCount > 99) "99+" else badgeCount.toString(),
                                         color = Color.White,
                                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
                                     )
@@ -2050,7 +2111,7 @@ private fun ReportUi.attentionLabel(isSupervisorMode: Boolean = false): String {
     if (isSupervisorMode) {
         return when (status) {
             StatusType.PENDING -> "Perlu review"
-            StatusType.REVISED -> "Menunggu perbaikan"
+            StatusType.REVISED -> "Perlu dipantau"
             StatusType.REJECTED -> "Sudah ditolak"
             StatusType.DRAFT -> "Masih draft"
             StatusType.APPROVED -> "Sudah disetujui"

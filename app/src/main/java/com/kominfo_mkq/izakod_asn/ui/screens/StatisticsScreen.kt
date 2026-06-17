@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.outlined.RotateLeft
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -24,8 +26,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SyncProblem
-import androidx.compose.material.icons.filled.TrendingUp
-import androidx.compose.material.icons.outlined.RotateLeft
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -324,7 +324,7 @@ private fun DailyStatisticsSection(
             title = "AVG Produktivitas",
             value = String.format("%.2f%%", metrics.avgProduktivitas.toDoubleSafe()),
             description = "Produktivitas rata-rata",
-            icon = Icons.Default.TrendingUp,
+            icon = Icons.AutoMirrored.Filled.TrendingUp,
             accent = PrimaryLight
         ),
         StatisticCardItem(
@@ -406,7 +406,7 @@ private fun MonthlyStatisticsSection(
             title = "Persentase Verifikasi",
             value = String.format("%.2f%%", metrics.persentaseVerifikasi.toFloatSafe()),
             description = "Persentase kegiatan terverifikasi",
-            icon = Icons.Default.TrendingUp,
+            icon = Icons.AutoMirrored.Filled.TrendingUp,
             accent = Color(0xFF14B8A6)
         ),
         StatisticCardItem(
@@ -420,7 +420,7 @@ private fun MonthlyStatisticsSection(
             title = "Total Revisi",
             value = metrics.totalRevisi.toIntSafe().toString(),
             description = "Total kegiatan direvisi",
-            icon = Icons.Outlined.RotateLeft,
+            icon = Icons.AutoMirrored.Outlined.RotateLeft,
             accent = StatusRevised
         )
     )

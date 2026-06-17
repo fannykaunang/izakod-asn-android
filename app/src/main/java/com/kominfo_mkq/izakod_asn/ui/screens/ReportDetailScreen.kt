@@ -39,14 +39,11 @@ import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -170,7 +167,6 @@ private fun StickyActionButtons(
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // ✅ Verify Button (Primary - if can verify)
             if (canVerify && normalizedStatus == "diajukan") {
                 Button(
                     onClick = onVerify,
@@ -306,204 +302,6 @@ private fun LaporanDetailContent(
         MetadataSection(laporan = laporan)
 
         Spacer(modifier = Modifier.height(if (canEdit || canVerify) 32.dp else 16.dp))
-    }
-}
-
-@Composable
-private fun StatusCard(status: String) {
-    val (bgColor, textColor, icon, label) = when (status) {
-        "Draft" -> Tuple4(
-            MaterialTheme.colorScheme.surfaceVariant,
-            MaterialTheme.colorScheme.onSurfaceVariant,
-            Icons.Default.Edit,
-            "Draft"
-        )
-        "Diajukan", "Pending" -> Tuple4(
-            StatusPending.copy(alpha = 0.15f),      // ✅ Amber background
-            StatusPending,                           // ✅ Amber text
-            Icons.Default.Schedule,
-            "Menunggu Verifikasi"
-        )
-        "Diverifikasi", "Approved" -> Tuple4(
-            StatusApproved.copy(alpha = 0.15f),     // ✅ Green background
-            StatusApproved,                          // ✅ Green text
-            Icons.Default.CheckCircle,
-            "Diverifikasi"
-        )
-        "Ditolak", "Rejected" -> Tuple4(
-            StatusRejected.copy(alpha = 0.15f),     // ✅ Red background
-            StatusRejected,                          // ✅ Red text
-            Icons.Default.Cancel,
-            "Ditolak"
-        )
-        "Revisi", "Revised" -> Tuple4(              // ✅ Add Revisi status
-            StatusRevised.copy(alpha = 0.15f),      // ✅ Orange background
-            StatusRevised,                           // ✅ Orange text
-            Icons.Default.Edit,
-            "Perlu Revisi"
-        )
-        else -> Tuple4(
-            MaterialTheme.colorScheme.surfaceVariant,
-            MaterialTheme.colorScheme.onSurfaceVariant,
-            Icons.Default.Info,
-            status
-        )
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = bgColor
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                modifier = Modifier.size(32.dp),
-                tint = textColor
-            )
-            Text(
-                label,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = textColor
-                )
-            )
-        }
-    }
-}
-
-@Composable
-private fun BasicInfoSection(laporan: LaporanDetail) {
-    SectionCard(title = "Informasi Dasar") {
-        DetailRow(
-            icon = Icons.Default.Person,
-            label = "Pegawai",
-            value = laporan.pegawaiNama ?: "-"
-        )
-
-        DetailRow(
-            icon = Icons.Default.Category,
-            label = "Kategori",
-            value = laporan.kategoriNama ?: "-"
-        )
-
-        DetailRow(
-            icon = Icons.Default.CalendarToday,
-            label = "Tanggal Kegiatan",
-            value = formatDate(laporan.tanggalKegiatan)
-        )
-    }
-}
-
-@Composable
-private fun ActivityDetailsSection(laporan: LaporanDetail) {
-    SectionCard(title = "Detail Kegiatan") {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            // Nama Kegiatan
-            Column {
-                Text(
-                    "Nama Kegiatan",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    laporan.namaKegiatan,
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = FontWeight.Medium
-                    )
-                )
-            }
-
-            HorizontalDivider()
-
-            // Deskripsi
-            Column {
-                Text(
-                    "Deskripsi",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    laporan.deskripsiKegiatan,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun TimeLocationSection(laporan: LaporanDetail) {
-    SectionCard(title = "Waktu & Lokasi") {
-        DetailRow(
-            icon = Icons.Default.AccessTime,
-            label = "Waktu Mulai",
-            value = laporan.waktuMulai
-        )
-
-        DetailRow(
-            icon = Icons.Default.AccessTime,
-            label = "Waktu Selesai",
-            value = laporan.waktuSelesai
-        )
-
-        if (laporan.durasiMenit != null) {
-            DetailRow(
-                icon = Icons.Default.Timer,
-                label = "Durasi",
-                value = "${laporan.durasiMenit} menit"
-            )
-        }
-
-        if (laporan.lokasiKegiatan != null) {
-            HorizontalDivider()
-
-            DetailRow(
-                icon = Icons.Default.Place,
-                label = "Lokasi",
-                value = laporan.lokasiKegiatan
-            )
-        }
-
-        if (laporan.latitude != null && laporan.longitude != null) {
-            DetailRow(
-                icon = Icons.Default.MyLocation,
-                label = "Koordinat",
-                value = "${laporan.latitude}, ${laporan.longitude}"
-            )
-        }
-    }
-}
-
-@Composable
-private fun ParticipantsInfoSection(laporan: LaporanDetail) {
-    SectionCard(title = "Peserta") {
-        if (laporan.pesertaKegiatan != null) {
-            DetailRow(
-                icon = Icons.Default.People,
-                label = "Nama Peserta",
-                value = laporan.pesertaKegiatan
-            )
-        }
-
-        if (laporan.jumlahPeserta != null) {
-            DetailRow(
-                icon = Icons.Default.Tag,
-                label = "Jumlah Peserta",
-                value = "${laporan.jumlahPeserta} orang"
-            )
-        }
     }
 }
 
@@ -1426,7 +1224,7 @@ private fun formatDate(dateString: String): String {
 
         val date = inputFormat.parse(datePart)
         date?.let { outputFormat.format(it) } ?: dateString
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         // If parsing fails, just show the string
         dateString.split("T")[0] // At least show date part
     }
@@ -1439,7 +1237,7 @@ private fun formatDateTime(dateTimeString: String): String {
         val outputFormat = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.forLanguageTag("id-ID"))
         val date = inputFormat.parse(dateTimeString)
         date?.let { outputFormat.format(it) } ?: dateTimeString
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         dateTimeString
     }
 }
@@ -1463,11 +1261,3 @@ private fun buildLampiranUrl(path: String): String? {
 
     return "${ApiClient.BASE_URL.trimEnd('/')}/${path.trimStart('/')}"
 }
-
-// Helper data class for status tuple
-private data class Tuple4<A, B, C, D>(
-    val first: A,
-    val second: B,
-    val third: C,
-    val fourth: D
-)

@@ -151,6 +151,8 @@ import kotlin.math.roundToInt
 
 private fun String?.displayOrDash(): String = this?.takeIf { it.isNotBlank() } ?: "-"
 private const val DASHBOARD_PAYROLL_LOG_TAG = "IZAKOD_DASH_PAYROLL"
+private const val DASHBOARD_TARGET_TAB_INDEX = 1
+private const val DASHBOARD_PAYROLL_TAB_INDEX = 3
 private fun String?.toIntSafe(): Int = this?.toIntOrNull() ?: 0
 private fun String?.toFloatSafe(): Float = this?.toFloatOrNull() ?: 0f
 private fun String?.toDoubleSafe(): Double = this?.toDoubleOrNull() ?: 0.0
@@ -300,6 +302,7 @@ fun DashboardScreen(
     val tppUiState by tppViewModel.uiState.collectAsState()
     val gajiUiState by gajiViewModel.uiState.collectAsState()
     val dashboardRefreshVersion by DashboardRefreshNotifier.version.collectAsState()
+    val selectedDashboardTabIndex by viewModel.currentTabIndex.collectAsState()
     val context = LocalContext.current
     val userPreferences = remember { UserPreferences(context) }
 
@@ -339,18 +342,24 @@ fun DashboardScreen(
     }
     val isPayrollRefreshing = when {
         !isPayrollProfileReady -> false
+        selectedDashboardTabIndex != DASHBOARD_PAYROLL_TAB_INDEX -> false
         isNonAsnPayroll -> gajiUiState.isRefreshing
         else -> tppUiState.isRefreshing
     }
-    val isDashboardRefreshing = uiState.isRefreshing || isPayrollRefreshing
+    val isTargetTabRefreshing = selectedDashboardTabIndex == DASHBOARD_TARGET_TAB_INDEX &&
+        uiState.isDashboardTargetsLoading
+    val isDashboardRefreshing = uiState.isRefreshing || isTargetTabRefreshing || isPayrollRefreshing
     val pullRefreshState = rememberPullRefreshState(
         refreshing = isDashboardRefreshing,
         onRefresh = {
             viewModel.refresh(context, showFullLoading = false)
+            if (selectedDashboardTabIndex == DASHBOARD_TARGET_TAB_INDEX) {
+                viewModel.loadDashboardTargetsIfNeeded(force = true)
+            }
             sessionData?.pin?.takeIf { it.isNotEmpty() }?.let { pin ->
                 viewModel.loadPegawaiProfile(pin)
             }
-            if (isPayrollProfileReady) {
+            if (selectedDashboardTabIndex == DASHBOARD_PAYROLL_TAB_INDEX && isPayrollProfileReady) {
                 if (isNonAsnPayroll) {
                     gajiViewModel.refresh()
                 } else {
@@ -364,8 +373,18 @@ fun DashboardScreen(
         viewModel.refreshIfNeeded(context)
     }
 
-    LaunchedEffect(uiState.pegawaiProfile?.pegawaiId, isNonAsnPayroll) {
-        if (uiState.pegawaiProfile != null) {
+    LaunchedEffect(
+        selectedDashboardTabIndex,
+        uiState.targetPeriodYear,
+        uiState.targetPeriodMonth
+    ) {
+        if (selectedDashboardTabIndex == DASHBOARD_TARGET_TAB_INDEX) {
+            viewModel.loadDashboardTargetsIfNeeded()
+        }
+    }
+
+    LaunchedEffect(selectedDashboardTabIndex, uiState.pegawaiProfile?.pegawaiId, isNonAsnPayroll) {
+        if (selectedDashboardTabIndex == DASHBOARD_PAYROLL_TAB_INDEX && uiState.pegawaiProfile != null) {
             if (isNonAsnPayroll) {
                 gajiViewModel.refreshIfNeeded()
             } else {
@@ -391,10 +410,13 @@ fun DashboardScreen(
         }
 
         viewModel.refreshIfNeeded(context = context, force = true)
+        if (selectedDashboardTabIndex == DASHBOARD_TARGET_TAB_INDEX) {
+            viewModel.loadDashboardTargetsIfNeeded(force = true)
+        }
         sessionData?.pin?.takeIf { it.isNotEmpty() }?.let { pin ->
             viewModel.loadPegawaiProfileIfNeeded(pin = pin, force = true)
         }
-        if (isPayrollProfileReady) {
+        if (selectedDashboardTabIndex == DASHBOARD_PAYROLL_TAB_INDEX && isPayrollProfileReady) {
             if (isNonAsnPayroll) {
                 gajiViewModel.refresh()
             } else {
@@ -472,6 +494,8 @@ fun DashboardScreen(
                         actionAlerts = uiState.actionAlerts,
                         isOverviewReady = isDashboardOverviewReady,
                         tertundaCount = uiState.tertundaCount,
+                        isTargetDetailsLoading = uiState.isDashboardTargetsLoading,
+                        hasTargetDetailsLoaded = uiState.hasDashboardTargetsLoaded,
                         targetItems = uiState.targetItems,
                         tppUiState = tppUiState,
                         tppData = tppUiState.data,
@@ -546,6 +570,8 @@ private fun DashboardContent(
     actionAlerts: DashboardActionAlertsData?,
     isOverviewReady: Boolean,
     tertundaCount: Int?,
+    isTargetDetailsLoading: Boolean,
+    hasTargetDetailsLoaded: Boolean,
     targetItems: List<TargetKinerjaItem>,
     tppUiState: TppSayaUiState,
     tppData: TppMeData?,
@@ -728,6 +754,8 @@ private fun DashboardContent(
                         item {
                             MinimalQuickActionsSection(
                                 tertundaCount = tertundaCount,
+                                actionAlerts = actionAlerts,
+                                assessmentSummary = assessmentSummary,
                                 onViewReports = onViewReports,
                                 onTargetKinerja = onTargetKinerja,
                                 onPenilaianKinerja = onPenilaianKinerja,
@@ -759,27 +787,31 @@ private fun DashboardContent(
                 }
 
                 1 -> {
-                    val listState = remember(page) { androidx.compose.foundation.lazy.LazyListState() }
-                    LazyColumn(
-                        state = listState,
-                        contentPadding = PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 112.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        item {
-                            TargetProgressSection(
-                                summary = targetSummary,
-                                assessmentSummary = assessmentSummary,
-                                targetItems = targetItems,
-                                currentPegawaiId = currentPegawaiId,
-                                targetPeriodYear = targetPeriodYear,
-                                targetPeriodMonth = targetPeriodMonth,
-                                canReviewSubordinates = canReviewSubordinates,
-                                onOpenReports = onViewReports,
-                                onPeriodSelected = onTargetPeriodSelected,
-                                onCreateTarget = onTargetCreate,
-                                onOpenTargetDetail = onTargetDetail,
-                                onOpenSubordinateTargetPeriod = onSubordinateTargetPeriod
-                            )
+                    if (!hasTargetDetailsLoaded || isTargetDetailsLoading) {
+                        LoadingContent(message = "Memuat target dan realisasi...")
+                    } else {
+                        val listState = remember(page) { androidx.compose.foundation.lazy.LazyListState() }
+                        LazyColumn(
+                            state = listState,
+                            contentPadding = PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 112.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            item {
+                                TargetProgressSection(
+                                    summary = targetSummary,
+                                    assessmentSummary = assessmentSummary,
+                                    targetItems = targetItems,
+                                    currentPegawaiId = currentPegawaiId,
+                                    targetPeriodYear = targetPeriodYear,
+                                    targetPeriodMonth = targetPeriodMonth,
+                                    canReviewSubordinates = canReviewSubordinates,
+                                    onOpenReports = onViewReports,
+                                    onPeriodSelected = onTargetPeriodSelected,
+                                    onCreateTarget = onTargetCreate,
+                                    onOpenTargetDetail = onTargetDetail,
+                                    onOpenSubordinateTargetPeriod = onSubordinateTargetPeriod
+                                )
+                            }
                         }
                     }
                 }
@@ -984,498 +1016,6 @@ fun ErrorContent(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Coba Lagi")
                     }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun HeroSection(
-    pegawaiProfile: PegawaiProfile?,
-    photoUrl: String?,
-    metrics: MetricsData?,
-    assessmentSummary: AssessmentSummaryData?,
-    targetSummary: DashboardTargetSummaryData?,
-    unreadNotificationCount: Int,
-    isDarkTheme: Boolean
-) {
-    val totalKegiatan = metrics?.totalKegiatan.toIntSafe()
-    val totalPending = metrics?.totalPending.toIntSafe()
-    val activeAssessmentStatus = assessmentSummary?.activePeriodStatus.displayOrDash()
-    val activeTargetStatus = targetSummary?.status.displayOrDash()
-    val activePeriodLabel = targetSummary?.activePeriodLabel?.takeIf { it.isNotBlank() }
-        ?: assessmentSummary?.activePeriodLabel?.takeIf { it.isNotBlank() }
-        ?: currentDateLabel()
-    val pendingOwnAssessment = assessmentSummary?.pendingOwnAssessment ?: 0
-    val pendingSubordinates = assessmentSummary?.pendingSubordinateAssessments ?: 0
-    val canReviewSubordinates = assessmentSummary?.canReviewSubordinates == true
-    val greeting = currentGreeting()
-    val nama = pegawaiProfile?.pegawaiNama.displayOrDash()
-    val jabatan = pegawaiProfile?.jabatan.displayOrDash()
-    val skpd = pegawaiProfile?.skpd.displayOrDash()
-    val roleLine = listOf(jabatan, skpd)
-        .filter { it.isNotBlank() && it != "-" }
-        .joinToString(" • ")
-        .ifBlank { "Informasi jabatan belum tersedia" }
-    val heroStatuses = buildList {
-        add(
-            HeroStatusItem(
-                label = "Penilaian: $activeAssessmentStatus",
-                color = when (activeAssessmentStatus.lowercase(Locale.getDefault())) {
-                    "final" -> StatusApproved
-                    "review" -> StatusPending
-                    "draft" -> PrimaryLight
-                    else -> StatusRevised
-                }
-            )
-        )
-        if (canReviewSubordinates) {
-            add(
-                HeroStatusItem(
-                    label = "$pendingSubordinates penilaian pegawai",
-                    color = if (pendingSubordinates > 0) StatusRejected else SecondaryLight
-                )
-            )
-        } else {
-            add(
-                HeroStatusItem(
-                    label = "Pending: $totalPending",
-                    color = if (totalPending > 0) StatusPending else SecondaryLight
-                )
-            )
-        }
-    }
-    val highlightText = when {
-        pendingOwnAssessment > 0 ->
-            "Penilaian Anda belum final pada periode aktif"
-        canReviewSubordinates && pendingSubordinates > 0 ->
-            "$pendingSubordinates penilaian bawahan belum final"
-        totalPending > 0 ->
-            "$totalPending laporan masih menunggu tindak lanjut"
-        unreadNotificationCount > 0 ->
-            "$unreadNotificationCount notifikasi baru siap ditinjau"
-        totalKegiatan > 0 ->
-            "$totalKegiatan kegiatan sudah tercatat pada periode ini"
-        else -> "Semua ringkasan kerja Anda akan muncul di sini"
-    }
-
-    GradientCard(
-        modifier = Modifier.fillMaxWidth(),
-        isDark = isDarkTheme,
-        cornerRadius = 24.dp,
-        elevation = 5.dp
-    ) {
-        Box(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(74.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.08f))
-            )
-
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .size(46.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.06f))
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "$greeting, $nama",
-                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
-                        color = Color.White,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Text(
-                        text = roleLine,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.84f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Text(
-                        text = activePeriodLabel,
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = Color.White.copy(alpha = 0.92f)
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        heroStatuses.forEach { statusItem ->
-                            CompactHeroStatusChip(
-                                text = statusItem.label,
-                                color = statusItem.color
-                            )
-                        }
-                    }
-
-                    Text(
-                        text = highlightText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.84f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                if (photoUrl != null) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(photoUrl)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = "Foto pegawai",
-                        modifier = Modifier
-                            .padding(start = 14.dp)
-                            .size(60.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-            }
-        }
-
-    }
-}
-
-private data class HeroStatusItem(
-    val label: String,
-    val color: Color
-)
-
-@Composable
-private fun CompactHeroStatusChip(
-    text: String,
-    color: Color
-) {
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = Color.White.copy(alpha = 0.16f)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(color)
-            )
-            Text(
-                text = text,
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.White.copy(alpha = 0.92f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-@Composable
-private fun HeroLegacySection(
-    pegawaiProfile: PegawaiProfile?,
-    photoUrl: String?,
-    metrics: MetricsData?,
-    assessmentSummary: AssessmentSummaryData?,
-    targetSummary: DashboardTargetSummaryData?,
-    unreadNotificationCount: Int,
-    isDarkTheme: Boolean
-) {
-    val totalKegiatan = metrics?.totalKegiatan.toIntSafe()
-    val targetStatus = targetSummary?.status.displayOrDash()
-    val assessmentStatus = assessmentSummary?.activePeriodStatus.displayOrDash()
-    val latestAssessmentScore = formatNullableScore(assessmentSummary?.latestFinalScore)
-    val greeting = currentGreeting()
-    val nama = pegawaiProfile?.pegawaiNama.displayOrDash()
-    val jabatan = pegawaiProfile?.jabatan.displayOrDash()
-    val skpd = pegawaiProfile?.skpd.displayOrDash()
-    val roleLine = listOf(jabatan, skpd)
-        .filter { it.isNotBlank() && it != "-" }
-        .joinToString(" • ")
-        .ifBlank { "Informasi jabatan belum tersedia" }
-    val activePeriodLabel = targetSummary?.activePeriodLabel?.takeIf { it.isNotBlank() }
-        ?: assessmentSummary?.activePeriodLabel?.takeIf { it.isNotBlank() }
-        ?: currentDateLabel()
-    val targetValue = when {
-        targetStatus != "-" -> targetStatus
-        (targetSummary?.totalTargets ?: 0) > 0 -> "${targetSummary?.totalTargets ?: 0} target"
-        else -> "Belum ada"
-    }
-    val assessmentValue = when {
-        assessmentStatus != "-" -> assessmentStatus
-        latestAssessmentScore != "-" -> latestAssessmentScore
-        unreadNotificationCount > 0 -> "$unreadNotificationCount baru"
-        else -> "Belum ada"
-    }
-
-    GradientCard(
-        modifier = Modifier.fillMaxWidth(),
-        isDark = isDarkTheme,
-        cornerRadius = 30.dp,
-        elevation = 5.dp
-    ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(112.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.08f))
-            )
-
-            if (photoUrl != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(photoUrl)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = "Foto pegawai",
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 4.dp, end = 4.dp)
-                        .size(66.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
-                )
-            }
-
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(100),
-                    color = Color.White.copy(alpha = 0.18f)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AssignmentTurnedIn,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = "Periode: $activePeriodLabel",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = Color.White
-                        )
-                    }
-                }
-
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    Text(
-                        text = "$greeting,",
-                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White
-                    )
-                    Text(
-                        text = nama,
-                        style = MaterialTheme.typography.headlineMedium.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            lineHeight = 28.sp
-                        ),
-                        color = Color.White,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = roleLine,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Medium,
-                            lineHeight = 20.sp
-                        ),
-                        color = Color.White.copy(alpha = 0.84f),
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    HeroMiniMetricCard(
-                        title = "Kegiatan\nbulan ini",
-                        value = totalKegiatan.toString(),
-                        modifier = Modifier.weight(1f)
-                    )
-                    HeroMiniMetricCard(
-                        title = "Status\nTarget",
-                        value = targetValue,
-                        modifier = Modifier.weight(1f)
-                    )
-                    HeroMiniMetricCard(
-                        title = "Status\nPenilaian",
-                        value = assessmentValue,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun HeroMiniMetricCard(
-    title: String,
-    value: String,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier,
-        tonalElevation = 0.dp,
-        shape = RoundedCornerShape(24.dp),
-        color = Color.White.copy(alpha = 0.14f)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 96.dp)
-                .padding(horizontal = 14.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
-                color = Color.White.copy(alpha = 0.84f),
-                lineHeight = 20.sp
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
-                color = Color.White,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-@Composable
-private fun HeroPlaySection(
-    pegawaiProfile: PegawaiProfile?,
-    photoUrl: String?,
-    assessmentSummary: AssessmentSummaryData?,
-    targetSummary: DashboardTargetSummaryData?,
-    currentTab: String,
-    isDarkTheme: Boolean
-) {
-    val greeting = currentGreeting()
-    val nama = pegawaiProfile?.pegawaiNama.displayOrDash()
-    val jabatan = pegawaiProfile?.jabatan.displayOrDash()
-    val skpd = pegawaiProfile?.skpd.displayOrDash()
-    val activePeriodLabel = targetSummary?.activePeriodLabel?.takeIf { it.isNotBlank() }
-        ?: assessmentSummary?.activePeriodLabel?.takeIf { it.isNotBlank() }
-        ?: currentDateLabel()
-    val roleLine = listOf(jabatan, skpd)
-        .filter { it.isNotBlank() && it != "-" }
-        .joinToString(" • ")
-        .ifBlank { "Informasi jabatan belum tersedia" }
-    val targetStatus = targetSummary?.status.displayOrDash()
-    val assessmentStatus = assessmentSummary?.activePeriodStatus.displayOrDash()
-    val heroStatus = when (currentTab) {
-        "Target" -> "Target: $targetStatus"
-        "Penilaian" -> "Penilaian: $assessmentStatus"
-        "TPP" -> "TPP Saya"
-        else -> listOf("Target: $targetStatus", "Penilaian: $assessmentStatus")
-            .joinToString(" • ")
-    }
-
-    GradientCard(
-        modifier = Modifier.fillMaxWidth(),
-        isDark = isDarkTheme,
-        cornerRadius = 28.dp,
-        elevation = 4.dp
-    ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(112.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.08f))
-            )
-
-            if (photoUrl != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(photoUrl)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = "Foto pegawai",
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 4.dp, end = 4.dp)
-                        .size(76.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
-                )
-            }
-
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(
-                    text = "$greeting, $nama",
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
-                    color = Color.White,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = roleLine,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.84f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = activePeriodLabel,
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = Color.White.copy(alpha = 0.92f)
-                )
-                Surface(
-                    shape = RoundedCornerShape(100),
-                    color = Color.White.copy(alpha = 0.18f)
-                ) {
-                    Text(
-                        text = heroStatus,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
             }
         }
@@ -2640,6 +2180,8 @@ private fun DashboardActionCarouselCard(
 @Composable
 private fun MinimalQuickActionsSection(
     tertundaCount: Int?,
+    actionAlerts: DashboardActionAlertsData?,
+    assessmentSummary: AssessmentSummaryData?,
     onViewReports: () -> Unit,
     onTargetKinerja: () -> Unit,
     onPenilaianKinerja: () -> Unit,
@@ -2654,20 +2196,41 @@ private fun MinimalQuickActionsSection(
     verifikasiPendingCount: Int?,
     onVerifikasi: () -> Unit
 ) {
-    val tertundaBadge = when {
-        tertundaCount == null || tertundaCount <= 0 -> null
-        tertundaCount > 99 -> "99+"
-        else -> tertundaCount.toString()
-    }
-    val verifikasiBadge = when {
-        verifikasiPendingCount == null || verifikasiPendingCount <= 0 -> null
-        verifikasiPendingCount > 99 -> "99+"
-        else -> verifikasiPendingCount.toString()
-    }
+    val laporanBadge = dashboardBadgeText(
+        (actionAlerts?.ownLaporanRevisionCount ?: 0) +
+            (actionAlerts?.subordinateLaporanPendingCount ?: 0) +
+            (actionAlerts?.subordinateLaporanRevisionCount ?: 0)
+    )
+    val targetBadge = dashboardBadgeText(
+        (actionAlerts?.targetNeedAttentionCount ?: 0) +
+            (actionAlerts?.realisasiNeedAttentionCount ?: 0)
+    )
+    val penilaianBadge = dashboardBadgeText(
+        actionAlerts?.ownAssessmentPendingCount
+            ?: assessmentSummary?.pendingOwnAssessment
+    )
+    val tertundaBadge = dashboardBadgeText(tertundaCount)
+    val verifikasiBadge = dashboardBadgeText(verifikasiPendingCount)
 
     val actions = buildList {
-        add(CompactQuickActionData("Laporan", Icons.AutoMirrored.Filled.List, SecondaryLight, onViewReports))
-        add(CompactQuickActionData("Target", Icons.Default.TaskAlt, PrimaryLight, onTargetKinerja))
+        add(
+            CompactQuickActionData(
+                label = "Laporan",
+                icon = Icons.AutoMirrored.Filled.List,
+                color = SecondaryLight,
+                onClick = onViewReports,
+                badgeText = laporanBadge
+            )
+        )
+        add(
+            CompactQuickActionData(
+                label = "Target",
+                icon = Icons.Default.TaskAlt,
+                color = PrimaryLight,
+                onClick = onTargetKinerja,
+                badgeText = targetBadge
+            )
+        )
         if (canShowBawahan) {
             add(CompactQuickActionData("Bawahan", Icons.Default.Groups, PrimaryLight, onBawahanSaya))
         }
@@ -2690,7 +2253,15 @@ private fun MinimalQuickActionsSection(
             onClick = onTertunda,
             badgeText = tertundaBadge
         ))
-        add(CompactQuickActionData("Penilaian", Icons.Default.Bookmark, StatusApproved, onPenilaianKinerja))
+        add(
+            CompactQuickActionData(
+                label = "Penilaian",
+                icon = Icons.Default.Bookmark,
+                color = StatusApproved,
+                onClick = onPenilaianKinerja,
+                badgeText = penilaianBadge
+            )
+        )
         add(CompactQuickActionData(payrollLabel, Icons.Default.PlaylistAddCheckCircle, StatusPending, onPayrollSaya))
         add(CompactQuickActionData("Pengingat", Icons.Default.AlarmOn, StatusApproved, onReminder))
     }
@@ -2732,6 +2303,12 @@ private fun MinimalQuickActionsSection(
             }
         }
     }
+}
+
+private fun dashboardBadgeText(count: Int?): String? = when {
+    count == null || count <= 0 -> null
+    count > 99 -> "99+"
+    else -> count.toString()
 }
 
 @Composable
@@ -3071,72 +2648,6 @@ private fun MinimalScoreSummaryCard(
 }
 
 @Composable
-private fun MinimalReviewerStatusCard(
-    title: String,
-    value: String,
-    subtitle: String,
-    actionLabel: String,
-    onAction: () -> Unit
-) {
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = 1.dp,
-        cornerRadius = 24.dp
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(text = title, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
-            Text(
-                text = value,
-                style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.ExtraBold),
-                color = StatusRejected
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            MinimalActionButton(
-                label = actionLabel,
-                icon = Icons.Default.Groups,
-                onClick = onAction
-            )
-        }
-    }
-}
-
-@Composable
-private fun MinimalActionButton(
-    label: String,
-    icon: ImageVector,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    ElevatedCard(
-        modifier = modifier,
-        elevation = 0.dp,
-        cornerRadius = 18.dp,
-        onClick = onClick
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-@Composable
 private fun MinimalSummaryCard(
     title: String,
     value: String,
@@ -3186,68 +2697,6 @@ private data class CompactQuickActionData(
     val onClick: () -> Unit,
     val badgeText: String? = null
 )
-
-@Composable
-fun ActionAlertsSection(
-    alerts: DashboardActionAlertsData?,
-    canReviewSubordinates: Boolean
-) {
-    val targetNeedAttention = alerts?.targetNeedAttentionCount ?: 0
-    val realisasiNeedAttention = alerts?.realisasiNeedAttentionCount ?: 0
-    val laporanPending = alerts?.laporanPendingCount ?: 0
-    val subordinateReview = alerts?.subordinateReviewCount ?: 0
-
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(
-            text = "Perlu Tindakan",
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            StatInsightCard(
-                title = "Target",
-                value = targetNeedAttention.toString(),
-                subtitle = "Draft atau revisi aktif",
-                icon = Icons.Default.Checklist,
-                accent = if (targetNeedAttention > 0) StatusPending else SecondaryLight,
-                modifier = Modifier.weight(1f)
-            )
-            StatInsightCard(
-                title = "Realisasi",
-                value = realisasiNeedAttention.toString(),
-                subtitle = "Item belum terisi",
-                icon = Icons.Default.PlaylistAddCheckCircle,
-                accent = if (realisasiNeedAttention > 0) StatusRevised else SecondaryLight,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            StatInsightCard(
-                title = "Laporan",
-                value = laporanPending.toString(),
-                subtitle = "Menunggu tindak lanjut",
-                icon = Icons.Default.AssignmentTurnedIn,
-                accent = if (laporanPending > 0) StatusPending else SecondaryLight,
-                modifier = Modifier.weight(1f)
-            )
-            StatInsightCard(
-                title = if (canReviewSubordinates) "Penilaian Pegawai" else "Review",
-                value = if (canReviewSubordinates) subordinateReview.toString() else "0",
-                subtitle = if (canReviewSubordinates) "Belum final tanpa penilaian saya" else "Belum ada review",
-                icon = if (canReviewSubordinates) Icons.Default.Groups else Icons.Default.TaskAlt,
-                accent = if (canReviewSubordinates && subordinateReview > 0) StatusRejected else SecondaryLight,
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
 
 @Composable
 fun TargetProgressSection(
@@ -4020,69 +3469,6 @@ private fun TargetPeriodGroupCard(
     }
 }
 
-@Composable
-private fun TargetSubordinateEmployeeCard(
-    item: TargetKinerjaItem,
-    reviewMode: Boolean,
-    onClick: () -> Unit
-) {
-    val detailCount = item.detailCount ?: item.details.orEmpty().size
-    val statusColor = targetStatusColor(item.status)
-    val displayStatus = item.status.toTargetDisplayText()
-
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick,
-        elevation = 0.dp,
-        cornerRadius = 18.dp
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = item.pegawaiNama?.takeIf { it.isNotBlank() } ?: "Pegawai #${item.pegawaiId}",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "${formatDashboardTargetPeriod(item.bulan, item.tahun)} - $detailCount item target",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                StatusChip(
-                    text = if (reviewMode) "Buka Detail" else displayStatus,
-                    color = if (reviewMode) StatusPending else statusColor
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                StatusChip(
-                    text = "$detailCount item",
-                    color = PrimaryLight,
-                    modifier = Modifier.weight(1f)
-                )
-                StatusChip(
-                    text = if (item.isAssessmentFinalized == true) "Periode Final" else displayStatus,
-                    color = if (item.isAssessmentFinalized == true) StatusApproved else statusColor,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-    }
-}
-
 private fun formatDashboardTargetPeriod(bulan: Int, tahun: Int): String {
     return SimpleDateFormat("MMMM yyyy", Locale("id", "ID"))
         .format(Calendar.getInstance().apply {
@@ -4230,135 +3616,6 @@ private fun TargetListItemCard(
                     text = item.approverNama?.takeIf { it.isNotBlank() } ?: displayStatus,
                     color = if (reviewMode) StatusPending else statusColor,
                     modifier = Modifier.weight(1f)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun QuickActionsSection(
-    onViewReports: () -> Unit,
-    onTargetKinerja: () -> Unit,
-    onPenilaianKinerja: () -> Unit,
-    onTemplates: () -> Unit,
-    onReminder: () -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(
-            text = "Aksi Cepat",
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-        )
-
-        val actions = listOf(
-            QuickActionData(
-                title = "Laporan",
-                subtitle = "Pantau status",
-                icon = Icons.AutoMirrored.Filled.List,
-                color = SecondaryLight,
-                onClick = onViewReports
-            ),
-            QuickActionData(
-                title = "Target",
-                subtitle = "Kelola target",
-                icon = Icons.Default.TaskAlt,
-                color = PrimaryLight,
-                onClick = onTargetKinerja
-            ),
-            QuickActionData(
-                title = "Penilaian",
-                subtitle = "Review nilai",
-                icon = Icons.Default.AssignmentTurnedIn,
-                color = StatusApproved,
-                onClick = onPenilaianKinerja
-            ),
-            QuickActionData(
-                title = "Template",
-                subtitle = "Mulai lebih cepat",
-                icon = Icons.Default.Bookmark,
-                color = TertiaryLight,
-                onClick = onTemplates
-            ),
-            QuickActionData(
-                title = "Reminder",
-                subtitle = "Kelola agenda",
-                icon = Icons.Default.AlarmOn,
-                color = StatusRevised,
-                onClick = onReminder
-            )
-        )
-
-        actions.chunked(2).forEach { rowItems ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                rowItems.forEach { action ->
-                    QuickActionButton(
-                        title = action.title,
-                        subtitle = action.subtitle,
-                        icon = action.icon,
-                        color = action.color,
-                        modifier = Modifier.weight(1f),
-                        onClick = action.onClick
-                    )
-                }
-
-                if (rowItems.size == 1) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-            }
-        }
-    }
-}
-
-private data class QuickActionData(
-    val title: String,
-    val subtitle: String,
-    val icon: ImageVector,
-    val color: Color,
-    val onClick: () -> Unit
-)
-
-@Composable
-fun QuickActionButton(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    color: Color,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    ElevatedCard(
-        modifier = modifier,
-        onClick = onClick,
-        elevation = 1.dp,
-        cornerRadius = 22.dp
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(color.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = title,
-                    tint = color
-                )
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -4933,74 +4190,5 @@ private fun StatusChip(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-    }
-}
-
-@Composable
-fun TimeSeriesSection(timeSeries: List<TimeSeriesItem>) {
-    val maxValue = timeSeries.maxOfOrNull { it.totalKegiatan.toIntSafe() }?.coerceAtLeast(1) ?: 1
-
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(
-            text = "Tren Aktivitas",
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-        )
-
-        ElevatedCard(
-            modifier = Modifier.fillMaxWidth(),
-            elevation = 1.dp,
-            cornerRadius = 24.dp
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(
-                    text = "Pergerakan 6 bulan terakhir",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-
-                timeSeries.forEach { item ->
-                    val total = item.totalKegiatan.toIntSafe()
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(
-                                    text = item.bulanNama,
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                                )
-                                Text(
-                                    text = "${item.tahun}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = PrimaryLight.copy(alpha = 0.1f)
-                            ) {
-                                Text(
-                                    text = "$total kegiatan",
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = PrimaryLight
-                                )
-                            }
-                        }
-
-                        LinearProgressIndicator(
-                            progress = { total.toFloat() / maxValue.toFloat() },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(10.dp)
-                                .clip(RoundedCornerShape(100)),
-                            color = PrimaryLight,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    }
-                }
-            }
-        }
     }
 }

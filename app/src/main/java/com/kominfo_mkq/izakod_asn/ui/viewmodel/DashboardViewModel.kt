@@ -42,6 +42,8 @@ data class DashboardUiState(
     val isDashboardOverviewLoading: Boolean = false,
     val hasDashboardOverviewLoaded: Boolean = false,
     val tertundaCount: Int? = null,
+    val isDashboardTargetsLoading: Boolean = false,
+    val hasDashboardTargetsLoaded: Boolean = false,
     val targetItems: List<TargetKinerjaItem> = emptyList(),
     val currentPegawaiId: Int? = null,
     val targetPeriodYear: Int? = null,
@@ -194,7 +196,6 @@ class DashboardViewModel : ViewModel() {
             isStale(lastStatistikLoadedAt) ||
             isStale(lastNotificationLoadedAt) ||
             isStale(lastOverviewLoadedAt) ||
-            isStale(lastDashboardTargetsLoadedAt) ||
             isStale(lastTertundaLoadedAt)
 
         if (needsRefresh) {
@@ -207,10 +208,6 @@ class DashboardViewModel : ViewModel() {
         loadStatistik(showFullLoading = showFullLoading)
         loadNotificationCount()
         loadAssessmentSummary(
-            tahun = selectedTargetYear,
-            bulan = selectedTargetMonth
-        )
-        loadDashboardTargets(
             tahun = selectedTargetYear,
             bulan = selectedTargetMonth
         )
@@ -352,17 +349,25 @@ class DashboardViewModel : ViewModel() {
     fun selectTargetPeriod(tahun: Int, bulan: Int) {
         if (tahun <= 0 || bulan !in 1..12) return
 
+        val shouldReloadTargetDetails = _currentTabIndex.value == TARGET_TAB_INDEX ||
+            _uiState.value.hasDashboardTargetsLoaded
+
         selectedTargetYear = tahun
         selectedTargetMonth = bulan
         _uiState.update {
             it.copy(
                 targetPeriodYear = tahun,
                 targetPeriodMonth = bulan,
-                hasDashboardOverviewLoaded = false
+                hasDashboardOverviewLoaded = false,
+                isDashboardTargetsLoading = if (shouldReloadTargetDetails) true else it.isDashboardTargetsLoading,
+                hasDashboardTargetsLoaded = if (shouldReloadTargetDetails) false else it.hasDashboardTargetsLoaded,
+                targetItems = if (shouldReloadTargetDetails) emptyList() else it.targetItems
             )
         }
         loadAssessmentSummary(tahun = tahun, bulan = bulan)
-        loadDashboardTargets(tahun = tahun, bulan = bulan)
+        if (shouldReloadTargetDetails) {
+            loadDashboardTargets(tahun = tahun, bulan = bulan)
+        }
     }
 
     fun loadAssessmentSummary(
@@ -416,6 +421,8 @@ class DashboardViewModel : ViewModel() {
     ) {
         viewModelScope.launch {
             try {
+                _uiState.update { it.copy(isDashboardTargetsLoading = true) }
+
                 val response = ApiClient.eabsenApiService.getTargetKinerjaList(
                     tahun = tahun,
                     bulan = bulan
@@ -428,18 +435,49 @@ class DashboardViewModel : ViewModel() {
                             targetItems = body?.data ?: emptyList(),
                             currentPegawaiId = body?.meta?.currentPegawaiId ?: it.currentPegawaiId,
                             targetPeriodYear = tahun,
-                            targetPeriodMonth = bulan
+                            targetPeriodMonth = bulan,
+                            isDashboardTargetsLoading = false,
+                            hasDashboardTargetsLoaded = true
                         )
                     }
                     lastDashboardTargetsLoadedAt = now()
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isDashboardTargetsLoading = false,
+                            hasDashboardTargetsLoaded = true
+                        )
+                    }
                 }
             } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isDashboardTargetsLoading = false,
+                        hasDashboardTargetsLoaded = true
+                    )
+                }
                 android.util.Log.e(
                     "DashboardViewModel",
                     "❌ Error loading dashboard targets: ${e.message}"
                 )
             }
         }
+    }
+
+    fun loadDashboardTargetsIfNeeded(force: Boolean = false) {
+        val state = _uiState.value
+        if (!force && state.isDashboardTargetsLoading) return
+
+        val shouldLoad = force ||
+            !state.hasDashboardTargetsLoaded ||
+            isStale(lastDashboardTargetsLoadedAt)
+
+        if (!shouldLoad) return
+
+        loadDashboardTargets(
+            tahun = selectedTargetYear,
+            bulan = selectedTargetMonth
+        )
     }
 
     private fun now(): Long = System.currentTimeMillis()
@@ -454,5 +492,6 @@ class DashboardViewModel : ViewModel() {
     private companion object {
         private const val DASHBOARD_REFRESH_TTL_MS = 60_000L
         private const val PROFILE_REFRESH_TTL_MS = 60_000L
+        private const val TARGET_TAB_INDEX = 1
     }
 }

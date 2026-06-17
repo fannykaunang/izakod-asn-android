@@ -19,12 +19,12 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AssignmentTurnedIn
 import androidx.compose.material.icons.filled.AutoGraph
 import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Warning
@@ -294,7 +294,7 @@ fun PenilaianKinerjaListScreen(
                                 selectedYear = year
                             }
                         ) {
-                            Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Periode sebelumnya")
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Periode sebelumnya")
                         }
 
                         Text(
@@ -309,7 +309,7 @@ fun PenilaianKinerjaListScreen(
                                 selectedYear = year
                             }
                         ) {
-                            Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Periode berikutnya")
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Periode berikutnya")
                         }
                     }
                 }
@@ -529,7 +529,7 @@ fun PenilaianBelumDibuatScreen(
                                 selectedYear = year
                             }
                         ) {
-                            Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Periode sebelumnya")
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Periode sebelumnya")
                         }
 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -551,7 +551,7 @@ fun PenilaianBelumDibuatScreen(
                                 selectedYear = year
                             }
                         ) {
-                            Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Periode berikutnya")
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Periode berikutnya")
                         }
                     }
                 }

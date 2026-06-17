@@ -283,15 +283,6 @@ private fun NotificationCard(
                 }
 
                 // Message preview (first 2 lines of WhatsApp message)
-                val cleanMessage = notification.pesan
-                    .filterLegacyVerificationHeader()
-                    .replace("*", "")
-                    .replace("_", "")
-                    .trim()
-                    .split("\n")
-                    .filter { it.isNotBlank() }
-                    .take(3)
-                    .joinToString(" • ")
 
                 Text(
                     text = notification.cleanMessage(),

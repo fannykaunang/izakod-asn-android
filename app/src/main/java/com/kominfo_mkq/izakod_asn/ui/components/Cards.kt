@@ -12,7 +12,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
@@ -60,34 +59,6 @@ fun GradientCard(
                 content = content
             )
         }
-    }
-}
-
-@Composable
-fun GlassmorphicCard(
-    modifier: Modifier = Modifier,
-    elevation: Dp = 2.dp,
-    cornerRadius: Dp = 24.dp,
-    blurRadius: Dp = 0.dp,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Card(
-        modifier = modifier
-            .then(
-                if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier
-            ),
-        shape = RoundedCornerShape(cornerRadius),
-        elevation = CardDefaults.cardElevation(defaultElevation = elevation),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            content = content
-        )
     }
 }
 

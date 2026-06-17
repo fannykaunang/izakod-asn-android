@@ -27,6 +27,7 @@ data class LaporanListUiState(
     val totalFiltered: Int? = null,
     val laporanMeta: LaporanMeta? = null,
     val hasActiveSubordinates: Boolean = false,
+    val ownActionCount: Int = 0,
     val subordinateActionCount: Int = 0,
     val atasanPegawai: AtasanPegawaiData? = null,
     val isLoadingAtasan: Boolean = false,
@@ -161,12 +162,18 @@ class LaporanListViewModel : ViewModel() {
                     } else {
                         _uiState.value.subordinateActionCount
                     }
+                    val ownActionCount = if (includeSubordinates) {
+                        _uiState.value.ownActionCount
+                    } else {
+                        body.data.count { it.isOwnActionReport() }
+                    }
 
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         laporanList = body.data,
                         laporanMeta = body.meta,
                         hasActiveSubordinates = hasActiveSubordinates,
+                        ownActionCount = ownActionCount,
                         subordinateActionCount = subordinateActionCount,
                         filterBulan = null,
                         filterTahun = null,
@@ -174,6 +181,8 @@ class LaporanListViewModel : ViewModel() {
                     )
                     if (!includeSubordinates && hasActiveSubordinates) {
                         refreshSubordinateActionCount(context)
+                    } else if (includeSubordinates) {
+                        refreshOwnActionCount(context)
                     }
                 } else {
                     _uiState.value = _uiState.value.copy(
@@ -204,7 +213,8 @@ class LaporanListViewModel : ViewModel() {
                         laporanList = body.data?.laporan ?: emptyList(),
                         filterBulan = body.meta?.bulan,
                         filterTahun = body.meta?.tahun,
-                        totalFiltered = body.meta?.total
+                        totalFiltered = body.meta?.total,
+                        ownActionCount = body.data?.laporan.orEmpty().count { it.isOwnActionReport() }
                     )
                 } else {
                     _uiState.value = _uiState.value.copy(
@@ -244,6 +254,30 @@ class LaporanListViewModel : ViewModel() {
         } catch (e: Exception) {
             Log.w(TAG, "refreshSubordinateActionCount failed: ${e.message}")
         }
+    }
+
+    private suspend fun refreshOwnActionCount(context: Context) {
+        try {
+            val response = repository.getLaporanList(
+                context = context,
+                includeSubordinates = false
+            )
+            val body = response.body()
+            if (response.isSuccessful && body?.success == true) {
+                _uiState.value = _uiState.value.copy(
+                    ownActionCount = body.data.count { it.isOwnActionReport() }
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "refreshOwnActionCount failed: ${e.message}")
+        }
+    }
+}
+
+private fun LaporanKegiatan.isOwnActionReport(): Boolean {
+    return when (statusLaporan.trim().lowercase()) {
+        "draft", "ditolak", "rejected", "revisi", "perlu revisi", "revised", "revision" -> true
+        else -> false
     }
 }
 

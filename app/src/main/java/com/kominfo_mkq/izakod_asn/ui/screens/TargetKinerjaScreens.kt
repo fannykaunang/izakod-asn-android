@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Close
@@ -38,7 +39,6 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Description
@@ -966,7 +966,7 @@ fun TargetKinerjaDetailScreen(
                                     },
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    Icon(Icons.Default.Send, contentDescription = null)
+                                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text("Ajukan")
                                 }
@@ -2505,260 +2505,6 @@ private fun TargetSoftPill(
 }
 
 @Composable
-private fun TargetDetailItemCard(
-    detail: TargetKinerjaDetailItem,
-    realisasi: RealisasiKinerjaItem?,
-    linkedLaporan: List<RealisasiLinkedLaporanItem>,
-    candidateLaporan: List<LaporanKegiatan>,
-    draft: RealisasiFormState,
-    canManageRealisasi: Boolean,
-    isAssessmentFinalized: Boolean,
-    showRealisasiSection: Boolean,
-    realisasiHistory: List<RealisasiKinerjaHistoryItem>,
-    isSaving: Boolean,
-    isLinking: Boolean,
-    unlinkingKey: String?,
-    onDraftChange: (RealisasiFormState) -> Unit,
-    onSaveRealisasi: () -> Unit,
-    onOpenLaporanPicker: () -> Unit,
-    onUnlinkLaporan: (Int) -> Unit
-) {
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Text(
-                text = detail.uraianTarget,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-            )
-
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(end = 4.dp)
-            ) {
-                item { InfoMiniChip(icon = Icons.Outlined.Description, text = detail.indikator ?: "-") }
-                item { InfoMiniChip(icon = Icons.Default.Flag, text = "Bobot ${formatNullableDouble(detail.bobot)}%") }
-            }
-
-            HorizontalDivider()
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                InfoBoxTarget(
-                    label = "Satuan",
-                    value = detail.satuan ?: "-",
-                    modifier = Modifier.weight(1f)
-                )
-                InfoBoxTarget(
-                    label = "Kuantitas",
-                    value = formatNullableDouble(detail.targetKuantitas),
-                    modifier = Modifier.weight(1f)
-                )
-                InfoBoxTarget(
-                    label = "Kualitas",
-                    value = formatNullableDouble(detail.targetKualitas),
-                    modifier = Modifier.weight(1f)
-                )
-                InfoBoxTarget(
-                    label = "Waktu",
-                    value = formatNullableDouble(detail.targetWaktu),
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            if (showRealisasiSection) {
-                HorizontalDivider()
-
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(
-                                text = "Realisasi Item",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Text(
-                                text = "Isi capaian aktual dan tautkan laporan pendukung untuk item target ini.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        StatusBadgeTarget(
-                            status = if (hasFilledRealisasi(realisasi)) "final" else "draft"
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        InfoBoxTarget(
-                            label = "Status",
-                            value = if (hasFilledRealisasi(realisasi)) "Sudah diisi" else "Belum diisi",
-                            modifier = Modifier.weight(1f)
-                        )
-                        InfoBoxTarget(
-                            label = "Laporan",
-                            value = linkedLaporan.size.toString(),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    OutlinedTextField(
-                        value = draft.realisasiKuantitas,
-                        onValueChange = { onDraftChange(draft.copy(realisasiKuantitas = it)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Realisasi Kuantitas") },
-                        placeholder = { Text("Contoh: 12 dokumen") },
-                        enabled = canManageRealisasi && !isSaving
-                    )
-                    OutlinedTextField(
-                        value = draft.realisasiKualitas,
-                        onValueChange = { onDraftChange(draft.copy(realisasiKualitas = it)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Realisasi Kualitas") },
-                        placeholder = { Text("Contoh: 90%") },
-                        enabled = canManageRealisasi && !isSaving
-                    )
-                    OutlinedTextField(
-                        value = draft.realisasiWaktu,
-                        onValueChange = { onDraftChange(draft.copy(realisasiWaktu = it)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Realisasi Waktu") },
-                        placeholder = { Text("Contoh: 30 hari") },
-                        enabled = canManageRealisasi && !isSaving
-                    )
-                    OutlinedTextField(
-                        value = draft.catatan,
-                        onValueChange = { onDraftChange(draft.copy(catatan = it)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3,
-                        label = { Text("Catatan Realisasi") },
-                        placeholder = { Text("Contoh: Kegiatan selesai sesuai rencana.") },
-                        enabled = canManageRealisasi && !isSaving
-                    )
-
-                    if (canManageRealisasi) {
-                        Button(
-                            onClick = onSaveRealisasi,
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !isSaving
-                        ) {
-                            Icon(Icons.Default.Save, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(if (isSaving) "Menyimpan..." else "Simpan Realisasi")
-                        }
-                    } else {
-                        Text(
-                            text = if (isAssessmentFinalized) {
-                                "Periode ini sudah dikunci karena penilaian kinerja sudah final. Realisasi dan tautan laporan hanya bisa dilihat."
-                            } else {
-                                "Mode baca saja. Realisasi dapat diisi oleh pemilik target atau admin saat target sudah disetujui/final."
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Text(
-                        text = "Laporan Pendukung",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                    )
-
-                    if (linkedLaporan.isEmpty()) {
-                        Text(
-                            text = "Belum ada laporan yang ditautkan ke item ini.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            linkedLaporan.forEach { laporan ->
-                                ElevatedCard(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(16.dp)
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Text(
-                                            text = laporan.namaKegiatan,
-                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                                        )
-                                        Text(
-                                            text = "${formatTargetTanggalShort(laporan.tanggalKegiatan)} • ${formatTargetRentangWaktu(laporan.waktuMulai, laporan.waktuSelesai)}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Text(
-                                            text = laporan.namaKategori ?: "Tanpa kategori",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                        if (canManageRealisasi) {
-                                            TextButton(
-                                                onClick = { onUnlinkLaporan(laporan.laporanId) },
-                                                enabled = unlinkingKey != "${detail.id}-${laporan.laporanId}"
-                                            ) {
-                                                Icon(Icons.Default.Delete, contentDescription = null)
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    if (unlinkingKey == "${detail.id}-${laporan.laporanId}") {
-                                                        "Melepas..."
-                                                    } else {
-                                                        "Lepas"
-                                                    }
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if (canManageRealisasi) {
-                        Button(
-                            onClick = onOpenLaporanPicker,
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = realisasi != null && !isLinking && candidateLaporan.isNotEmpty()
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                when {
-                                    realisasi == null -> "Simpan realisasi dulu"
-                                    candidateLaporan.isEmpty() -> "Semua laporan sudah tertaut"
-                                    isLinking -> "Menautkan..."
-                                    else -> "Tautkan Laporan Pendukung"
-                                }
-                            )
-                        }
-                    }
-
-                    if (realisasiHistory.isNotEmpty()) {
-                        HorizontalDivider()
-                        RealisasiHistorySection(history = realisasiHistory)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun LockedPeriodBanner() {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
@@ -2965,135 +2711,6 @@ private fun TimelineHistoryRow(
     }
 }
 
-@Composable
-private fun TargetHistorySectionLegacy(history: List<TargetKinerjaHistoryItem>) {
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                text = "Riwayat Target",
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-            )
-            if (history.isEmpty()) {
-                Text(
-                    text = "Belum ada riwayat target.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    history.forEach { item ->
-                        HistoryRowCard(
-                            title = readableHistoryAction(item.aksi),
-                            subtitle = buildString {
-                                if (!item.statusDari.isNullOrBlank() || !item.statusKe.isNullOrBlank()) {
-                                    append(
-                                        "${readableStatus(item.statusDari)} → ${readableStatus(item.statusKe)}"
-                                    )
-                                }
-                                if (!item.aksiRole.isNullOrBlank()) {
-                                    if (isNotBlank()) append(" • ")
-                                    append(item.aksiRole)
-                                }
-                                if (!item.aksiSumber.isNullOrBlank()) {
-                                    if (isNotBlank()) append(" • ")
-                                    append(item.aksiSumber)
-                                }
-                            }.ifBlank { "Perubahan target" },
-                            note = item.catatan,
-                            timestamp = formatHistoryTimestamp(item.createdAt)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun RealisasiHistorySectionLegacy(history: List<RealisasiKinerjaHistoryItem>) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            text = "Riwayat Realisasi",
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-        )
-        history.forEach { item ->
-            HistoryRowCard(
-                title = readableHistoryAction(item.aksi),
-                subtitle = buildString {
-                    if (!item.aksiRole.isNullOrBlank()) {
-                        append(item.aksiRole)
-                    }
-                    if (!item.aksiSumber.isNullOrBlank()) {
-                        if (isNotBlank()) append(" • ")
-                        append(item.aksiSumber)
-                    }
-                }.ifBlank { "Pembaruan realisasi" },
-                note = item.catatan,
-                timestamp = formatHistoryTimestamp(item.createdAt)
-            )
-        }
-    }
-}
-
-@Composable
-private fun HistoryRowCard(
-    title: String,
-    subtitle: String,
-    note: String?,
-    timestamp: String
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                    )
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = timestamp,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            if (!note.isNullOrBlank()) {
-                Text(
-                    text = note,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
 private fun readableHistoryAction(value: String): String = when (value.lowercase()) {
     "create", "created" -> "Dibuat"
     "update", "updated" -> "Diperbarui"
@@ -3105,16 +2722,6 @@ private fun readableHistoryAction(value: String): String = when (value.lowercase
     "unlink_laporan" -> "Lepas Laporan"
     "finalize", "finalized" -> "Difinalkan"
     else -> value.replace('_', ' ').replaceFirstChar { it.uppercase() }
-}
-
-private fun readableStatus(value: String?): String = when (value?.lowercase()) {
-    null, "" -> "-"
-    "draft" -> "Draft"
-    "diajukan" -> "Diajukan"
-    "disetujui" -> "Disetujui"
-    "revisi" -> "Revisi"
-    "final" -> "Final"
-    else -> value.replaceFirstChar { it.uppercase() }
 }
 
 private fun formatHistoryTimestamp(value: String): String {
@@ -3336,32 +2943,6 @@ private fun InfoBoxTarget(
             Text(
                 text = value,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-            )
-        }
-    }
-}
-
-@Composable
-private fun DetailCardSection(
-    title: String,
-    body: String
-) {
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-            )
-            Text(
-                text = body,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

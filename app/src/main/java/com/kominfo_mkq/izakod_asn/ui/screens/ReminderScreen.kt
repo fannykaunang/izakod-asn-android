@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -46,11 +45,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -76,7 +72,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -880,64 +875,6 @@ fun DaySelector(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TipeReminderSelector(
-    selectedTipe: String,
-    onTipeSelected: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val tipeOptions = listOf("Harian", "Mingguan", "Bulanan", "Sekali")
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = !expanded },
-        modifier = modifier
-    ) {
-        OutlinedTextField(
-            value = selectedTipe,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Pola pengingat") },
-            trailingIcon = {
-                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-            },
-            modifier = Modifier
-                .menuAnchor()
-                .fillMaxWidth()
-        )
-
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            tipeOptions.forEach { tipe ->
-                DropdownMenuItem(
-                    text = {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(12.dp)
-                                    .clip(CircleShape)
-                                    .background(reminderAccentColor(tipe))
-                            )
-                            Text(tipe)
-                        }
-                    },
-                    onClick = {
-                        onTipeSelected(tipe)
-                        expanded = false
-                    }
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
 fun TanggalSpesifikPicker(
     selectedDate: String,
     onDateSelected: (String) -> Unit,
@@ -1185,7 +1122,7 @@ private fun parseDateToMillis(dateString: String): Long {
         val format = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         format.timeZone = TimeZone.getTimeZone("UTC")
         format.parse(dateString)?.time ?: System.currentTimeMillis()
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         System.currentTimeMillis()
     }
 }
@@ -1204,7 +1141,7 @@ private fun parseTime(timeString: String): Pair<Int, Int> {
         } else {
             Pair(8, 0)
         }
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         Pair(8, 0)
     }
 }

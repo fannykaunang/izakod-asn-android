@@ -1031,67 +1031,6 @@ private fun SettingsActionSection(
 }
 
 @Composable
-private fun SimpleActionSection(
-    items: List<SettingSimpleAction>
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column {
-            items.forEachIndexed { index, item ->
-                SimpleActionRow(item = item)
-                if (index != items.lastIndex) {
-                    DividerLike()
-                }
-            }
-        }
-    }
-}
-
-private data class SettingSimpleAction(
-    val title: String,
-    val subtitle: String,
-    val tint: Color? = null,
-    val onClick: () -> Unit
-)
-
-@Composable
-private fun SimpleActionRow(item: SettingSimpleAction) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = item.onClick)
-            .padding(horizontal = 16.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = item.title,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                color = item.tint ?: MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = item.subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            tint = item.tint ?: MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
 private fun ProfileLoadingContent() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {

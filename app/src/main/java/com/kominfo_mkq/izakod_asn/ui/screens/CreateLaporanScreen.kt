@@ -45,7 +45,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Link
@@ -124,6 +123,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * CreateLaporanScreen - Form untuk membuat laporan kegiatan baru
@@ -215,7 +215,7 @@ fun CreateLaporanScreen(
             android.util.Log.d("CreateLaporanScreen", "✅ Success! Showing toast and navigating...")
             Toast.makeText(context, "Laporan berhasil disimpan!", Toast.LENGTH_SHORT).show()
 
-            kotlinx.coroutines.delay(500)
+            kotlinx.coroutines.delay(500.milliseconds)
             onNavigateBack()
         }
     }
@@ -1451,96 +1451,6 @@ private fun SectionCaption(text: String) {
         modifier = Modifier.padding(bottom = 14.dp)
     )
 }
-
-@Composable
-private fun InfoAlert() {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Icon(
-                Icons.Default.Info,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Column {
-                Text(
-                    "Informasi Penting:",
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    "• Pastikan Anda sudah melakukan absensi untuk tanggal kegiatan\n" +
-                            "• Field bertanda * wajib diisi\n" +
-                            "• Anda dapat menyimpan sebagai Draft atau langsung Mengajukan",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-        }
-    }
-}
-
-//@Composable
-//private fun ErrorAlert(
-//    message: String,
-//    requiresAttendance: Boolean,
-//    onDismiss: () -> Unit
-//) {
-//    Card(
-//        modifier = Modifier
-//            .fillMaxWidth()
-//            .padding(horizontal = 16.dp, vertical = 8.dp),
-//        colors = CardDefaults.cardColors(
-//            containerColor = MaterialTheme.colorScheme.errorContainer
-//        )
-//    ) {
-//        Row(
-//            modifier = Modifier.padding(16.dp),
-//            horizontalArrangement = Arrangement.spacedBy(12.dp),
-//            verticalAlignment = Alignment.Top
-//        ) {
-//            Icon(
-//                Icons.Default.Warning,
-//                contentDescription = null,
-//                tint = MaterialTheme.colorScheme.error
-//            )
-//            Column(modifier = Modifier.weight(1f)) {
-//                Text(
-//                    if (requiresAttendance) "Belum Absen" else "Error",
-//                    style = MaterialTheme.typography.titleSmall.copy(
-//                        fontWeight = FontWeight.Bold
-//                    ),
-//                    color = MaterialTheme.colorScheme.onErrorContainer
-//                )
-//                Spacer(modifier = Modifier.height(4.dp))
-//                Text(
-//                    message,
-//                    style = MaterialTheme.typography.bodySmall,
-//                    color = MaterialTheme.colorScheme.onErrorContainer
-//                )
-//            }
-//            IconButton(onClick = onDismiss) {
-//                Icon(
-//                    Icons.Default.Close,
-//                    contentDescription = "Tutup",
-//                    tint = MaterialTheme.colorScheme.onErrorContainer
-//                )
-//            }
-//        }
-//    }
-//}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
