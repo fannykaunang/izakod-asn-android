@@ -179,6 +179,10 @@ class DashboardViewModel : ViewModel() {
         force: Boolean = false
     ) {
         val state = _uiState.value
+        if (!force && (state.isLoading || state.isRefreshing || state.isDashboardOverviewLoading)) {
+            return
+        }
+
         val needsInitialLoad = !hasStartedInitialLoad ||
             state.metrics == null ||
             !state.hasDashboardOverviewLoaded ||

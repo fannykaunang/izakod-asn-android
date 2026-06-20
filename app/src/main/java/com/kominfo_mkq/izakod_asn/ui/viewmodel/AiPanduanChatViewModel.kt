@@ -177,6 +177,30 @@ class AiPanduanChatViewModel : ViewModel() {
 
 private val assistantTopics = listOf(
     AiPanduanTopic(
+        id = "nominal-entago-muncul",
+        title = "Agar nominal muncul di E-NTAGO",
+        question = "Bagaimana urutan agar nominal TPP/Gaji muncul di dashboard E-NTAGO?",
+        description = "Urutan dari sinkron pegawai sampai finalisasi OPD.",
+        sourceTitle = "Panduan Operator Nominal TPP/Gaji Muncul di E-NTAGO",
+        answer = "Mulai dari Sinkronisasi Pegawai agar data pegawai dari E-NTAGO tersedia di IZAKOD-ASN. Setelah itu OPD perlu melengkapi profil TPP/Gaji, memastikan periode dibuka, menyinkronkan rekap absensi, menghitung dan menyimpan hasil, mengajukan, memverifikasi, lalu memfinalkan.\n\nUntuk ASN/PPPK, jalurnya adalah TPP ASN/PPPK. Untuk Non-ASN/Honorer/Kontrak, jalurnya adalah Gaji Non-ASN. Sinkronisasi pegawai hanya menyiapkan data identitas, sehingga tidak otomatis membuat nominal muncul.\n\nJika yang tampil masih estimasi, angka tersebut masih sementara. Angka resmi muncul setelah proses OPD selesai sampai tahap final sesuai periode."
+    ),
+    AiPanduanTopic(
+        id = "alur-tpp-opd",
+        title = "Urutan kerja TPP OPD",
+        question = "Apa urutan kerja operator untuk Profil TPP dan Perhitungan TPP OPD?",
+        description = "Dari profil TPP sampai ajukan pengajuan OPD.",
+        sourceTitle = "AI Tanya Panduan SOP IZAKOD-ASN",
+        answer = "Untuk ASN/PPPK, mulai dari Profil Pegawai TPP. Pilih OPD yang benar, pastikan profil dibuat, cocokkan jabatan E-NTAGO dengan referensi jabatan TPP, lengkapi kelas jabatan dan golongan pajak, lalu verifikasi profil.\n\nSetelah profil siap, lanjut ke Perhitungan TPP OPD. Cek periode dan OPD, pastikan profil TPP serta rekap kehadiran siap, jalankan Hitung TPP, cek pajak golongan dan total dibayar, lalu ajukan OPD jika data sudah lengkap.\n\nJika tombol hitung atau ajukan tidak bisa dipakai, penyebab umum adalah periode dikunci, profil belum siap, rekap belum tersedia, pajak belum lengkap, atau pengajuan sudah masuk proses verifikasi."
+    ),
+    AiPanduanTopic(
+        id = "alur-gaji-non-asn-opd",
+        title = "Urutan kerja Gaji Non-ASN",
+        question = "Apa urutan kerja operator untuk Gaji Non-ASN?",
+        description = "Profil gaji, kontrak, rekap, hitung, ajukan, verifikasi.",
+        sourceTitle = "AI Tanya Panduan SOP IZAKOD-ASN",
+        answer = "Untuk Non-ASN/Honorer/Kontrak, mulai dari profil gaji. Pastikan profil gaji tersedia dan aktif, kontrak aktif terhubung, serta tarif atau komponen gaji yang berlaku sudah tersedia.\n\nSetelah itu buka Gaji Non-ASN: sinkronkan rekap absensi periode yang diproses, jalankan preview hitung untuk melihat pegawai siap dan tertahan, simpan hasil perhitungan, lalu ajukan OPD.\n\nBagian Keuangan OPD memverifikasi jika data sudah sesuai atau meminta revisi jika masih ada masalah. Jika profil gaji, kontrak aktif, atau rekap absensi belum lengkap, Gaji Saya bisa belum muncul atau masih estimasi."
+    ),
+    AiPanduanTopic(
         id = "target-laporan",
         title = "Target dulu atau laporan dulu?",
         question = "Saya harus buat target dulu atau laporan dulu?",
