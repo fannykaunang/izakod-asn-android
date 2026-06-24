@@ -1,6 +1,7 @@
 package com.kominfo_mkq.izakod_asn
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -23,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -33,8 +35,12 @@ import androidx.lifecycle.lifecycleScope
 import com.kominfo_mkq.izakod_asn.data.local.AppContextHolder
 import com.kominfo_mkq.izakod_asn.data.local.TokenStore
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
+import com.kominfo_mkq.izakod_asn.data.model.AppVersionPolicy
+import com.kominfo_mkq.izakod_asn.data.repository.AppVersionRepository
 import com.kominfo_mkq.izakod_asn.data.repository.AuthRepository
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
+import com.kominfo_mkq.izakod_asn.fcm.DeviceInfo
+import com.kominfo_mkq.izakod_asn.ui.components.AppUpdateDialog
 import com.kominfo_mkq.izakod_asn.ui.navigation.IZAKODNavigation
 import com.kominfo_mkq.izakod_asn.ui.navigation.Screen
 import com.kominfo_mkq.izakod_asn.ui.navigation.mobileSsoBridgeRoute
@@ -147,6 +153,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             var isDarkTheme by remember { mutableStateOf(userPrefs.isDarkTheme()) }
+            var appUpdatePolicy by remember { mutableStateOf<AppVersionPolicy?>(null) }
+            val appUpdateScope = rememberCoroutineScope()
             var pendingExternalRoute by rememberSaveable {
                 mutableStateOf(
                     if (initialSsoTicket == null) initialExternalRoute?.route else null
@@ -158,6 +166,10 @@ class MainActivity : ComponentActivity() {
                 } else {
                     checkAndRestoreSession()
                 }
+            }
+
+            LaunchedEffect(Unit) {
+                appUpdatePolicy = performAppVersionStartupCheck(userPrefs)
             }
 
             DisposableEffect(Unit) {
@@ -196,6 +208,62 @@ class MainActivity : ComponentActivity() {
                             userPrefs.setDarkTheme(enabled) // simpan preferensi
                         }
                     )
+
+                    appUpdatePolicy?.let { policy ->
+                        val isUpdateRequired = policy.isUpdateRequiredForCurrentVersion(
+                            DeviceInfo.appVersionCode(applicationContext)
+                        )
+
+                        LaunchedEffect(policy.policyId, policy.latestVersionCode, isUpdateRequired) {
+                            val eventResult = AppVersionRepository(applicationContext).recordUpdateEvent(
+                                eventType = AppVersionRepository.EVENT_UPDATE_SHOWN,
+                                policy = policy,
+                                source = "update_dialog"
+                            )
+                            if (!eventResult.success) {
+                                Log.w("MainActivity", "Update shown event skipped: ${eventResult.error}")
+                            }
+                        }
+
+                        AppUpdateDialog(
+                            policy = policy,
+                            isRequired = isUpdateRequired,
+                            onDismissRequest = {
+                                if (!isUpdateRequired) {
+                                    appUpdateScope.launch {
+                                        AppVersionRepository(applicationContext).recordUpdateEvent(
+                                            eventType = AppVersionRepository.EVENT_UPDATE_DISMISSED,
+                                            policy = policy,
+                                            source = "update_dialog"
+                                        )
+                                    }
+                                    appUpdatePolicy = null
+                                }
+                            },
+                            onSkipClick = {
+                                if (!isUpdateRequired) {
+                                    appUpdateScope.launch {
+                                        AppVersionRepository(applicationContext).recordUpdateEvent(
+                                            eventType = AppVersionRepository.EVENT_UPDATE_SKIPPED,
+                                            policy = policy,
+                                            source = "update_dialog"
+                                        )
+                                    }
+                                    appUpdatePolicy = null
+                                }
+                            },
+                            onUpdateClick = {
+                                appUpdateScope.launch {
+                                    AppVersionRepository(applicationContext).recordUpdateEvent(
+                                        eventType = AppVersionRepository.EVENT_UPDATE_CLICKED,
+                                        policy = policy,
+                                        source = "update_dialog"
+                                    )
+                                }
+                                openAppStore(policy)
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -249,6 +317,93 @@ class MainActivity : ComponentActivity() {
                 StatistikRepository.setUserData(it.pegawaiId, it.pin)
                 Log.d("MainActivity", "✅ Session restored on resume")
             }
+        }
+    }
+
+    private suspend fun performAppVersionStartupCheck(prefs: UserPreferences): AppVersionPolicy? {
+        val repository = AppVersionRepository(applicationContext)
+        val currentVersionCode = DeviceInfo.appVersionCode(applicationContext)
+        val currentVersionName = DeviceInfo.appVersion(applicationContext)
+        val previousVersionCode = prefs.getLastSeenAppVersionCode()
+        val previousVersionName = prefs.getLastSeenAppVersionName()
+        val cachedBeforeCheck = repository.getCachedAppVersionPolicy()
+        var policy = cachedBeforeCheck
+        val appVersionChanged = previousVersionCode != null && currentVersionCode > previousVersionCode
+        val cachedPolicyNeedsPrompt = cachedBeforeCheck
+            ?.shouldPromptForCurrentVersion(currentVersionCode) == true
+
+        if (repository.shouldCheckAppVersion() || appVersionChanged || cachedPolicyNeedsPrompt) {
+            val result = repository.getAppVersionPolicy(
+                forceRefresh = appVersionChanged || cachedPolicyNeedsPrompt
+            )
+            if (result.success) {
+                policy = result.data ?: repository.getCachedAppVersionPolicy()
+            } else {
+                Log.w("MainActivity", "App version check skipped: ${result.error}")
+            }
+        }
+
+        if (appVersionChanged) {
+            val eventResult = repository.recordUpdateEvent(
+                eventType = AppVersionRepository.EVENT_UPDATE_COMPLETED,
+                policy = policy,
+                source = "app_start",
+                fromVersionCode = previousVersionCode,
+                fromVersionName = previousVersionName,
+                toVersionCode = currentVersionCode,
+                toVersionName = currentVersionName,
+                metadata = mapOf("detected_by" to "app_start_version_change")
+            )
+
+            if (!eventResult.success) {
+                Log.w("MainActivity", "Update completed event skipped: ${eventResult.error}")
+            }
+        }
+
+        prefs.saveLastSeenAppVersion(currentVersionCode, currentVersionName)
+        return policy?.takeIf { it.shouldPromptForCurrentVersion(currentVersionCode) }
+    }
+
+    private fun openAppStore(policy: AppVersionPolicy) {
+        val targetPackageName = policy.packageName?.takeIf { it.isNotBlank() } ?: packageName
+        val storeUrl = policy.storeUrl?.takeIf { it.isNotBlank() }
+
+        if (storeUrl != null && openUri(storeUrl)) return
+        if (openUri("market://details?id=$targetPackageName")) return
+        openUri("https://play.google.com/store/apps/details?id=$targetPackageName")
+    }
+
+    private fun AppVersionPolicy.shouldPromptForCurrentVersion(currentVersionCode: Int): Boolean {
+        return isUpdateRequiredForCurrentVersion(currentVersionCode) ||
+            isUpdateAvailableForCurrentVersion(currentVersionCode)
+    }
+
+    private fun AppVersionPolicy.isUpdateRequiredForCurrentVersion(currentVersionCode: Int): Boolean {
+        val minimumCode = minimumSupportedVersionCode
+        return if (minimumCode != null) {
+            currentVersionCode < minimumCode
+        } else {
+            updateRequired
+        }
+    }
+
+    private fun AppVersionPolicy.isUpdateAvailableForCurrentVersion(currentVersionCode: Int): Boolean {
+        val latestCode = latestVersionCode
+        return if (latestCode != null) {
+            currentVersionCode < latestCode
+        } else {
+            updateAvailable
+        }
+    }
+
+    private fun openUri(rawUri: String): Boolean {
+        return try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(rawUri)))
+            true
+        } catch (_: ActivityNotFoundException) {
+            false
+        } catch (_: Exception) {
+            false
         }
     }
 

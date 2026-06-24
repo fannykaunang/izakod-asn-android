@@ -28,6 +28,7 @@ import com.kominfo_mkq.izakod_asn.data.local.TokenStore
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.MobileSsoTarget
 import com.kominfo_mkq.izakod_asn.data.repository.AuthRepository
+import com.kominfo_mkq.izakod_asn.data.repository.LoginSessionPostSetup
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
 import org.json.JSONObject
 
@@ -57,6 +58,8 @@ fun MobileSsoBridgeScreen(
             val user = data?.user
             val pegawaiId = user?.pegawaiId ?: 0
             val pin = user?.pin?.trim().orEmpty()
+            val entagoAccessToken = data?.entagoAccessToken?.trim().orEmpty()
+            val entagoRefreshToken = data?.entagoRefreshToken?.trim().orEmpty()
 
             Log.d(
                 MOBILE_SSO_PAYROLL_LOG_TAG,
@@ -75,6 +78,12 @@ fun MobileSsoBridgeScreen(
                 )
             }
 
+            if (entagoAccessToken.isBlank() || entagoRefreshToken.isBlank()) {
+                throw IllegalStateException(
+                    "Sesi E-NTAGO dari login otomatis belum lengkap. Silakan login ulang di E-NTAGO lalu coba lagi."
+                )
+            }
+
             val userPrefs = UserPreferences(context)
             userPrefs.clearEntagoTokens()
             userPrefs.saveSession(
@@ -84,6 +93,8 @@ fun MobileSsoBridgeScreen(
                 skpdid = user?.skpdid ?: 0,
                 pegawaiId = pegawaiId
             )
+            userPrefs.setEntagoAccessToken(entagoAccessToken)
+            userPrefs.setEntagoRefreshToken(entagoRefreshToken)
             userPrefs.setMobileJwtToken(token)
             userPrefs.setRefreshToken(data.refreshToken?.trim())
             userPrefs.saveProfileSnapshot(user)
@@ -102,6 +113,7 @@ fun MobileSsoBridgeScreen(
             TokenStore.setToken(token)
             TokenStore.setRefreshToken(data.refreshToken?.trim())
             StatistikRepository.setUserData(pegawaiId = pegawaiId, pin = pin)
+            LoginSessionPostSetup.registerFcmTokenIfPossible(context)
 
             data.target?.route?.takeIf { it.isNotBlank() }
                 ?: fallbackRoute?.takeIf { it.isNotBlank() }

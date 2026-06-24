@@ -4,21 +4,17 @@ import android.app.Application
 import android.util.Base64
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.firebase.messaging.FirebaseMessaging
 import com.kominfo_mkq.izakod_asn.data.local.TokenStore
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.AuthenticatedSession
-import com.kominfo_mkq.izakod_asn.data.model.FcmRegisterRequest
 import com.kominfo_mkq.izakod_asn.data.model.MobileTokenResponse
-import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
 import com.kominfo_mkq.izakod_asn.data.repository.AuthRepository
+import com.kominfo_mkq.izakod_asn.data.repository.LoginSessionPostSetup
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
-import com.kominfo_mkq.izakod_asn.fcm.DeviceInfo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import org.json.JSONObject
 
 data class LoginUiState(
@@ -69,31 +65,9 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
-            try {
-                val token = TokenStore.getToken() ?: userPrefs.getMobileJwtToken()
-                if (token.isNullOrBlank()) return@launch
-
-                val ctx = getApplication<Application>().applicationContext
-                val fcmToken = FirebaseMessaging.getInstance().token.await()
-                userPrefs.setMobileFcmToken(fcmToken)
-
-                val regResp = ApiClient.eabsenApiService.registerFcmToken(
-                    FcmRegisterRequest(
-                        fcm_token = fcmToken,
-                        device_id = DeviceInfo.androidId(ctx),
-                        device_model = DeviceInfo.model(),
-                        app_version = DeviceInfo.appVersion(ctx)
-                    )
-                )
-
-                if (!regResp.isSuccessful) {
-                    android.util.Log.w("FCM", "ensure register failed: ${regResp.code()}")
-                } else {
-                    android.util.Log.d("FCM", "ensure register success")
-                }
-            } catch (e: Exception) {
-                android.util.Log.w("FCM", "ensure register exception: ${e.message}")
-            }
+            LoginSessionPostSetup.registerFcmTokenIfPossible(
+                getApplication<Application>().applicationContext
+            )
         }
 
         return true
@@ -158,33 +132,9 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                         pin = userData.pin
                     )
 
-                    val ctx = getApplication<Application>().applicationContext
-                    val fcmToken = FirebaseMessaging.getInstance().token.await()
-                    userPrefs.setMobileFcmToken(fcmToken)
-
-                    val appVersion = DeviceInfo.appVersion(ctx)
-
-                    try {
-                        val regResp = ApiClient.eabsenApiService.registerFcmToken(
-                            FcmRegisterRequest(
-                                fcm_token = fcmToken,
-                                device_id = DeviceInfo.androidId(ctx),
-                                device_model = DeviceInfo.model(),
-                                app_version = appVersion
-                            )
-                        )
-
-                        if (!regResp.isSuccessful) {
-                            android.util.Log.w(
-                                "FCM",
-                                "registerFcmToken failed: ${regResp.code()} ${regResp.errorBody()?.string()}"
-                            )
-                        } else {
-                            android.util.Log.d("FCM", "registerFcmToken success")
-                        }
-                    } catch (e: Exception) {
-                        android.util.Log.w("FCM", "registerFcmToken exception: ${e.message}")
-                    }
+                    LoginSessionPostSetup.registerFcmTokenIfPossible(
+                        getApplication<Application>().applicationContext
+                    )
 
                     _uiState.value = LoginUiState(
                         isSuccess = true,

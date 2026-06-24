@@ -29,4 +29,25 @@ object DeviceInfo {
             info.versionName ?: "unknown"
         }.getOrDefault("unknown")
     }
+
+    fun appVersionCode(context: Context): Int {
+        return runCatching {
+            val pm = context.packageManager
+            val pkg = context.packageName
+
+            val info = if (Build.VERSION.SDK_INT >= 33) {
+                pm.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(pkg, 0)
+            }
+
+            if (Build.VERSION.SDK_INT >= 28) {
+                info.longVersionCode.toInt()
+            } else {
+                @Suppress("DEPRECATION")
+                info.versionCode
+            }
+        }.getOrDefault(0)
+    }
 }

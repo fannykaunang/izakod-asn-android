@@ -65,10 +65,15 @@ class AtasanPegawaiRepository {
 
     suspend fun getUsulan(
         status: String? = null,
-        limit: Int = 100
+        limit: Int = 100,
+        scope: String? = null
     ): ApiResponse<List<AtasanPegawaiUsulanItem>> = withContext(Dispatchers.IO) {
         try {
-            val response = apiService.getAtasanPegawaiUsulan(status = status, limit = limit)
+            val response = apiService.getAtasanPegawaiUsulan(
+                status = status,
+                limit = limit,
+                scope = scope
+            )
             if (response.isSuccessful) {
                 val body = response.body()
                 if (body?.success == true) {

@@ -21,6 +21,7 @@ data class AtasanPegawaiUiState(
     val isRefreshing: Boolean = false,
     val isMutating: Boolean = false,
     val currentPegawaiId: Int? = null,
+    val canManagePersonalSubordinates: Boolean = false,
     val bawahan: List<AtasanPegawaiData> = emptyList(),
     val kandidat: List<KandidatBawahanItem> = emptyList(),
     val usulan: List<AtasanPegawaiUsulanItem> = emptyList(),
@@ -49,7 +50,7 @@ class AtasanPegawaiViewModel : ViewModel() {
 
             val bawahanResult = repository.getBawahanSaya()
             val kandidatResult = repository.getKandidatBawahan(limit = 100)
-            val usulanResult = repository.getUsulan(limit = 100)
+            val usulanResult = repository.getUsulan(limit = 100, scope = "personal")
 
             val firstError = listOf(
                 bawahanResult.error,
@@ -61,6 +62,7 @@ class AtasanPegawaiViewModel : ViewModel() {
                 it.copy(
                     isLoading = false,
                     isRefreshing = false,
+                    canManagePersonalSubordinates = kandidatResult.success,
                     bawahan = bawahanResult.data.orEmpty(),
                     kandidat = kandidatResult.data.orEmpty(),
                     usulan = usulanResult.data.orEmpty(),

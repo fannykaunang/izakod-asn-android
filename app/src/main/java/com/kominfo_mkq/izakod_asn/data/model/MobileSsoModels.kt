@@ -32,6 +32,15 @@ data class MobileSsoExchangeData(
     @SerializedName("expires_in")
     val expiresIn: Long? = null,
 
+    @SerializedName("entago_access_token")
+    val entagoAccessToken: String? = null,
+
+    @SerializedName("entago_refresh_token")
+    val entagoRefreshToken: String? = null,
+
+    @SerializedName("entago_token_type")
+    val entagoTokenType: String? = null,
+
     @SerializedName("user")
     val user: EntagoLoginUser? = null,
 

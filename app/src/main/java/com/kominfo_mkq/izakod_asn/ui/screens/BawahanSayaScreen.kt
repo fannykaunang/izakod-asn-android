@@ -136,7 +136,7 @@ fun BawahanSayaScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            if (!uiState.isLoading) {
+            if (!uiState.isLoading && uiState.canManagePersonalSubordinates) {
                 ExtendedFloatingActionButton(
                     onClick = { formState = BawahanProposalFormState.add() },
                     icon = { Icon(Icons.Default.PersonAdd, contentDescription = null) },
@@ -175,6 +175,7 @@ fun BawahanSayaScreen(
                         item {
                             BawahanHeroCard(
                                 uiState = uiState,
+                                canAdd = uiState.canManagePersonalSubordinates,
                                 onAdd = { formState = BawahanProposalFormState.add() }
                             )
                         }
@@ -193,10 +194,18 @@ fun BawahanSayaScreen(
                                 item {
                                     EmptyBawahanState(
                                         title = "Belum ada bawahan aktif",
-                                        message = "Ajukan bawahan yang berada dalam OPD yang sama. Usulan akan dicek oleh petugas kepegawaian.",
-                                        buttonText = "Tambah Usulan",
+                                        message = if (uiState.canManagePersonalSubordinates) {
+                                            "Ajukan bawahan yang berada dalam OPD yang sama. Usulan akan dicek oleh petugas kepegawaian."
+                                        } else {
+                                            "Menu ini hanya dapat digunakan oleh pegawai yang sudah terdaftar sebagai atasan atau reviewer bawahan."
+                                        },
+                                        buttonText = if (uiState.canManagePersonalSubordinates) "Tambah Usulan" else null,
                                         icon = Icons.Default.Groups,
-                                        onClick = { formState = BawahanProposalFormState.add() }
+                                        onClick = if (uiState.canManagePersonalSubordinates) {
+                                            { formState = BawahanProposalFormState.add() }
+                                        } else {
+                                            null
+                                        }
                                     )
                                 }
                             } else {
@@ -223,10 +232,18 @@ fun BawahanSayaScreen(
                                 item {
                                     EmptyBawahanState(
                                         title = "Belum ada usulan",
-                                        message = "Draft dan usulan yang sudah diajukan akan tampil di sini.",
-                                        buttonText = "Buat Usulan",
+                                        message = if (uiState.canManagePersonalSubordinates) {
+                                            "Draft dan usulan yang sudah diajukan akan tampil di sini."
+                                        } else {
+                                            "Tidak ada usulan personal yang perlu ditampilkan untuk akun ini."
+                                        },
+                                        buttonText = if (uiState.canManagePersonalSubordinates) "Buat Usulan" else null,
                                         icon = Icons.Default.HourglassTop,
-                                        onClick = { formState = BawahanProposalFormState.add() }
+                                        onClick = if (uiState.canManagePersonalSubordinates) {
+                                            { formState = BawahanProposalFormState.add() }
+                                        } else {
+                                            null
+                                        }
                                     )
                                 }
                             } else {
@@ -271,6 +288,7 @@ fun BawahanSayaScreen(
 @Composable
 private fun BawahanHeroCard(
     uiState: AtasanPegawaiUiState,
+    canAdd: Boolean,
     onAdd: () -> Unit
 ) {
     val directCount = uiState.bawahan.count { it.jenisAtasan.equals("Langsung", ignoreCase = true) }
@@ -336,6 +354,20 @@ private fun BawahanHeroCard(
                     HeroStatChip("${uiState.bawahan.size}", "Aktif")
                     HeroStatChip("$directCount", "Langsung")
                     HeroStatChip("${pendingCount + draftCount}", "Usulan")
+                }
+
+                if (canAdd) {
+                    FilledTonalButton(
+                        onClick = onAdd,
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = Color.White.copy(alpha = 0.18f),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Icon(Icons.Default.PersonAdd, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Buat Usulan")
+                    }
                 }
             }
         }
@@ -646,9 +678,9 @@ private fun BawahanProposalCard(
 private fun EmptyBawahanState(
     title: String,
     message: String,
-    buttonText: String,
+    buttonText: String?,
     icon: ImageVector,
-    onClick: () -> Unit
+    onClick: (() -> Unit)?
 ) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
@@ -677,11 +709,13 @@ private fun EmptyBawahanState(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Button(
-                onClick = onClick,
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryLight)
-            ) {
-                Text(buttonText)
+            if (!buttonText.isNullOrBlank() && onClick != null) {
+                Button(
+                    onClick = onClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryLight)
+                ) {
+                    Text(buttonText)
+                }
             }
         }
     }

@@ -6,6 +6,9 @@ import android.util.Log
 import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.google.gson.Gson
+import com.google.gson.JsonSyntaxException
+import com.kominfo_mkq.izakod_asn.data.model.AppVersionPolicy
 import com.kominfo_mkq.izakod_asn.data.model.EntagoLoginUser
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
 import java.io.IOException
@@ -20,6 +23,7 @@ import javax.crypto.AEADBadTagException
 class UserPreferences(context: Context) {
     private val appContext = context.applicationContext
     private var prefs: SharedPreferences = createEncryptedPrefsWithRecovery(appContext)
+    private val gson = Gson()
 
     companion object {
         private const val TAG = "UserPreferences"
@@ -53,6 +57,10 @@ class UserPreferences(context: Context) {
         private const val KEY_DASHBOARD_COACHMARK_DISMISSED_PREFIX = "dashboard_coachmark_dismissed_"
         private const val KEY_SSO_PAYROLL_ESTIMATE_JSON = "sso_payroll_estimate_json"
         private const val KEY_SSO_PAYROLL_ESTIMATE_SAVED_AT = "sso_payroll_estimate_saved_at"
+        private const val KEY_APP_VERSION_POLICY_JSON = "app_version_policy_json"
+        private const val KEY_APP_VERSION_POLICY_SAVED_AT = "app_version_policy_saved_at"
+        private const val KEY_APP_VERSION_LAST_SEEN_CODE = "app_version_last_seen_code"
+        private const val KEY_APP_VERSION_LAST_SEEN_NAME = "app_version_last_seen_name"
 
         @Volatile
         private var inMemorySsoPayrollEstimateJson: String? = null
@@ -354,6 +362,70 @@ class UserPreferences(context: Context) {
             remove(KEY_SSO_PAYROLL_ESTIMATE_SAVED_AT)
         }
     }
+
+    fun saveAppVersionPolicyCache(policy: AppVersionPolicy) {
+        val json = gson.toJson(policy)
+        editSafely {
+            putString(KEY_APP_VERSION_POLICY_JSON, json)
+            putLong(KEY_APP_VERSION_POLICY_SAVED_AT, System.currentTimeMillis())
+        }
+    }
+
+    fun getCachedAppVersionPolicy(maxAgeMillis: Long = Long.MAX_VALUE): AppVersionPolicy? {
+        val savedAt = getAppVersionPolicyCachedAt()
+        val json = readSafely<String?>(null) { getString(KEY_APP_VERSION_POLICY_JSON, null) }
+        if (savedAt <= 0L || json.isNullOrBlank()) return null
+
+        val now = System.currentTimeMillis()
+        if (maxAgeMillis != Long.MAX_VALUE && now - savedAt > maxAgeMillis) {
+            return null
+        }
+
+        return try {
+            gson.fromJson(json, AppVersionPolicy::class.java)
+        } catch (error: JsonSyntaxException) {
+            Log.w(TAG, "Cache policy versi aplikasi tidak valid.", error)
+            clearAppVersionPolicyCache()
+            null
+        }
+    }
+
+    fun getAppVersionPolicyCachedAt(): Long =
+        readSafely(0L) { getLong(KEY_APP_VERSION_POLICY_SAVED_AT, 0L) }
+
+    fun isAppVersionPolicyCacheFresh(maxAgeMillis: Long): Boolean {
+        val savedAt = getAppVersionPolicyCachedAt()
+        return savedAt > 0L && System.currentTimeMillis() - savedAt <= maxAgeMillis
+    }
+
+    fun clearAppVersionPolicyCache() {
+        editSafely {
+            remove(KEY_APP_VERSION_POLICY_JSON)
+            remove(KEY_APP_VERSION_POLICY_SAVED_AT)
+        }
+    }
+
+    fun saveLastSeenAppVersion(versionCode: Int, versionName: String) {
+        if (versionCode <= 0) return
+
+        editSafely {
+            putInt(KEY_APP_VERSION_LAST_SEEN_CODE, versionCode)
+            putString(KEY_APP_VERSION_LAST_SEEN_NAME, versionName)
+        }
+    }
+
+    fun getLastSeenAppVersionCode(): Int? {
+        return readSafely<Int?>(null) {
+            if (contains(KEY_APP_VERSION_LAST_SEEN_CODE)) {
+                getInt(KEY_APP_VERSION_LAST_SEEN_CODE, 0).takeIf { it > 0 }
+            } else {
+                null
+            }
+        }
+    }
+
+    fun getLastSeenAppVersionName(): String? =
+        readSafely<String?>(null) { getString(KEY_APP_VERSION_LAST_SEEN_NAME, null) }
 
     fun saveProfileSnapshot(profile: PegawaiProfile) {
         editSafely {

@@ -3,6 +3,9 @@ package com.kominfo_mkq.izakod_asn.data.remote
 import com.google.gson.JsonObject
 import com.kominfo_mkq.izakod_asn.data.model.AiPanduanRequest
 import com.kominfo_mkq.izakod_asn.data.model.AiPanduanResponse
+import com.kominfo_mkq.izakod_asn.data.model.AppUpdateEventRequest
+import com.kominfo_mkq.izakod_asn.data.model.AppUpdateEventResponse
+import com.kominfo_mkq.izakod_asn.data.model.AppVersionPolicyResponse
 import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiListResponse
 import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiResponse
 import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiUsulanListResponse
@@ -319,7 +322,8 @@ interface EabsenApiService {
     @GET("api/atasan-pegawai/usulan")
     suspend fun getAtasanPegawaiUsulan(
         @Query("status") status: String? = null,
-        @Query("limit") limit: Int = 100
+        @Query("limit") limit: Int = 100,
+        @Query("scope") scope: String? = null
     ): Response<AtasanPegawaiUsulanListResponse>
 
     @POST("api/atasan-pegawai/usulan")
@@ -388,6 +392,19 @@ interface EabsenApiService {
     suspend fun registerFcmToken(
         @Body request: FcmRegisterRequest
     ): Response<BasicActionResponse>
+
+    @GET("api/mobile/app-version")
+    suspend fun getMobileAppVersion(
+        @Query("app_key") appKey: String = "izakod_asn",
+        @Query("platform") platform: String = "android",
+        @Query("versionCode") versionCode: Int? = null,
+        @Query("versionName") versionName: String? = null
+    ): Response<AppVersionPolicyResponse>
+
+    @POST("api/mobile/app-update-events")
+    suspend fun createMobileAppUpdateEvent(
+        @Body request: AppUpdateEventRequest
+    ): Response<AppUpdateEventResponse>
 
     @GET("api/target-kinerja")
     suspend fun getTargetKinerjaList(
