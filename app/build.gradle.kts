@@ -15,8 +15,8 @@ android {
         applicationId = "com.kominfo_mkq.izakod_asn"
         minSdk = 24
         targetSdk = 36
-        versionCode = 8
-        versionName = "2.0.0"
+        versionCode = 9
+        versionName = "2.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
