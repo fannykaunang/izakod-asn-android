@@ -10,9 +10,11 @@ import com.kominfo_mkq.izakod_asn.data.model.DashboardActionAlertsData
 import com.kominfo_mkq.izakod_asn.data.model.DashboardTargetSummaryData
 import com.kominfo_mkq.izakod_asn.data.model.MetricsData
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
+import com.kominfo_mkq.izakod_asn.data.model.PengumumanHighlightItem
 import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaItem
 import com.kominfo_mkq.izakod_asn.data.model.TimeSeriesItem
 import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
+import com.kominfo_mkq.izakod_asn.data.repository.PengumumanRepository
 import com.kominfo_mkq.izakod_asn.data.repository.StatistikRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -44,6 +46,9 @@ data class DashboardUiState(
     val tertundaCount: Int? = null,
     val isDashboardTargetsLoading: Boolean = false,
     val hasDashboardTargetsLoaded: Boolean = false,
+    val isPengumumanHighlightsLoading: Boolean = false,
+    val pengumumanHighlights: List<PengumumanHighlightItem> = emptyList(),
+    val hasPengumumanHighlightsLoaded: Boolean = false,
     val targetItems: List<TargetKinerjaItem> = emptyList(),
     val currentPegawaiId: Int? = null,
     val targetPeriodYear: Int? = null,
@@ -57,6 +62,7 @@ data class DashboardUiState(
 class DashboardViewModel : ViewModel() {
 
     private val repository = StatistikRepository()
+    private val pengumumanRepository = PengumumanRepository()
     private val tertundaLoader = TertundaDataLoader()
     private val initialCalendar = Calendar.getInstance()
     private var selectedTargetYear: Int = initialCalendar.get(Calendar.YEAR)
@@ -66,6 +72,7 @@ class DashboardViewModel : ViewModel() {
     private var lastNotificationLoadedAt = 0L
     private var lastOverviewLoadedAt = 0L
     private var lastDashboardTargetsLoadedAt = 0L
+    private var lastPengumumanHighlightsLoadedAt = 0L
     private var lastTertundaLoadedAt = 0L
     private var lastProfileLoadedAt = 0L
     private var handledRefreshVersion = 0
@@ -186,6 +193,7 @@ class DashboardViewModel : ViewModel() {
         val needsInitialLoad = !hasStartedInitialLoad ||
             state.metrics == null ||
             !state.hasDashboardOverviewLoaded ||
+            !state.hasPengumumanHighlightsLoaded ||
             state.tertundaCount == null
 
         if (needsInitialLoad) {
@@ -200,6 +208,7 @@ class DashboardViewModel : ViewModel() {
             isStale(lastStatistikLoadedAt) ||
             isStale(lastNotificationLoadedAt) ||
             isStale(lastOverviewLoadedAt) ||
+            isStale(lastPengumumanHighlightsLoadedAt) ||
             isStale(lastTertundaLoadedAt)
 
         if (needsRefresh) {
@@ -215,6 +224,7 @@ class DashboardViewModel : ViewModel() {
             tahun = selectedTargetYear,
             bulan = selectedTargetMonth
         )
+        loadPengumumanHighlightsIfNeeded()
         context?.let { loadTertundaCount(it.applicationContext) }
     }
 
@@ -482,6 +492,53 @@ class DashboardViewModel : ViewModel() {
             tahun = selectedTargetYear,
             bulan = selectedTargetMonth
         )
+    }
+
+    fun loadPengumumanHighlightsIfNeeded(force: Boolean = false) {
+        val state = _uiState.value
+        if (!force && state.isPengumumanHighlightsLoading) return
+
+        val shouldLoad = force ||
+            !state.hasPengumumanHighlightsLoaded ||
+            isStale(lastPengumumanHighlightsLoadedAt)
+
+        if (!shouldLoad) return
+
+        viewModelScope.launch {
+            try {
+                _uiState.update { it.copy(isPengumumanHighlightsLoading = true) }
+
+                val response = pengumumanRepository.getHighlights(limit = 5)
+                _uiState.update {
+                    if (response.success) {
+                        it.copy(
+                            pengumumanHighlights = response.data.orEmpty(),
+                            isPengumumanHighlightsLoading = false,
+                            hasPengumumanHighlightsLoaded = true
+                        )
+                    } else {
+                        it.copy(
+                            isPengumumanHighlightsLoading = false,
+                            hasPengumumanHighlightsLoaded = true
+                        )
+                    }
+                }
+                if (response.success) {
+                    lastPengumumanHighlightsLoadedAt = now()
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isPengumumanHighlightsLoading = false,
+                        hasPengumumanHighlightsLoaded = true
+                    )
+                }
+                android.util.Log.e(
+                    "DashboardViewModel",
+                    "Error loading pengumuman highlights: ${e.message}"
+                )
+            }
+        }
     }
 
     private fun now(): Long = System.currentTimeMillis()

@@ -44,6 +44,7 @@ import com.kominfo_mkq.izakod_asn.ui.screens.NotificationScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.PenilaianBelumDibuatScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.PenilaianKinerjaDetailScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.PenilaianKinerjaListScreen
+import com.kominfo_mkq.izakod_asn.ui.screens.PengumumanDetailScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.ProfileScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.ReminderScreen
 import com.kominfo_mkq.izakod_asn.ui.screens.ReportDetailScreen
@@ -90,6 +91,7 @@ sealed class Screen(val route: String) {
     object CreateReport : Screen("create_report")
     object Notifications : Screen("notifications")
     object NotificationDetail : Screen("notification_detail")
+    object PengumumanDetail : Screen("pengumuman_detail")
     object MobileSsoBridge : Screen("mobile_sso_bridge?ssoTicket={ssoTicket}&fallbackRoute={fallbackRoute}")
 }
 
@@ -353,6 +355,9 @@ fun IZAKODNavigation(
                     onNavigateToReminder = { navController.navigate(Screen.Reminders.route) },
                     onNavigateToAssistant = { navController.navigate(Screen.AiPanduanChat.route) },
                     onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) },
+                    onNavigateToPengumuman = { pengumumanId ->
+                        navController.navigate("${Screen.PengumumanDetail.route}/$pengumumanId")
+                    },
                     isDarkTheme = isDarkTheme,
                     onToggleTheme = onToggleTheme,
                     requestedTabIndex = dashboardRequestedTabIndex,
@@ -753,6 +758,16 @@ fun IZAKODNavigation(
                     onOpenLaporan = { laporanId ->
                         navController.navigate("laporan_detail/$laporanId")
                     }
+                )
+            }
+            composable(
+                route = "${Screen.PengumumanDetail.route}/{pengumumanId}",
+                arguments = listOf(navArgument("pengumumanId") { type = NavType.IntType })
+            ) { backStackEntry ->
+                val pengumumanId = backStackEntry.arguments?.getInt("pengumumanId") ?: 0
+                PengumumanDetailScreen(
+                    pengumumanId = pengumumanId,
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
         }

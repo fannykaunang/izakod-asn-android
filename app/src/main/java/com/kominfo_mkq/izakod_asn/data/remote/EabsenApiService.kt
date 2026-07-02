@@ -38,6 +38,8 @@ import com.kominfo_mkq.izakod_asn.data.model.NotifikasiResponse
 import com.kominfo_mkq.izakod_asn.data.model.PayrollLiveEstimateResponse
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiData
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfileResponse
+import com.kominfo_mkq.izakod_asn.data.model.PengumumanHighlightsResponse
+import com.kominfo_mkq.izakod_asn.data.model.PengumumanReadResponse
 import com.kominfo_mkq.izakod_asn.data.model.PenilaianBelumDibuatResponse
 import com.kominfo_mkq.izakod_asn.data.model.PenilaianKinerjaDetailResponse
 import com.kominfo_mkq.izakod_asn.data.model.PenilaianKinerjaListResponse
@@ -262,6 +264,16 @@ interface EabsenApiService {
     suspend fun getNotifications(
         @Query("pegawai_id") pegawai_id: Int?,
     ): Response<NotifikasiResponse>
+
+    @GET("api/pengumuman/highlights")
+    suspend fun getPengumumanHighlights(
+        @Query("limit") limit: Int = 5
+    ): Response<PengumumanHighlightsResponse>
+
+    @GET("api/pengumuman/{id}/read")
+    suspend fun getPengumumanReadDetail(
+        @Path("id") id: Int
+    ): Response<PengumumanReadResponse>
 
     @PATCH("api/notifikasi/{id}/read")
     suspend fun markNotificationAsRead(

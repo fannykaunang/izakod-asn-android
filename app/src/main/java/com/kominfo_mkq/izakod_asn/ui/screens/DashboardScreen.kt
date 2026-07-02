@@ -123,10 +123,12 @@ import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnMeData
 import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnPerhitungan
 import com.kominfo_mkq.izakod_asn.data.model.MetricsData
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
+import com.kominfo_mkq.izakod_asn.data.model.PengumumanHighlightItem
 import com.kominfo_mkq.izakod_asn.data.model.TargetKinerjaItem
 import com.kominfo_mkq.izakod_asn.data.model.TimeSeriesItem
 import com.kominfo_mkq.izakod_asn.data.model.TppMeData
 import com.kominfo_mkq.izakod_asn.data.model.isNonAsnPegawai
+import com.kominfo_mkq.izakod_asn.data.remote.ApiClient
 import com.kominfo_mkq.izakod_asn.ui.components.ElevatedCard
 import com.kominfo_mkq.izakod_asn.ui.components.GradientCard
 import com.kominfo_mkq.izakod_asn.ui.components.OutlinedCard
@@ -224,6 +226,12 @@ private fun Double?.formatDashboardCurrency(): String {
     return formatter.format(value)
 }
 
+private fun String?.toIzakodAssetUrl(): String? {
+    val raw = this?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    if (raw.startsWith("http://") || raw.startsWith("https://")) return raw
+    return ApiClient.BASE_URL.trimEnd('/') + "/" + raw.trimStart('/')
+}
+
 private fun GajiNonAsnPerhitungan?.hasEffectiveDashboardGajiData(): Boolean {
     val calculation = this ?: return false
     return calculation.totalDibayar != null ||
@@ -293,6 +301,7 @@ fun DashboardScreen(
     onNavigateToReminder: () -> Unit,
     onNavigateToAssistant: () -> Unit,
     onNavigateToNotifications: () -> Unit,
+    onNavigateToPengumuman: (Int) -> Unit,
     isDarkTheme: Boolean,
     onToggleTheme: (Boolean) -> Unit,
     requestedTabIndex: Int? = null,
@@ -358,6 +367,7 @@ fun DashboardScreen(
         refreshing = isDashboardRefreshing,
         onRefresh = {
             viewModel.refresh(context, showFullLoading = false)
+            viewModel.loadPengumumanHighlightsIfNeeded(force = true)
             if (selectedDashboardTabIndex == DASHBOARD_TARGET_TAB_INDEX) {
                 viewModel.loadDashboardTargetsIfNeeded(force = true)
             }
@@ -428,6 +438,7 @@ fun DashboardScreen(
         }
 
         viewModel.refreshIfNeeded(context = context, force = true)
+        viewModel.loadPengumumanHighlightsIfNeeded(force = true)
         if (selectedDashboardTabIndex == DASHBOARD_TARGET_TAB_INDEX) {
             viewModel.loadDashboardTargetsIfNeeded(force = true)
         }
@@ -512,6 +523,7 @@ fun DashboardScreen(
                         actionAlerts = uiState.actionAlerts,
                         isOverviewReady = isDashboardOverviewReady,
                         tertundaCount = uiState.tertundaCount,
+                        pengumumanHighlights = uiState.pengumumanHighlights,
                         isTargetDetailsLoading = uiState.isDashboardTargetsLoading,
                         hasTargetDetailsLoaded = uiState.hasDashboardTargetsLoaded,
                         targetItems = uiState.targetItems,
@@ -550,6 +562,7 @@ fun DashboardScreen(
                         onTargetPeriodSelected = viewModel::selectTargetPeriod,
                         onTemplates = onNavigateToTemplates,
                         onReminder = onNavigateToReminder,
+                        onPengumumanClick = onNavigateToPengumuman,
                         viewModel = viewModel,
                         requestedTabIndex = requestedTabIndex,
                         onRequestedTabConsumed = onRequestedTabConsumed,
@@ -588,6 +601,7 @@ private fun DashboardContent(
     actionAlerts: DashboardActionAlertsData?,
     isOverviewReady: Boolean,
     tertundaCount: Int?,
+    pengumumanHighlights: List<PengumumanHighlightItem>,
     isTargetDetailsLoading: Boolean,
     hasTargetDetailsLoaded: Boolean,
     targetItems: List<TargetKinerjaItem>,
@@ -626,6 +640,7 @@ private fun DashboardContent(
     onTargetPeriodSelected: (Int, Int) -> Unit,
     onTemplates: () -> Unit,
     onReminder: () -> Unit,
+    onPengumumanClick: (Int) -> Unit,
     viewModel: DashboardViewModel,
     requestedTabIndex: Int? = null,
     onRequestedTabConsumed: () -> Unit = {},
@@ -727,6 +742,14 @@ private fun DashboardContent(
                                 payrollLabel = payrollMenuLabel,
                                 isDarkTheme = isDarkTheme
                             )
+                        }
+                        if (pengumumanHighlights.isNotEmpty()) {
+                            item {
+                                PengumumanHighlightCarousel(
+                                    items = pengumumanHighlights,
+                                    onItemClick = onPengumumanClick
+                                )
+                            }
                         }
                         item {
                             Box(
@@ -876,6 +899,181 @@ private fun DashboardContent(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PengumumanHighlightCarousel(
+    items: List<PengumumanHighlightItem>,
+    onItemClick: (Int) -> Unit
+) {
+    val pagerState = rememberPagerState(pageCount = { items.size })
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = "Informasi Pilihan",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                )
+                Text(
+                    text = "Panduan dan kabar penting untuk pegawai.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        HorizontalPager(
+            state = pagerState,
+            contentPadding = PaddingValues(end = 40.dp),
+            pageSpacing = 12.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) { page ->
+            PengumumanHighlightCard(
+                item = items[page],
+                onClick = { onItemClick(items[page].id) }
+            )
+        }
+
+        if (items.size > 1) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                items.forEachIndexed { index, _ ->
+                    val isSelected = pagerState.currentPage == index
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 3.dp)
+                            .size(width = if (isSelected) 22.dp else 7.dp, height = 7.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isSelected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                                }
+                            )
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PengumumanHighlightCard(
+    item: PengumumanHighlightItem,
+    onClick: () -> Unit
+) {
+    val thumbnailUrl = item.thumbnailUrl.toIzakodAssetUrl()
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 154.dp)
+            .clickable(onClick = onClick),
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(28.dp),
+        tonalElevation = 2.dp,
+        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (thumbnailUrl != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(thumbnailUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = item.judul,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(width = 108.dp, height = 126.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(width = 92.dp, height = 118.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                                    MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f)
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Bookmark,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(34.dp)
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(999.dp)
+                ) {
+                    Text(
+                        text = item.kategoriKonten?.takeIf { it.isNotBlank() } ?: "Info",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Text(
+                    text = item.judul,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.ExtraBold
+                    ),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Text(
+                    text = item.ringkasan?.takeIf { it.isNotBlank() } ?: "Ketuk untuk membaca informasi lengkap.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Text(
+                    text = "Baca selengkapnya",
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
         }
     }

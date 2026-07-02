@@ -490,6 +490,21 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun resolveNotificationRoute(intent: Intent?): ExternalRoute? {
+        val pengumumanId = intent?.firstPositiveIntExtra(
+            "pengumuman_id",
+            "pengumumanId",
+            "target_id"
+        ) ?: extractPengumumanIdFromLink(intent?.getStringExtra("link_tujuan"))
+
+        if (pengumumanId != null) {
+            Log.d(
+                "MainActivity",
+                "Notification route diterima: pengumuman_id=$pengumumanId"
+            )
+
+            return ExternalRoute(route = "pengumuman_detail/$pengumumanId")
+        }
+
         val laporanId = intent?.getStringExtra("laporan_id")
             ?.trim()
             ?.toIntOrNull()
@@ -503,6 +518,50 @@ class MainActivity : ComponentActivity() {
         )
 
         return ExternalRoute(route = "laporan_detail/$laporanId")
+    }
+
+    private fun Intent.firstPositiveIntExtra(vararg names: String): Int? {
+        for (name in names) {
+            val value = getStringExtra(name)
+                ?.trim()
+                ?.toIntOrNull()
+                ?.takeIf { it > 0 }
+            if (value != null) return value
+        }
+
+        return null
+    }
+
+    private fun extractPengumumanIdFromLink(link: String?): Int? {
+        val rawLink = link?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val uri = runCatching { Uri.parse(rawLink) }.getOrNull() ?: return null
+        val pathSegments = uri.pathSegments
+        val pengumumanSegmentIndex = pathSegments.indexOfFirst { segment ->
+            segment.equals("pengumuman", ignoreCase = true) ||
+                segment.equals("pengumuman_detail", ignoreCase = true) ||
+                segment.equals("pengumuman-detail", ignoreCase = true)
+        }
+
+        if (pengumumanSegmentIndex >= 0) {
+            pathSegments.getOrNull(pengumumanSegmentIndex + 1)
+                ?.toIntOrNull()
+                ?.takeIf { it > 0 }
+                ?.let { return it }
+        }
+
+        if (uri.host.equals("pengumuman", ignoreCase = true)) {
+            pathSegments.firstOrNull()
+                ?.toIntOrNull()
+                ?.takeIf { it > 0 }
+                ?.let { return it }
+        }
+
+        return uri.getQueryParameter("pengumuman_id")
+            ?.toIntOrNull()
+            ?.takeIf { it > 0 }
+            ?: uri.getQueryParameter("pengumumanId")
+                ?.toIntOrNull()
+                ?.takeIf { it > 0 }
     }
 
     private fun extractLaporanIdFromLink(link: String?): Int? {
