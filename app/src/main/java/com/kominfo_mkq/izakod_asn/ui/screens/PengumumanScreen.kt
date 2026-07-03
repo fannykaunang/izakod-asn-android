@@ -1,7 +1,10 @@
 package com.kominfo_mkq.izakod_asn.ui.screens
 
+import android.text.Spanned
+import android.text.style.URLSpan
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,7 +14,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -33,15 +35,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.text.HtmlCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -170,17 +178,91 @@ private fun PengumumanDetailContent(
                             fontWeight = FontWeight.Bold
                         )
                     )
-                    Text(
-                        text = detail.isiKonten?.takeIf { it.isNotBlank() }
+                    PengumumanHtmlText(
+                        value = detail.isiKonten?.takeIf { it.isNotBlank() }
                             ?: detail.pesan?.takeIf { it.isNotBlank() }
-                            ?: "Belum ada isi informasi.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                            ?: "Belum ada isi informasi."
                     )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun PengumumanHtmlText(value: String) {
+    val uriHandler = LocalUriHandler.current
+    val linkColor = MaterialTheme.colorScheme.primary
+    val annotatedText = remember(value, linkColor) {
+        buildPengumumanAnnotatedContent(value, linkColor)
+    }
+
+    ClickableText(
+        text = annotatedText,
+        style = MaterialTheme.typography.bodyMedium.copy(
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        ),
+        onClick = { offset ->
+            annotatedText
+                .getStringAnnotations(tag = "URL", start = offset, end = offset)
+                .firstOrNull()
+                ?.let { annotation ->
+                    runCatching { uriHandler.openUri(annotation.item) }
+                }
+        }
+    )
+}
+
+private fun buildPengumumanAnnotatedContent(
+    value: String,
+    linkColor: androidx.compose.ui.graphics.Color
+): AnnotatedString {
+    val spanned = parsePengumumanHtml(value)
+    val rawText = spanned.toString()
+    val contentStart = rawText.indexOfFirst { !it.isWhitespace() }.takeIf { it >= 0 } ?: 0
+    val contentEnd = rawText.indexOfLast { !it.isWhitespace() }.takeIf { it >= 0 }
+        ?.plus(1)
+        ?: rawText.length
+    val text = rawText.substring(contentStart, contentEnd)
+    val builder = AnnotatedString.Builder(text)
+
+    spanned.getSpans(0, spanned.length, URLSpan::class.java).forEach { span ->
+        val start = (spanned.getSpanStart(span) - contentStart).coerceIn(0, text.length)
+        val end = (spanned.getSpanEnd(span) - contentStart).coerceIn(start, text.length)
+        val url = span.url?.trim().orEmpty()
+
+        if (url.isNotBlank() && start < end) {
+            builder.addStyle(
+                style = SpanStyle(
+                    color = linkColor,
+                    fontWeight = FontWeight.SemiBold,
+                    textDecoration = TextDecoration.Underline
+                ),
+                start = start,
+                end = end
+            )
+            builder.addStringAnnotation(
+                tag = "URL",
+                annotation = url,
+                start = start,
+                end = end
+            )
+        }
+    }
+
+    return builder.toAnnotatedString()
+}
+
+private fun parsePengumumanHtml(value: String): Spanned {
+    val tagRegex = Regex("""</?[a-z][\s\S]*>""", RegexOption.IGNORE_CASE)
+    val decodedOnce = HtmlCompat.fromHtml(value, HtmlCompat.FROM_HTML_MODE_LEGACY).toString()
+    val source = when {
+        tagRegex.containsMatchIn(value) -> value
+        tagRegex.containsMatchIn(decodedOnce) -> decodedOnce
+        else -> value
+    }
+
+    return HtmlCompat.fromHtml(source, HtmlCompat.FROM_HTML_MODE_LEGACY)
 }
 
 @Composable
@@ -204,13 +286,13 @@ private fun PengumumanHeroCard(detail: PengumumanReadDetail) {
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 190.dp, max = 260.dp)
+                        .height(198.dp)
                 )
             } else {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(190.dp)
+                        .height(198.dp)
                         .background(
                             Brush.linearGradient(
                                 colors = listOf(

@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -79,13 +80,21 @@ class IzakodFirebaseMessagingService : FirebaseMessagingService() {
 
     private fun showNotification(title: String, body: String, data: Map<String, String>) {
         val channelId = "izakod_default"
+        val pengumumanId = data["pengumuman_id"]
+            ?: data["pengumumanId"]
+            ?: extractPengumumanIdFromLink(data["link_tujuan"])
+        val linkTujuan = data["link_tujuan"] ?: ""
 
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            action = Intent.ACTION_VIEW
+            if (!pengumumanId.isNullOrBlank()) {
+                setData(Uri.parse("izakod-asn://pengumuman/$pengumumanId"))
+            }
             putExtra("notifikasi_id", data["notifikasi_id"] ?: "")
-            putExtra("pengumuman_id", data["pengumuman_id"] ?: data["pengumumanId"] ?: "")
+            putExtra("pengumuman_id", pengumumanId ?: "")
             putExtra("laporan_id", data["laporan_id"] ?: "")
-            putExtra("link_tujuan", data["link_tujuan"] ?: "")
+            putExtra("link_tujuan", linkTujuan)
             putExtra("tipe_notifikasi", data["tipe_notifikasi"] ?: "")
             putExtra("action_required", data["action_required"] ?: "")
         }
@@ -126,5 +135,33 @@ class IzakodFirebaseMessagingService : FirebaseMessagingService() {
             .build()
 
         nm.notify(System.currentTimeMillis().toInt(), notification)
+    }
+
+    private fun extractPengumumanIdFromLink(link: String?): String? {
+        val rawLink = link?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val uri = runCatching { Uri.parse(rawLink) }.getOrNull() ?: return null
+        val pathSegments = uri.pathSegments
+        val pengumumanSegmentIndex = pathSegments.indexOfFirst { segment ->
+            segment.equals("pengumuman", ignoreCase = true) ||
+                segment.equals("pengumuman_detail", ignoreCase = true) ||
+                segment.equals("pengumuman-detail", ignoreCase = true)
+        }
+
+        if (pengumumanSegmentIndex >= 0) {
+            pathSegments.getOrNull(pengumumanSegmentIndex + 1)
+                ?.takeIf { it.toIntOrNull()?.let { value -> value > 0 } == true }
+                ?.let { return it }
+        }
+
+        if (uri.host.equals("pengumuman", ignoreCase = true)) {
+            pathSegments.firstOrNull()
+                ?.takeIf { it.toIntOrNull()?.let { value -> value > 0 } == true }
+                ?.let { return it }
+        }
+
+        return uri.getQueryParameter("pengumuman_id")
+            ?.takeIf { it.toIntOrNull()?.let { value -> value > 0 } == true }
+            ?: uri.getQueryParameter("pengumumanId")
+                ?.takeIf { it.toIntOrNull()?.let { value -> value > 0 } == true }
     }
 }

@@ -277,7 +277,8 @@ interface EabsenApiService {
 
     @PATCH("api/notifikasi/{id}/read")
     suspend fun markNotificationAsRead(
-        @Path("id") notificationId: Int
+        @Path("id") notificationId: Int,
+        @Query("pegawai_id") pegawaiId: Int? = null
     ): Response<BasicActionResponse>
 
     /**

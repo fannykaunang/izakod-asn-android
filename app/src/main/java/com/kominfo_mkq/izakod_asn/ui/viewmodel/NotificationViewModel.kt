@@ -92,7 +92,12 @@ class NotificationViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
-                val response = ApiClient.eabsenApiService.markNotificationAsRead(notificationId)
+                val pegawaiId = StatistikRepository.getPegawaiId()
+                    ?: throw Exception("Session expired")
+                val response = ApiClient.eabsenApiService.markNotificationAsRead(
+                    notificationId = notificationId,
+                    pegawaiId = pegawaiId
+                )
                 val body = response.body()
 
                 if (response.isSuccessful && body?.success != false) {

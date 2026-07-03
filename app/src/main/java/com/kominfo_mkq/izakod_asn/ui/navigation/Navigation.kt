@@ -757,6 +757,9 @@ fun IZAKODNavigation(
                     onNavigateBack = { navController.popBackStack() },
                     onOpenLaporan = { laporanId ->
                         navController.navigate("laporan_detail/$laporanId")
+                    },
+                    onOpenPengumuman = { pengumumanId ->
+                        navController.navigate("${Screen.PengumumanDetail.route}/$pengumumanId")
                     }
                 )
             }

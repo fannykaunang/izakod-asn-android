@@ -495,6 +495,7 @@ class MainActivity : ComponentActivity() {
             "pengumumanId",
             "target_id"
         ) ?: extractPengumumanIdFromLink(intent?.getStringExtra("link_tujuan"))
+            ?: extractPengumumanIdFromLink(intent?.data?.toString())
 
         if (pengumumanId != null) {
             Log.d(
@@ -510,6 +511,7 @@ class MainActivity : ComponentActivity() {
             ?.toIntOrNull()
             ?.takeIf { it > 0 }
             ?: extractLaporanIdFromLink(intent?.getStringExtra("link_tujuan"))
+            ?: extractLaporanIdFromLink(intent?.data?.toString())
             ?: return null
 
         Log.d(

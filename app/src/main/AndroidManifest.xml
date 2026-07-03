@@ -40,6 +40,16 @@
                     android:host="payroll"
                     android:scheme="izakod-asn" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="pengumuman"
+                    android:scheme="izakod-asn" />
+            </intent-filter>
         </activity>
         <service
             android:name="com.kominfo_mkq.izakod_asn.fcm.IzakodFirebaseMessagingService"

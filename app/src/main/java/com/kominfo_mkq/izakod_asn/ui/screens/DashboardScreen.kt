@@ -909,6 +909,8 @@ private fun PengumumanHighlightCarousel(
     items: List<PengumumanHighlightItem>,
     onItemClick: (Int) -> Unit
 ) {
+    if (items.isEmpty()) return
+
     val pagerState = rememberPagerState(pageCount = { items.size })
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -934,13 +936,13 @@ private fun PengumumanHighlightCarousel(
 
         HorizontalPager(
             state = pagerState,
-            contentPadding = PaddingValues(end = 40.dp),
             pageSpacing = 12.dp,
             modifier = Modifier.fillMaxWidth()
         ) { page ->
+            val item = items[page]
             PengumumanHighlightCard(
-                item = items[page],
-                onClick = { onItemClick(items[page].id) }
+                item = item,
+                onClick = { onItemClick(item.id) }
             )
         }
 
@@ -981,21 +983,15 @@ private fun PengumumanHighlightCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 154.dp)
+            .height(198.dp)
             .clickable(onClick = onClick),
         color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(26.dp),
         tonalElevation = 2.dp,
         shadowElevation = 2.dp,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
             if (thumbnailUrl != null) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
@@ -1004,20 +1000,17 @@ private fun PengumumanHighlightCard(
                         .build(),
                     contentDescription = item.judul,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(width = 108.dp, height = 126.dp)
-                        .clip(RoundedCornerShape(22.dp))
+                    modifier = Modifier.fillMaxSize()
                 )
             } else {
                 Box(
                     modifier = Modifier
-                        .size(width = 92.dp, height = 118.dp)
-                        .clip(RoundedCornerShape(22.dp))
+                        .fillMaxSize()
                         .background(
                             Brush.linearGradient(
                                 colors = listOf(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                                    MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f)
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.78f),
+                                    MaterialTheme.colorScheme.tertiary.copy(alpha = 0.72f)
                                 )
                             )
                         ),
@@ -1032,28 +1025,41 @@ private fun PengumumanHighlightCard(
                 }
             }
 
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Surface(
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    shape = RoundedCornerShape(999.dp)
-                ) {
-                    Text(
-                        text = item.kategoriKonten?.takeIf { it.isNotBlank() } ?: "Info",
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(118.dp)
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.62f)
+                            )
+                        )
                     )
-                }
+            )
 
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(78.dp)
+                    .background(Color.Black.copy(alpha = 0.26f))
+            )
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 Text(
                     text = item.judul,
                     style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.ExtraBold
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White.copy(alpha = 0.94f)
                     ),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
@@ -1062,17 +1068,9 @@ private fun PengumumanHighlightCard(
                 Text(
                     text = item.ringkasan?.takeIf { it.isNotBlank() } ?: "Ketuk untuk membaca informasi lengkap.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
+                    color = Color.White.copy(alpha = 0.72f),
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
-                )
-
-                Text(
-                    text = "Baca selengkapnya",
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = MaterialTheme.colorScheme.primary
                 )
             }
         }
@@ -2252,12 +2250,6 @@ private fun DashboardActionCarousel(
 
     val pagerState = rememberPagerState(pageCount = { items.size })
 
-    LaunchedEffect(items.size) {
-        if (items.isNotEmpty() && pagerState.currentPage > items.lastIndex) {
-            pagerState.scrollToPage(items.lastIndex)
-        }
-    }
-
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -2265,11 +2257,6 @@ private fun DashboardActionCarousel(
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = if (items.size > 1) {
-                PaddingValues(end = 28.dp)
-            } else {
-                PaddingValues(0.dp)
-            },
             pageSpacing = 12.dp
         ) { page ->
             DashboardActionCarouselCard(item = items[page])

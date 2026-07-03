@@ -115,7 +115,12 @@ fun NotificationScreen(
                     items(uiState.notifications, key = { it.notifikasiId }) { notif ->
                         NotificationCard(
                             notification = notif,
-                            onClick = { onNotificationClick(notif.notifikasiId) }
+                            onClick = {
+                                if (notif.isRead == 0) {
+                                    viewModel.markAsRead(notif.notifikasiId)
+                                }
+                                onNotificationClick(notif.notifikasiId)
+                            }
                         )
                     }
                 }
@@ -129,6 +134,7 @@ fun NotificationDetailScreen(
     notificationId: Int,
     onNavigateBack: () -> Unit,
     onOpenLaporan: (Int) -> Unit,
+    onOpenPengumuman: (Int) -> Unit,
     viewModel: NotificationViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -198,7 +204,8 @@ fun NotificationDetailScreen(
                 NotificationDetailContent(
                     modifier = Modifier.padding(paddingValues),
                     notification = notification,
-                    onOpenLaporan = onOpenLaporan
+                    onOpenLaporan = onOpenLaporan,
+                    onOpenPengumuman = onOpenPengumuman
                 )
             }
         }
@@ -333,9 +340,11 @@ private fun NotificationCard(
 private fun NotificationDetailContent(
     modifier: Modifier = Modifier,
     notification: Notifikasi,
-    onOpenLaporan: (Int) -> Unit
+    onOpenLaporan: (Int) -> Unit,
+    onOpenPengumuman: (Int) -> Unit
 ) {
     val (icon, iconColor, bgColor) = notificationVisuals(notification.tipeNotifikasi)
+    val pengumumanId = notification.extractPengumumanId()
 
     LazyColumn(
         modifier = modifier
@@ -440,6 +449,18 @@ private fun NotificationDetailContent(
                             value = notification.linkTujuan
                         )
                     }
+                }
+            }
+        }
+
+        if (pengumumanId != null) {
+            item {
+                Button(
+                    onClick = { onOpenPengumuman(pengumumanId) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text("Baca Pengumuman")
                 }
             }
         }
@@ -727,6 +748,24 @@ private fun String.isLegacyVerificationHeader(): Boolean {
     return normalized.contains("NOTIFIKASI") &&
             normalized.contains("VERIFIKASI") &&
             normalized.contains("LAPORAN")
+}
+
+private fun Notifikasi.extractPengumumanId(): Int? {
+    val link = linkTujuan?.trim().orEmpty()
+    if (link.isBlank()) return null
+
+    val pathMatch = Regex(
+        pattern = """(?:^|/)(?:pengumuman|pengumuman_detail|pengumuman-detail)/(\d+)(?:$|[/?#])""",
+        option = RegexOption.IGNORE_CASE
+    ).find(link)
+    if (pathMatch != null) {
+        return pathMatch.groupValues.getOrNull(1)?.toIntOrNull()
+    }
+
+    return Regex(
+        pattern = """[?&](?:pengumuman_id|pengumumanId|id)=(\d+)""",
+        option = RegexOption.IGNORE_CASE
+    ).find(link)?.groupValues?.getOrNull(1)?.toIntOrNull()
 }
 
 private fun formatNotificationDateTime(dateString: String): String {
