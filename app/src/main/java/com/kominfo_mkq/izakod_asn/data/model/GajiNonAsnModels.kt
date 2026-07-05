@@ -32,6 +32,9 @@ data class GajiNonAsnMeData(
     @SerializedName("perhitungan")
     val perhitungan: GajiNonAsnPerhitungan? = null,
 
+    @SerializedName("display_payroll")
+    val displayPayroll: PayrollDisplay? = null,
+
     @SerializedName("pengajuan_opd")
     val pengajuanOpd: GajiNonAsnPengajuanOpd? = null,
 

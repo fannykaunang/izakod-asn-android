@@ -374,7 +374,7 @@ fun DashboardScreen(
             sessionData?.pin?.takeIf { it.isNotEmpty() }?.let { pin ->
                 viewModel.loadPegawaiProfile(pin)
             }
-            if (selectedDashboardTabIndex == DASHBOARD_PAYROLL_TAB_INDEX && isPayrollProfileReady) {
+            if (isPayrollProfileReady) {
                 if (isNonAsnPayroll) {
                     gajiViewModel.refresh()
                 } else {
@@ -421,6 +421,18 @@ fun DashboardScreen(
         }
     }
 
+    LaunchedEffect(uiState.pegawaiProfile?.pegawaiId, isPayrollProfileReady, isNonAsnPayroll) {
+        if (!isPayrollProfileReady) {
+            return@LaunchedEffect
+        }
+
+        if (isNonAsnPayroll) {
+            gajiViewModel.refreshIfNeeded()
+        } else {
+            tppViewModel.refreshIfNeeded()
+        }
+    }
+
     val activePegawaiId = uiState.currentPegawaiId ?: uiState.pegawaiProfile?.pegawaiId ?: sessionData?.pegawaiId
     var focusSectionBounds by remember { mutableStateOf<Rect?>(null) }
     var dismissedCoachmarkKey by remember { mutableStateOf<String?>(null) }
@@ -445,7 +457,7 @@ fun DashboardScreen(
         sessionData?.pin?.takeIf { it.isNotEmpty() }?.let { pin ->
             viewModel.loadPegawaiProfileIfNeeded(pin = pin, force = true)
         }
-        if (selectedDashboardTabIndex == DASHBOARD_PAYROLL_TAB_INDEX && isPayrollProfileReady) {
+        if (isPayrollProfileReady) {
             if (isNonAsnPayroll) {
                 gajiViewModel.refresh()
             } else {
@@ -2605,32 +2617,41 @@ private fun MinimalSummarySection(
         ?.takeIf { it.isNotBlank() }
         ?: "Belum ada periode final"
     val nominalTpp = tppData?.nominalTpp
+    val tppDisplay = tppData?.displayPayroll
     val tppPeriod = monthYearLabel(tppUiState.tahun, tppUiState.bulan)
     val gajiCalculation = gajiData?.perhitungan
+    val gajiDisplay = gajiData?.displayPayroll
     val gajiPeriod = monthYearLabel(gajiUiState.tahun, gajiUiState.bulan)
     val currentPeriodLabel = targetSummary?.activePeriodLabel?.takeIf { it.isNotBlank() }
         ?: tppPeriod
         ?: gajiPeriod
         ?: assessmentSummary?.activePeriodLabel?.takeIf { it.isNotBlank() }
         ?: "Bulan ini"
-    val tppStatusKey = nominalTpp?.status?.lowercase(Locale.ROOT).orEmpty()
+    val tppDisplayStatus = tppDisplay?.status?.lowercase(Locale.ROOT)
+    val tppStatusKey = tppDisplay?.detailStatus?.lowercase(Locale.ROOT)
+        ?: nominalTpp?.status?.lowercase(Locale.ROOT).orEmpty()
     val tppIsLiveEstimate = tppStatusKey == "estimasi_berjalan" ||
+        tppDisplayStatus == "estimasi" ||
+        tppDisplay?.label?.contains("estimasi", ignoreCase = true) == true ||
         nominalTpp?.label?.contains("estimasi", ignoreCase = true) == true
     val tppFinalityLabel = when {
-        nominalTpp == null -> "Belum dihitung"
+        tppDisplayStatus == "belum" || nominalTpp == null && tppDisplay?.nominal == null -> "Belum dihitung"
         tppIsLiveEstimate -> "Estimasi berjalan"
-        nominalTpp.isFinal -> nominalTpp.label?.takeIf { it.isNotBlank() } ?: "Final"
+        tppDisplay?.isFinal == true || nominalTpp?.isFinal == true -> tppDisplay?.label?.takeIf { it.isNotBlank() }
+            ?: nominalTpp?.label?.takeIf { it.isNotBlank() }
+            ?: "Final"
         else -> "Belum final"
     }
     val tppBadge = when {
-        nominalTpp == null -> "BELUM"
+        tppDisplay?.badge != null -> tppDisplay.badge
+        tppDisplayStatus == "belum" || nominalTpp == null -> "BELUM"
         tppIsLiveEstimate -> "ESTIMASI"
         nominalTpp.isFinal -> "FINAL"
         else -> "DRAFT"
     }
     val tppToneColor = when {
-        nominalTpp == null -> MaterialTheme.colorScheme.outline
-        nominalTpp.isFinal || tppStatusKey in setOf("final", "final_opd", "dibayar", "arsip") -> StatusApproved
+        tppDisplayStatus == "belum" || nominalTpp == null && tppDisplay?.nominal == null -> MaterialTheme.colorScheme.outline
+        tppDisplay?.isFinal == true || nominalTpp?.isFinal == true || tppStatusKey in setOf("final", "final_opd", "dibayar", "arsip") -> StatusApproved
         tppStatusKey in setOf("revisi", "dikembalikan") -> StatusRevised
         tppStatusKey in setOf("ditolak", "batal") -> StatusRejected
         tppIsLiveEstimate -> PrimaryLight
@@ -2673,15 +2694,30 @@ private fun MinimalSummarySection(
     } else {
         gajiFinalityLabel
     }
+    val gajiDisplayStatus = gajiDisplay?.status?.lowercase(Locale.ROOT)
+    val displayGajiNominal = gajiDisplay?.nominal ?: gajiCalculation?.totalDibayar
     val payrollTitle = if (isNonAsnPayroll) "Gaji Saya" else "TPP Saya"
     val payrollValue = if (isNonAsnPayroll) {
-        gajiCalculation?.totalDibayar.formatDashboardCurrency()
+        displayGajiNominal.formatDashboardCurrency()
     } else {
-        nominalTpp?.estimasiDiterima.formatDashboardCurrency()
+        (tppDisplay?.nominal ?: nominalTpp?.estimasiDiterima).formatDashboardCurrency()
     }
-    val payrollSubtitle = if (isNonAsnPayroll) gajiSubtitle else tppSubtitle
-    val payrollBadge = if (isNonAsnPayroll) gajiBadge else tppBadge
-    val payrollToneColor = if (isNonAsnPayroll) gajiToneColor else tppToneColor
+    val payrollSubtitle = if (isNonAsnPayroll) {
+        gajiDisplay?.message?.takeIf { it.isNotBlank() } ?: gajiSubtitle
+    } else {
+        tppDisplay?.message?.takeIf { it.isNotBlank() } ?: tppSubtitle
+    }
+    val payrollBadge = if (isNonAsnPayroll) gajiDisplay?.badge ?: gajiBadge else tppBadge
+    val payrollToneColor = if (isNonAsnPayroll) {
+        when (gajiDisplayStatus) {
+            "resmi" -> if (gajiDisplay?.isFinal == true) StatusApproved else PrimaryLight
+            "estimasi" -> PrimaryLight
+            "belum" -> MaterialTheme.colorScheme.outline
+            else -> gajiToneColor
+        }
+    } else {
+        tppToneColor
+    }
     val scoreSubtitle = if (latestScorePeriod == "Belum ada periode final") {
         latestScorePeriod
     } else {

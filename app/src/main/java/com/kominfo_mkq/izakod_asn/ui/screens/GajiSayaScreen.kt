@@ -43,6 +43,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnMeData
 import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnPerhitungan
 import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnRekap
+import com.kominfo_mkq.izakod_asn.data.model.PayrollDisplay
 import com.kominfo_mkq.izakod_asn.ui.components.ElevatedCard
 import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
 import com.kominfo_mkq.izakod_asn.ui.theme.PrimaryLight
@@ -256,6 +257,7 @@ private fun GajiSayaContent(
             item {
                 GajiNominalSummaryCard(
                     calculation = data.perhitungan,
+                    display = data.displayPayroll,
                     onOpenDetail = { onNavigateToDetail(uiState.tahun, uiState.bulan) }
                 )
             }
@@ -301,7 +303,10 @@ private fun GajiSayaDetailContent(
                 GajiProfileSummaryCard(data = data)
             }
             item {
-                GajiNominalDetailCard(calculation = data.perhitungan)
+                GajiNominalDetailCard(
+                    calculation = data.perhitungan,
+                    display = data.displayPayroll
+                )
             }
             item {
                 GajiRekapSummaryCard(rekap = data.rekap)
@@ -375,11 +380,15 @@ private fun GajiProfileSummaryCard(data: GajiNonAsnMeData) {
 @Composable
 private fun GajiNominalSummaryCard(
     calculation: GajiNonAsnPerhitungan?,
+    display: PayrollDisplay?,
     onOpenDetail: () -> Unit
 ) {
-    val isLiveEstimate = calculation?.status?.equals("estimasi_berjalan", ignoreCase = true) == true
-    val statusLabel = gajiStatusLabel(calculation?.status)
-    val hasEffectiveCalculation = calculation.hasEffectiveGajiData()
+    val displayStatus = display?.status?.lowercase(Locale.ROOT)
+    val isLiveEstimate = displayStatus == "estimasi" ||
+        calculation?.status?.equals("estimasi_berjalan", ignoreCase = true) == true
+    val statusLabel = display?.badge ?: display?.label ?: gajiStatusLabel(calculation?.status)
+    val hasEffectiveCalculation = display.hasDisplayPayrollNominal() || calculation.hasEffectiveGajiData()
+    val displayNominal = display?.nominal ?: calculation?.totalDibayar
 
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
@@ -396,18 +405,22 @@ private fun GajiNominalSummaryCard(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = if (isLiveEstimate) "Estimasi Gaji Diterima" else "Gaji Diterima",
+                    text = when {
+                        displayStatus == "belum" || !hasEffectiveCalculation -> "Gaji Belum Dihitung"
+                        isLiveEstimate -> "Estimasi Gaji Diterima"
+                        else -> "Gaji Diterima"
+                    },
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                 )
                 Text(
-                    text = calculation?.totalDibayar.formatGajiCurrency(),
+                    text = displayNominal.formatGajiCurrency(),
                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
                     color = PrimaryLight,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = calculation?.let {
+                    text = display?.message?.takeIf { it.isNotBlank() } ?: calculation?.let {
                         "Gaji pokok ${it.gajiPokok.formatGajiCurrency()} - Potongan ${it.totalPotongan.formatGajiCurrency()}"
                     } ?: "Gaji belum dihitung untuk periode ini.",
                     style = MaterialTheme.typography.bodySmall,
@@ -418,7 +431,7 @@ private fun GajiNominalSummaryCard(
             }
             GajiChip(
                 text = statusLabel.uppercase(Locale.ROOT),
-                color = gajiStatusColor(calculation?.status)
+                color = displayPayrollColor(display, calculation)
             )
         }
 
@@ -435,7 +448,10 @@ private fun GajiNominalSummaryCard(
 }
 
 @Composable
-private fun GajiNominalDetailCard(calculation: GajiNonAsnPerhitungan?) {
+private fun GajiNominalDetailCard(
+    calculation: GajiNonAsnPerhitungan?,
+    display: PayrollDisplay?
+) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         elevation = 1.dp,
@@ -446,7 +462,7 @@ private fun GajiNominalDetailCard(calculation: GajiNonAsnPerhitungan?) {
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
         )
         Text(
-            text = gajiStatusLabel(calculation?.status),
+            text = display?.message ?: gajiStatusLabel(calculation?.status),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -458,7 +474,9 @@ private fun GajiNominalDetailCard(calculation: GajiNonAsnPerhitungan?) {
         GajiDetailRow("Potongan lainnya", calculation?.potonganLainnya.formatGajiCurrency())
         GajiDetailRow("Total potongan", calculation?.totalPotongan.formatGajiCurrency())
         GajiDetailRow("Total dibayar", calculation?.totalDibayar.formatGajiCurrency())
-        GajiDetailRow("Status", gajiStatusLabel(calculation?.status))
+        GajiDetailRow("Status tampilan", display?.label ?: "-")
+        GajiDetailRow("Sumber", display?.source ?: "-")
+        GajiDetailRow("Status perhitungan", display?.detailStatus ?: gajiStatusLabel(calculation?.status))
         GajiDetailRow("Dihitung", formatGajiDateTime(calculation?.calculatedAt))
     }
 }
@@ -772,6 +790,18 @@ private fun gajiStatusColor(status: String?): Color {
     }
 }
 
+private fun displayPayrollColor(
+    display: PayrollDisplay?,
+    calculation: GajiNonAsnPerhitungan?
+): Color {
+    return when (display?.status?.lowercase(Locale.ROOT)) {
+        "resmi" -> if (display.isFinal) StatusApproved else PrimaryLight
+        "estimasi" -> PrimaryLight
+        "belum" -> StatusPending
+        else -> gajiStatusColor(calculation?.status)
+    }
+}
+
 private fun gajiStatusLabel(status: String?): String {
     return when (status?.lowercase(Locale.ROOT)) {
         "estimasi_berjalan" -> "Estimasi"
@@ -792,6 +822,13 @@ private fun GajiNonAsnPerhitungan?.hasEffectiveGajiData(): Boolean {
     return calculation.totalDibayar != null ||
         calculation.gajiPokok != null ||
         !calculation.status.isNullOrBlank()
+}
+
+private fun PayrollDisplay?.hasDisplayPayrollNominal(): Boolean {
+    val display = this ?: return false
+    return display.status == "estimasi" ||
+        display.status == "resmi" ||
+        display.nominal != null
 }
 
 private fun gajiPeriodLabel(tahun: Int, bulan: Int): String {

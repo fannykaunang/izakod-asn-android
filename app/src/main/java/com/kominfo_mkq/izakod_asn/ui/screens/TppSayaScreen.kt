@@ -51,6 +51,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kominfo_mkq.izakod_asn.data.model.TppApelHarian
 import com.kominfo_mkq.izakod_asn.data.model.TppMeData
 import com.kominfo_mkq.izakod_asn.data.model.TppNominal
+import com.kominfo_mkq.izakod_asn.data.model.PayrollDisplay
 import com.kominfo_mkq.izakod_asn.data.model.TppRekapKehadiran
 import com.kominfo_mkq.izakod_asn.ui.components.ElevatedCard
 import com.kominfo_mkq.izakod_asn.ui.components.IZAKODHeaderBar
@@ -265,12 +266,16 @@ private fun TppSayaContent(
                 TppProfileSummaryCard(data = data)
             }
             item {
-                TppNominalSummaryCard(nominal = data.nominalTpp)
+                TppNominalSummaryCard(
+                    nominal = data.nominalTpp,
+                    display = data.displayPayroll
+                )
             }
             item {
                 TppRekapSummaryCard(
                     rekap = data.rekap,
-                    hasEffectivePayrollData = data.nominalTpp.hasEffectiveTppData(),
+                    hasEffectivePayrollData = data.displayPayroll.hasDisplayPayrollNominal() ||
+                        data.nominalTpp.hasEffectiveTppData(),
                     onOpenDetail = { onNavigateToDetail(uiState.tahun, uiState.bulan) }
                 )
             }
@@ -316,7 +321,10 @@ private fun TppSayaDetailContent(
                 TppProfileSummaryCard(data = data)
             }
             item {
-                TppNominalDetailCard(nominal = data.nominalTpp)
+                TppNominalDetailCard(
+                    nominal = data.nominalTpp,
+                    display = data.displayPayroll
+                )
             }
             item {
                 TppRekapDetailCard(rekap = data.rekap)
@@ -482,15 +490,21 @@ private fun TppProfileSummaryCard(data: TppMeData) {
 }
 
 @Composable
-private fun TppNominalSummaryCard(nominal: TppNominal?) {
-    val isLiveEstimate = nominal?.status?.equals("estimasi_berjalan", ignoreCase = true) == true
+private fun TppNominalSummaryCard(
+    nominal: TppNominal?,
+    display: PayrollDisplay?
+) {
+    val displayStatus = display?.status?.lowercase(Locale.ROOT)
+    val isLiveEstimate = displayStatus == "estimasi" ||
+        nominal?.status?.equals("estimasi_berjalan", ignoreCase = true) == true
     val title = when {
-        nominal == null -> "TPP Belum Dihitung"
+        displayStatus == "belum" || nominal == null -> "TPP Belum Dihitung"
         isLiveEstimate -> "Estimasi TPP Diterima"
         else -> "TPP Diterima"
     }
+    val displayNominal = display?.nominal ?: nominal?.estimasiDiterima
     val chipColor = when {
-        nominal?.isFinal == true -> StatusApproved
+        display?.isFinal == true || nominal?.isFinal == true -> StatusApproved
         isLiveEstimate -> PrimaryLight
         else -> StatusPending
     }
@@ -514,14 +528,14 @@ private fun TppNominalSummaryCard(nominal: TppNominal?) {
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                 )
                 Text(
-                    text = nominal?.estimasiDiterima.formatCurrency(),
+                    text = displayNominal.formatCurrency(),
                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
                     color = PrimaryLight,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = nominal?.let {
+                    text = display?.message?.takeIf { it.isNotBlank() } ?: nominal?.let {
                         "Disiplin ${it.nilaiDisiplin.formatCurrency()} + Kinerja ${it.nilaiKinerja.formatCurrency()}"
                     } ?: "Nominal belum dihitung untuk periode ini.",
                     style = MaterialTheme.typography.bodySmall,
@@ -531,7 +545,7 @@ private fun TppNominalSummaryCard(nominal: TppNominal?) {
                 )
             }
             TppChip(
-                text = nominal?.label ?: "Belum dihitung",
+                text = display?.badge ?: display?.label ?: nominal?.label ?: "Belum dihitung",
                 color = chipColor
             )
         }
@@ -559,7 +573,10 @@ private fun TppNominalSummaryCard(nominal: TppNominal?) {
 }
 
 @Composable
-private fun TppNominalDetailCard(nominal: TppNominal?) {
+private fun TppNominalDetailCard(
+    nominal: TppNominal?,
+    display: PayrollDisplay?
+) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         elevation = 1.dp,
@@ -570,7 +587,7 @@ private fun TppNominalDetailCard(nominal: TppNominal?) {
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
         )
         Text(
-            text = nominal?.label ?: "Belum dihitung",
+            text = display?.message ?: nominal?.label ?: "Belum dihitung",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -587,7 +604,9 @@ private fun TppNominalDetailCard(nominal: TppNominal?) {
         TppDetailRow("Total netto", nominal?.totalNetto.formatCurrency())
         TppDetailRow("Total dibayar", nominal?.totalDibayar.formatCurrency())
         TppDetailRow("Perkiraan diterima", nominal?.estimasiDiterima.formatCurrency())
-        TppDetailRow("Status", nominal?.status ?: "-")
+        TppDetailRow("Status tampilan", display?.label ?: "-")
+        TppDetailRow("Sumber", display?.source ?: "-")
+        TppDetailRow("Status perhitungan", display?.detailStatus ?: nominal?.status ?: "-")
         TppDetailRow("Dihitung", formatDateTime(nominal?.calculatedAt))
     }
 }
@@ -1188,6 +1207,13 @@ private fun TppNominal?.hasEffectiveTppData(): Boolean {
         nominal.totalDibayar > 0.0 ||
         nominal.totalNetto > 0.0 ||
         !nominal.status.isNullOrBlank()
+}
+
+private fun PayrollDisplay?.hasDisplayPayrollNominal(): Boolean {
+    val display = this ?: return false
+    return display.status == "estimasi" ||
+        display.status == "resmi" ||
+        (display.nominal ?: 0.0) > 0.0
 }
 
 private fun statusColor(status: String?): Color {

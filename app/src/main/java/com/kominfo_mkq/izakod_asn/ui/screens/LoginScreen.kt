@@ -1,5 +1,6 @@
 package com.kominfo_mkq.izakod_asn.ui.screens
 
+import android.app.Activity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -45,7 +46,9 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +62,7 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -68,6 +72,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kominfo_mkq.izakod_asn.R
 import com.kominfo_mkq.izakod_asn.ui.theme.GradientEndLight
@@ -87,10 +92,30 @@ fun LoginScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     var localSessionMessage by rememberSaveable { mutableStateOf<String?>(null) }
     val focusManager = LocalFocusManager.current
+    val view = LocalView.current
 
     // Collect UI state
     val uiState by viewModel.uiState.collectAsState()
     val visibleMessage = uiState.errorMessage ?: localSessionMessage
+
+    if (!view.isInEditMode) {
+        DisposableEffect(view) {
+            val window = (view.context as? Activity)?.window
+            val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+            val previousLightStatusBars = controller?.isAppearanceLightStatusBars
+
+            onDispose {
+                if (previousLightStatusBars != null) {
+                    controller.isAppearanceLightStatusBars = previousLightStatusBars
+                }
+            }
+        }
+
+        SideEffect {
+            val window = (view.context as? Activity)?.window ?: return@SideEffect
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+        }
+    }
 
     LaunchedEffect(Unit) {
         val loggedIn = viewModel.checkLoginStatus()

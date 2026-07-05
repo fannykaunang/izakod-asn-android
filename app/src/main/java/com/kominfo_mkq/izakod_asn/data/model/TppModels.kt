@@ -32,6 +32,9 @@ data class TppMeData(
     @SerializedName("nominal_tpp")
     val nominalTpp: TppNominal? = null,
 
+    @SerializedName("display_payroll")
+    val displayPayroll: PayrollDisplay? = null,
+
     @SerializedName("apel_harian")
     val apelHarian: List<TppApelHarian> = emptyList(),
 

@@ -95,10 +95,28 @@ class PayrollLiveEstimateRepository {
     private fun parseJsonError(raw: String?, fallback: String): String {
         val parsedMessage = try {
             val json = JSONObject(raw ?: "{}")
-            json.optString("message").ifBlank {
+            val message = json.optString("message").ifBlank {
                 json.optString("response")
             }.ifBlank {
                 json.optString("error")
+            }
+
+            val details = json.optJSONArray("details")
+            val firstDetail = details
+                ?.optJSONObject(0)
+                ?.let { detail ->
+                    val path = detail.optString("path")
+                    val detailMessage = detail.optString("message")
+                    listOf(path, detailMessage)
+                        .filter { it.isNotBlank() }
+                        .joinToString(": ")
+                }
+                .orEmpty()
+
+            if (message.isNotBlank() && firstDetail.isNotBlank()) {
+                "$message ($firstDetail)"
+            } else {
+                message.ifBlank { firstDetail }
             }
         } catch (_: Exception) {
             ""

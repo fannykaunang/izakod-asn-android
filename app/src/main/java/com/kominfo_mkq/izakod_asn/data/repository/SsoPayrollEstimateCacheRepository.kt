@@ -12,6 +12,7 @@ import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnPegawaiInfo
 import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnPerhitungan
 import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnPeriodeInfo
 import com.kominfo_mkq.izakod_asn.data.model.GajiNonAsnStatus
+import com.kominfo_mkq.izakod_asn.data.model.PayrollDisplay
 import com.kominfo_mkq.izakod_asn.data.model.PegawaiProfile
 import com.kominfo_mkq.izakod_asn.data.model.TppMeData
 import com.kominfo_mkq.izakod_asn.data.model.TppMeResponse
@@ -120,6 +121,16 @@ class SsoPayrollEstimateCacheRepository {
                 ),
                 pegawai = cache.toGajiPegawaiInfo(),
                 perhitungan = calculation,
+                displayPayroll = PayrollDisplay(
+                    status = "estimasi",
+                    nominal = calculation.totalDibayar,
+                    source = "sso_payroll_estimate_cache",
+                    label = SSO_FALLBACK_LABEL,
+                    badge = "ESTIMASI",
+                    message = "Nominal ini masih estimasi berjalan dan dapat berubah sampai OPD memfinalkan perhitungan.",
+                    isFinal = false,
+                    detailStatus = calculation.status
+                ),
                 status = GajiNonAsnStatus(
                     calculationAvailable = true,
                     ready = false,
@@ -173,6 +184,18 @@ class SsoPayrollEstimateCacheRepository {
                 ),
                 pegawai = cache.toTppPegawaiInfo(),
                 nominalTpp = nominal,
+                displayPayroll = PayrollDisplay(
+                    status = "estimasi",
+                    nominal = nominal.estimasiDiterima.takeIf { it > 0.0 }
+                        ?: nominal.totalDibayar.takeIf { it > 0.0 }
+                        ?: nominal.totalNetto.takeIf { it > 0.0 },
+                    source = "sso_payroll_estimate_cache",
+                    label = SSO_FALLBACK_LABEL,
+                    badge = "ESTIMASI",
+                    message = "Nominal ini masih estimasi berjalan dan dapat berubah sampai OPD memfinalkan perhitungan.",
+                    isFinal = false,
+                    detailStatus = nominal.status
+                ),
                 status = TppMeStatus(
                     profileReadinessIssues = listOf(SSO_FALLBACK_ISSUE),
                     perhitunganAvailable = true,

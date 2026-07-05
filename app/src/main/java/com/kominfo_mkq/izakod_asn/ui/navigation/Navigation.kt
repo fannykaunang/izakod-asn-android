@@ -237,12 +237,17 @@ fun IZAKODNavigation(
         }
     ) { innerPadding ->
         val layoutDirection = LocalLayoutDirection.current
+        val topPadding = if (currentRoute == Screen.Login.route || (currentRoute == null && startDestination == Screen.Login.route)) {
+            0.dp
+        } else {
+            innerPadding.calculateTopPadding()
+        }
         NavHost(
             navController = navController,
             startDestination = startDestination,
             modifier = Modifier.padding(
                 start = innerPadding.calculateStartPadding(layoutDirection),
-                top = innerPadding.calculateTopPadding(),
+                top = topPadding,
                 end = innerPadding.calculateEndPadding(layoutDirection),
                 bottom = 0.dp
             )
