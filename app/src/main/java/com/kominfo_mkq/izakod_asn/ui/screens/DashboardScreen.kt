@@ -228,6 +228,9 @@ private fun Double?.formatDashboardCurrency(): String {
 
 private fun String?.toIzakodAssetUrl(): String? {
     val raw = this?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    if (raw.startsWith("http://izakod-asn.merauke.go.id/", ignoreCase = true)) {
+        return raw.replaceFirst("http://", "https://", ignoreCase = true)
+    }
     if (raw.startsWith("http://") || raw.startsWith("https://")) return raw
     return ApiClient.BASE_URL.trimEnd('/') + "/" + raw.trimStart('/')
 }

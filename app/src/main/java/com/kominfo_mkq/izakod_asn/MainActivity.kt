@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Base64
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -16,8 +17,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -29,6 +34,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
@@ -51,35 +57,102 @@ import org.json.JSONObject
 
 
 @Composable
-fun RequestNotificationPermissionOnce(userPrefs: UserPreferences) {
+fun RequestNotificationPermissionAfterActiveSession(
+    userPrefs: UserPreferences,
+    sessionSignal: Int
+) {
     if (Build.VERSION.SDK_INT < 33) return
+    if (sessionSignal <= 0) return
 
     val context = LocalContext.current
+    var showSettingsDialog by remember { mutableStateOf(false) }
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { _ ->
+    ) { granted ->
         // Apa pun hasilnya, sudah dianggap "pernah diminta"
         userPrefs.setAskedNotificationPermission(true)
+        showSettingsDialog = !granted || !areNotificationsAllowed(context)
     }
 
-    LaunchedEffect(Unit) {
-        // kalau sudah pernah diminta -> jangan tanya lagi
-        if (userPrefs.hasAskedNotificationPermission()) return@LaunchedEffect
+    LaunchedEffect(sessionSignal) {
+        delay(650)
 
-        val granted = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.POST_NOTIFICATIONS
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (granted) {
+        if (areNotificationsAllowed(context)) {
             // sudah granted tanpa perlu prompt, tandai saja biar tidak ngecek lagi
             userPrefs.setAskedNotificationPermission(true)
+            showSettingsDialog = false
+            return@LaunchedEffect
+        }
+
+        // Kalau pernah ditolak, beberapa perangkat tidak akan menampilkan prompt sistem lagi.
+        if (userPrefs.hasAskedNotificationPermission()) {
+            showSettingsDialog = true
             return@LaunchedEffect
         }
 
         // belum granted & belum pernah diminta -> minta 1x
         launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    if (showSettingsDialog) {
+        AlertDialog(
+            onDismissRequest = { showSettingsDialog = false },
+            title = { Text("Aktifkan Notifikasi") },
+            text = {
+                Text(
+                    "Agar pengumuman, revisi laporan, TPP/Gaji, dan informasi penting tetap masuk, aktifkan izin notifikasi IZAKOD-ASN di pengaturan perangkat."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showSettingsDialog = false
+                        openAppNotificationSettings(context)
+                    }
+                ) {
+                    Text("Buka Pengaturan")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSettingsDialog = false }) {
+                    Text("Nanti")
+                }
+            }
+        )
+    }
+}
+
+private fun areNotificationsAllowed(context: android.content.Context): Boolean {
+    if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
+
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
+
+    return ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.POST_NOTIFICATIONS
+    ) == PackageManager.PERMISSION_GRANTED
+}
+
+private fun openAppNotificationSettings(context: android.content.Context) {
+    val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        }
+    } else {
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.parse("package:${context.packageName}")
+        }
+    }
+
+    try {
+        context.startActivity(intent)
+    } catch (_: ActivityNotFoundException) {
+        context.startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:${context.packageName}")
+            }
+        )
     }
 }
 
@@ -167,6 +240,9 @@ class MainActivity : ComponentActivity() {
                     checkAndRestoreSession()
                 }
             }
+            var activeSessionSignal by rememberSaveable {
+                mutableStateOf(if (startDestination == Screen.Dashboard.route) 1 else 0)
+            }
 
             LaunchedEffect(Unit) {
                 appUpdatePolicy = performAppVersionStartupCheck(userPrefs)
@@ -186,11 +262,11 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    // ✅ Minta izin notifikasi sekali (Android 13+)
-                    // Kalau mau hanya saat user sudah login:
-                    if (startDestination == Screen.Dashboard.route) {
-                        RequestNotificationPermissionOnce(userPrefs)
-                    }
+                    // Minta izin notifikasi setelah sesi login benar-benar aktif.
+                    RequestNotificationPermissionAfterActiveSession(
+                        userPrefs = userPrefs,
+                        sessionSignal = activeSessionSignal
+                    )
 
                     IZAKODNavigation(
                         startDestination = startDestination,
@@ -201,7 +277,9 @@ class MainActivity : ComponentActivity() {
                             pendingExternalRoute = null
                         },
 
-                        // ✅ callback untuk Settings toggle
+                        onAuthenticatedSessionReady = {
+                            activeSessionSignal += 1
+                        },
                         isDarkTheme = isDarkTheme,
                         onToggleTheme = { enabled ->
                             isDarkTheme = enabled

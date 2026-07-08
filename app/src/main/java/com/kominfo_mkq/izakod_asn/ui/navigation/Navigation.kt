@@ -138,6 +138,7 @@ fun IZAKODNavigation(
     initialSsoFallbackRoute: String? = null,
     pendingExternalRoute: String? = null,
     onPendingExternalRouteConsumed: () -> Unit = {},
+    onAuthenticatedSessionReady: () -> Unit = {},
     isDarkTheme: Boolean,
     onToggleTheme: (Boolean) -> Unit
 ) {
@@ -258,6 +259,7 @@ fun IZAKODNavigation(
                     onSessionMessageConsumed = { loginNoticeMessage = null },
                     onLoginSuccess = {
                         val targetRoute = pendingExternalRoute ?: Screen.Dashboard.route
+                        onAuthenticatedSessionReady()
                         payrollDetailReturnToDashboard = isPayrollDetailRoute(targetRoute)
                         navController.navigate(targetRoute) {
                             popUpTo(Screen.Login.route) { inclusive = true }
@@ -296,6 +298,7 @@ fun IZAKODNavigation(
                     ticket = ticket,
                     fallbackRoute = fallbackRoute,
                     onSuccess = { route ->
+                        onAuthenticatedSessionReady()
                         payrollDetailReturnToDashboard = isPayrollDetailRoute(route)
                         navController.navigate(route) {
                             popUpTo(navController.graph.id) { inclusive = true }

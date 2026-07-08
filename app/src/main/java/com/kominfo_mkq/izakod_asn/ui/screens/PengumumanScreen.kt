@@ -1,7 +1,19 @@
 package com.kominfo_mkq.izakod_asn.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.graphics.Typeface
 import android.text.Spanned
+import android.text.style.AbsoluteSizeSpan
+import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
+import android.text.style.StrikethroughSpan
+import android.text.style.StyleSpan
+import android.text.style.UnderlineSpan
 import android.text.style.URLSpan
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.text.ClickableText
@@ -20,7 +32,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -28,6 +43,7 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -40,15 +56,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import androidx.core.text.HtmlCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
@@ -124,13 +144,22 @@ private fun PengumumanDetailContent(
     modifier: Modifier,
     detail: PengumumanReadDetail
 ) {
+    if (detail.isWithdrawn) {
+        PengumumanWithdrawnContent(modifier = modifier, detail = detail)
+        return
+    }
+    val publicUrl = detail.publicWebUrl()
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 20.dp, top = 18.dp, end = 20.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            PengumumanHeroCard(detail = detail)
+            PengumumanHeroCard(
+                detail = detail,
+                publicUrl = publicUrl
+            )
         }
 
         detail.ringkasan?.takeIf { it.isNotBlank() }?.let { ringkasan ->
@@ -190,6 +219,106 @@ private fun PengumumanDetailContent(
 }
 
 @Composable
+private fun PengumumanWithdrawnContent(
+    modifier: Modifier,
+    detail: PengumumanReadDetail
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 20.dp, top = 18.dp, end = 20.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            ElevatedCard(
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.42f)
+                ),
+                shape = RoundedCornerShape(28.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
+                        contentColor = MaterialTheme.colorScheme.error,
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Text(
+                            text = "Sudah ditarik",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    }
+
+                    Text(
+                        text = detail.judul,
+                        style = MaterialTheme.typography.headlineSmall.copy(
+                            fontWeight = FontWeight.ExtraBold
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Text(
+                        text = detail.withdrawnReason?.takeIf { it.isNotBlank() }
+                            ?: detail.ringkasan?.takeIf { it.isNotBlank() }
+                            ?: "Pengumuman ini sudah ditarik oleh admin dan tidak lagi tersedia sebagai informasi aktif.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Text(
+                        text = "Waktu tarik: ${formatPengumumanDate(detail.withdrawnAt)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PengumumanWebActions(
+    detail: PengumumanReadDetail,
+    publicUrl: String
+) {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedButton(
+            onClick = { openPengumumanPublicUrl(context, publicUrl) },
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(
+                Icons.Default.OpenInBrowser,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.size(6.dp))
+            Text("Buka Web", maxLines = 1)
+        }
+        Button(
+            onClick = { sharePengumumanPublicUrl(context, detail, publicUrl) },
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(
+                Icons.Default.Share,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.size(6.dp))
+            Text("Bagikan", maxLines = 1)
+        }
+    }
+}
+
+@Composable
 private fun PengumumanHtmlText(value: String) {
     val uriHandler = LocalUriHandler.current
     val linkColor = MaterialTheme.colorScheme.primary
@@ -215,7 +344,7 @@ private fun PengumumanHtmlText(value: String) {
 
 private fun buildPengumumanAnnotatedContent(
     value: String,
-    linkColor: androidx.compose.ui.graphics.Color
+    linkColor: Color
 ): AnnotatedString {
     val spanned = parsePengumumanHtml(value)
     val rawText = spanned.toString()
@@ -225,6 +354,60 @@ private fun buildPengumumanAnnotatedContent(
         ?: rawText.length
     val text = rawText.substring(contentStart, contentEnd)
     val builder = AnnotatedString.Builder(text)
+
+    spanned.getSpans(0, spanned.length, StyleSpan::class.java).forEach { span ->
+        builder.addPengumumanSpanStyle(spanned, span, contentStart, text.length) {
+            when (span.style) {
+                Typeface.BOLD -> SpanStyle(fontWeight = FontWeight.Bold)
+                Typeface.ITALIC -> SpanStyle(fontStyle = FontStyle.Italic)
+                Typeface.BOLD_ITALIC -> SpanStyle(
+                    fontWeight = FontWeight.Bold,
+                    fontStyle = FontStyle.Italic
+                )
+
+                else -> null
+            }
+        }
+    }
+
+    spanned.getSpans(0, spanned.length, RelativeSizeSpan::class.java).forEach { span ->
+        builder.addPengumumanSpanStyle(spanned, span, contentStart, text.length) {
+            SpanStyle(
+                fontSize = (16f * span.sizeChange)
+                    .coerceIn(12f, 28f)
+                    .sp
+            )
+        }
+    }
+
+    spanned.getSpans(0, spanned.length, AbsoluteSizeSpan::class.java).forEach { span ->
+        builder.addPengumumanSpanStyle(spanned, span, contentStart, text.length) {
+            SpanStyle(
+                fontSize = span.size
+                    .toFloat()
+                    .coerceIn(12f, 30f)
+                    .sp
+            )
+        }
+    }
+
+    spanned.getSpans(0, spanned.length, ForegroundColorSpan::class.java).forEach { span ->
+        builder.addPengumumanSpanStyle(spanned, span, contentStart, text.length) {
+            SpanStyle(color = Color(span.foregroundColor))
+        }
+    }
+
+    spanned.getSpans(0, spanned.length, UnderlineSpan::class.java).forEach { span ->
+        builder.addPengumumanSpanStyle(spanned, span, contentStart, text.length) {
+            SpanStyle(textDecoration = TextDecoration.Underline)
+        }
+    }
+
+    spanned.getSpans(0, spanned.length, StrikethroughSpan::class.java).forEach { span ->
+        builder.addPengumumanSpanStyle(spanned, span, contentStart, text.length) {
+            SpanStyle(textDecoration = TextDecoration.LineThrough)
+        }
+    }
 
     spanned.getSpans(0, spanned.length, URLSpan::class.java).forEach { span ->
         val start = (spanned.getSpanStart(span) - contentStart).coerceIn(0, text.length)
@@ -253,6 +436,22 @@ private fun buildPengumumanAnnotatedContent(
     return builder.toAnnotatedString()
 }
 
+private fun AnnotatedString.Builder.addPengumumanSpanStyle(
+    spanned: Spanned,
+    span: Any,
+    contentStart: Int,
+    textLength: Int,
+    styleFactory: () -> SpanStyle?
+) {
+    val start = (spanned.getSpanStart(span) - contentStart).coerceIn(0, textLength)
+    val end = (spanned.getSpanEnd(span) - contentStart).coerceIn(start, textLength)
+    val style = styleFactory()
+
+    if (style != null && start < end) {
+        addStyle(style = style, start = start, end = end)
+    }
+}
+
 private fun parsePengumumanHtml(value: String): Spanned {
     val tagRegex = Regex("""</?[a-z][\s\S]*>""", RegexOption.IGNORE_CASE)
     val decodedOnce = HtmlCompat.fromHtml(value, HtmlCompat.FROM_HTML_MODE_LEGACY).toString()
@@ -266,7 +465,10 @@ private fun parsePengumumanHtml(value: String): Spanned {
 }
 
 @Composable
-private fun PengumumanHeroCard(detail: PengumumanReadDetail) {
+private fun PengumumanHeroCard(
+    detail: PengumumanReadDetail,
+    publicUrl: String?
+) {
     val thumbnailUrl = detail.thumbnailUrl.toIzakodAssetUrl()
 
     ElevatedCard(
@@ -344,6 +546,13 @@ private fun PengumumanHeroCard(detail: PengumumanReadDetail) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+
+                publicUrl?.let { url ->
+                    PengumumanWebActions(
+                        detail = detail,
+                        publicUrl = url
+                    )
+                }
             }
         }
     }
@@ -396,8 +605,67 @@ private fun PengumumanErrorContent(
 
 private fun String?.toIzakodAssetUrl(): String? {
     val raw = this?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    if (raw.startsWith("http://izakod-asn.merauke.go.id/", ignoreCase = true)) {
+        return raw.replaceFirst("http://", "https://", ignoreCase = true)
+    }
     if (raw.startsWith("http://") || raw.startsWith("https://")) return raw
     return ApiClient.BASE_URL.trimEnd('/') + "/" + raw.trimStart('/')
+}
+
+private fun PengumumanReadDetail.publicWebUrl(): String? {
+    publicUrl?.trim()?.takeIf { it.isNotBlank() }?.let {
+        return it.toIzakodAssetUrl() ?: it
+    }
+    val slug = publicSlug?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    return "${ApiClient.BASE_URL.trimEnd('/')}/informasi/${slug}"
+}
+
+private fun openPengumumanPublicUrl(context: Context, publicUrl: String) {
+    val intent = Intent(Intent.ACTION_VIEW, publicUrl.toUri())
+    runCatching { context.startActivity(intent) }
+        .onFailure {
+            Toast.makeText(
+                context,
+                "Tidak ada aplikasi untuk membuka link.",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+}
+
+private fun copyPengumumanPublicUrl(context: Context, publicUrl: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+    clipboard?.setPrimaryClip(ClipData.newPlainText("Link informasi IZAKOD-ASN", publicUrl))
+    Toast.makeText(context, "Link informasi disalin.", Toast.LENGTH_SHORT).show()
+}
+
+private fun sharePengumumanPublicUrl(
+    context: Context,
+    detail: PengumumanReadDetail,
+    publicUrl: String
+) {
+    val shareText = buildString {
+        append(detail.judul)
+        detail.ringkasan?.trim()?.takeIf { it.isNotBlank() }?.let {
+            append("\n\n")
+            append(it)
+        }
+        append("\n\n")
+        append(publicUrl)
+    }
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, detail.judul)
+        putExtra(Intent.EXTRA_TEXT, shareText)
+    }
+    runCatching {
+        context.startActivity(Intent.createChooser(intent, "Bagikan informasi"))
+    }.onFailure {
+        Toast.makeText(
+            context,
+            "Tidak ada aplikasi untuk membagikan link.",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
 }
 
 private fun formatPengumumanDate(value: String?): String {

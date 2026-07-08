@@ -54,6 +54,12 @@ data class PengumumanHighlightItem(
     @SerializedName("kategori_konten")
     val kategoriKonten: String? = null,
 
+    @SerializedName("public_slug")
+    val publicSlug: String? = null,
+
+    @SerializedName("public_url")
+    val publicUrl: String? = null,
+
     @SerializedName("link_tujuan")
     val linkTujuan: String? = null,
 
@@ -83,6 +89,9 @@ data class PengumumanReadDetail(
     @SerializedName("tipe")
     val tipe: String? = null,
 
+    @SerializedName("status")
+    val status: String? = null,
+
     @SerializedName("judul")
     val judul: String,
 
@@ -101,11 +110,26 @@ data class PengumumanReadDetail(
     @SerializedName("kategori_konten")
     val kategoriKonten: String? = null,
 
+    @SerializedName("public_slug")
+    val publicSlug: String? = null,
+
+    @SerializedName("public_url")
+    val publicUrl: String? = null,
+
     @SerializedName("link_tujuan")
     val linkTujuan: String? = null,
 
     @SerializedName("action_required")
     val actionRequired: Boolean = false,
+
+    @SerializedName("is_withdrawn")
+    val isWithdrawn: Boolean = false,
+
+    @SerializedName("withdrawn_at")
+    val withdrawnAt: String? = null,
+
+    @SerializedName("withdrawn_reason")
+    val withdrawnReason: String? = null,
 
     @SerializedName("published_at")
     val publishedAt: String? = null,
