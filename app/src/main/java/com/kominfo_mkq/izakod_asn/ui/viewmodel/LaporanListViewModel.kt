@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.kominfo_mkq.izakod_asn.data.local.UserPreferences
 import com.kominfo_mkq.izakod_asn.data.model.AtasanPegawaiData
 import com.kominfo_mkq.izakod_asn.data.model.LaporanKegiatan
+import com.kominfo_mkq.izakod_asn.data.model.LaporanCetakData
 import com.kominfo_mkq.izakod_asn.data.model.LaporanMeta
 import com.kominfo_mkq.izakod_asn.data.repository.LaporanRepository
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +26,7 @@ data class LaporanListUiState(
     val filterBulan: Int? = null,
     val filterTahun: Int? = null,
     val totalFiltered: Int? = null,
+    val cetakData: LaporanCetakData? = null,
     val laporanMeta: LaporanMeta? = null,
     val hasActiveSubordinates: Boolean = false,
     val ownActionCount: Int = 0,
@@ -177,7 +179,8 @@ class LaporanListViewModel : ViewModel() {
                         subordinateActionCount = subordinateActionCount,
                         filterBulan = null,
                         filterTahun = null,
-                        totalFiltered = null
+                        totalFiltered = null,
+                        cetakData = null
                     )
                     if (!includeSubordinates && hasActiveSubordinates) {
                         refreshSubordinateActionCount(context)
@@ -214,6 +217,7 @@ class LaporanListViewModel : ViewModel() {
                         filterBulan = body.meta?.bulan,
                         filterTahun = body.meta?.tahun,
                         totalFiltered = body.meta?.total,
+                        cetakData = body.data,
                         ownActionCount = body.data?.laporan.orEmpty().count { it.isOwnActionReport() }
                     )
                 } else {

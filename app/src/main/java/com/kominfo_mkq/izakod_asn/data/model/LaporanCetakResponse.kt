@@ -17,6 +17,12 @@ data class LaporanCetakData(
     @SerializedName("pegawai")
     val pegawai: PegawaiCetak?,
 
+    @SerializedName("atasan_langsung")
+    val atasanLangsung: PegawaiCetak?,
+
+    @SerializedName("kepala_opd")
+    val kepalaOpd: PegawaiCetak?,
+
     @SerializedName("laporan")
     val laporan: List<LaporanKegiatan> = emptyList(),
 
@@ -32,13 +38,16 @@ data class PegawaiCetak(
     val pegawaiNama: String,
 
     @SerializedName("pegawai_nip")
-    val pegawaiNip: String,
+    val pegawaiNip: String?,
 
     @SerializedName("jabatan")
     val jabatan: String?,
 
     @SerializedName("skpd")
-    val skpd: String?
+    val skpd: String?,
+
+    @SerializedName("is_non_asn")
+    val isNonAsn: Boolean? = null
 )
 
 data class LampiranKegiatan(

@@ -61,6 +61,8 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
@@ -79,6 +81,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -115,6 +118,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 import android.graphics.Color as GColor
 
@@ -179,6 +183,7 @@ fun ReportListScreen(
     var pdfFile by remember { mutableStateOf<File?>(null) }
     var isGeneratingPdf by remember { mutableStateOf(false) }
     var pdfError by remember { mutableStateOf<String?>(null) }
+    var signatureDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     val isSubordinateMode = selectedOwnerScope == ReportOwnerScope.SUBORDINATES
     val showOwnerTabs = uiState.hasActiveSubordinates || isSubordinateMode
 
@@ -337,6 +342,16 @@ fun ReportListScreen(
                                 },
                                 onClick = {
                                     showOverflowMenu = false
+                                    if (!isFilterActive) {
+                                        val now = Calendar.getInstance()
+                                        viewModel.loadLaporanBulanan(
+                                            context,
+                                            now.get(Calendar.MONTH) + 1,
+                                            now.get(Calendar.YEAR)
+                                        )
+                                    }
+                                    pdfFile = null
+                                    pdfError = null
                                     showPrintPreview = true
                                 }
                             )
@@ -563,26 +578,29 @@ fun ReportListScreen(
         val bulan = uiState.filterBulan ?: (Calendar.getInstance().get(Calendar.MONTH) + 1)
         val tahun = uiState.filterTahun ?: Calendar.getInstance().get(Calendar.YEAR)
 
-        val atasanReady = uiState.atasanPegawai != null
-        val atasanError = uiState.errorAtasan
-        val atasanLoading = uiState.isLoadingAtasan
+        val printDataReady = uiState.cetakData?.pegawai != null
+        val printDataError = if (uiState.isError) uiState.errorMessage else null
 
         PrintPreviewDialog(
             title = "Preview Cetak",
             month = bulan,
             year = tahun,
-            total = filteredReports.size,
-            isLoading = isGeneratingPdf,
-            //errorText = pdfError,
-            errorText = pdfError ?: uiState.errorAtasan,
+            total = allReports.size,
+            isLoading = isGeneratingPdf || uiState.isLoading,
+            errorText = pdfError ?: printDataError,
             pdfFile = pdfFile,
+            signatureDateMillis = signatureDateMillis,
+            onSignatureDateChange = { selectedMillis ->
+                signatureDateMillis = selectedMillis
+                pdfFile = null
+            },
             onDismiss = {
                 showPrintPreview = false
                 pdfFile = null
                 pdfError = null
                 isGeneratingPdf = false
             },
-            autoGenerate = (uiState.atasanPegawai != null && uiState.errorAtasan.isNullOrBlank()),
+            autoGenerate = printDataReady && printDataError.isNullOrBlank(),
 //            onGenerate = {
 //                scope.launch {
 //                    isGeneratingPdf = true
@@ -660,42 +678,48 @@ fun ReportListScreen(
                     pdfError = null
 
                     // 0) Kalau masih loading atasan, jangan mulai generate PDF
-                    if (atasanLoading) {
-                        pdfError = "Sedang memuat data atasan... coba lagi sebentar."
+                    if (uiState.isLoading) {
+                        pdfError = "Sedang memuat data laporan... coba lagi sebentar."
                         return@launch
                     }
 
                     // 1) Jika ada error / data atasan kosong, stop tanpa loading PDF
-                    if (!atasanError.isNullOrBlank()) {
-                        pdfError = atasanError
+                    if (!printDataError.isNullOrBlank()) {
+                        pdfError = printDataError
                         return@launch
                     }
 
-                    if (!atasanReady) {
-                        // Optional: panggil loadAtasanPegawai lagi (kalau belum pernah)
-                        viewModel.loadAtasanPegawai(context)
-                        pdfError = "Data atasan belum tersedia. Silakan coba lagi."
+                    val printData = uiState.cetakData
+                    val pegawai = printData?.pegawai
+                    val atasanData = printData?.atasanLangsung
+                    if (pegawai == null) {
+                        pdfError = "Data pegawai belum tersedia."
                         return@launch
                     }
 
                     // ✅ Baru mulai loading PDF kalau syarat sudah terpenuhi
                     isGeneratingPdf = true
                     try {
-                        val data = uiState.atasanPegawai!!  // sudah pasti ada
-
                         val asn = PersonBlock(
-                            nama = data.pegawaiNama.orEmpty(),
-                            nip = data.pegawaiNip.orEmpty(),
-                            jabatan = data.pegawaiJabatan.orEmpty()
+                            nama = pegawai.pegawaiNama,
+                            nip = pegawai.pegawaiNip.orEmpty(),
+                            jabatan = pegawai.jabatan.orEmpty()
                         )
 
                         val atasan = PersonBlock(
-                            nama = data.atasanPegawaiNama.orEmpty(),
-                            nip = data.atasanPegawaiNip.orEmpty(),
-                            jabatan = data.atasanPegawaiJabatan.orEmpty().ifEmpty { "-" }
+                            nama = atasanData?.pegawaiNama.orEmpty().ifEmpty { "-" },
+                            nip = atasanData?.pegawaiNip.orEmpty(),
+                            jabatan = atasanData?.jabatan.orEmpty().ifEmpty { "-" }
                         )
 
-                        val skpdTitle = data.pegawaiSkpd?.trim().orEmpty()
+                        val approverData = printData.kepalaOpd ?: atasanData
+                        val approver = PersonBlock(
+                            nama = approverData?.pegawaiNama.orEmpty().ifEmpty { "-" },
+                            nip = approverData?.pegawaiNip.orEmpty(),
+                            jabatan = approverData?.jabatan.orEmpty().ifEmpty { "Kepala Dinas" }
+                        )
+
+                        val skpdTitle = pegawai.skpd?.trim().orEmpty()
                             .ifEmpty { "DINAS / UNIT KERJA" }
                             .uppercase()
 
@@ -704,11 +728,15 @@ fun ReportListScreen(
                                 context = context,
                                 bulan = bulan,
                                 tahun = tahun,
-                                laporan = filteredReports,
+                                laporan = allReports,
                                 asn = asn,
                                 atasan = atasan,
+                                approver = approver,
+                                isNonAsnReport = pegawai.isNonAsn
+                                    ?: pegawai.jabatan.isNonAsnJabatan(),
                                 skpdTitle = skpdTitle,
                                 kota = "Merauke",
+                                signatureDateMillis = signatureDateMillis,
                                 ttdResId = null,
                                 stempelResId = null
                             )
@@ -1530,13 +1558,17 @@ private fun PrintPreviewDialog(
     isLoading: Boolean,
     errorText: String?,
     pdfFile: File?,
+    signatureDateMillis: Long,
+    onSignatureDateChange: (Long) -> Unit,
     onDismiss: () -> Unit,
     onGenerate: () -> Unit,
     onPrint: (File) -> Unit,
     autoGenerate: Boolean,
 ) {
+    var showSignatureDatePicker by remember { mutableStateOf(false) }
+
     // generate PDF first time dialog opened (kalau belum ada)
-    LaunchedEffect(autoGenerate) {
+    LaunchedEffect(autoGenerate, signatureDateMillis) {
         if (autoGenerate) onGenerate()
     }
 
@@ -1550,6 +1582,14 @@ private fun PrintPreviewDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                TextButton(onClick = { showSignatureDatePicker = true }) {
+                    Icon(Icons.Default.CalendarToday, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Tanggal tanda tangan: ${formatSignatureDate(signatureDateMillis)}"
+                    )
+                }
 
                 if (!errorText.isNullOrBlank()) {
                     Text(
@@ -1616,6 +1656,35 @@ private fun PrintPreviewDialog(
             }
         }
     )
+
+    if (showSignatureDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = signatureDateMillis
+        )
+
+        DatePickerDialog(
+            onDismissRequest = { showSignatureDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let(
+                            onSignatureDateChange
+                        )
+                        showSignatureDatePicker = false
+                    }
+                ) {
+                    Text("Pilih")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSignatureDatePicker = false }) {
+                    Text("Batal")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 }
 
 /** Render first page pdf -> Bitmap (untuk preview) */
@@ -1733,8 +1802,11 @@ private fun generateLaporanPdfTppTemplate(
     laporan: List<ReportUi>,
     asn: PersonBlock,
     atasan: PersonBlock,
+    approver: PersonBlock,
+    isNonAsnReport: Boolean,
     skpdTitle: String,
     kota: String = "Merauke",
+    signatureDateMillis: Long,
     @DrawableRes ttdResId: Int? = null,
     @DrawableRes stempelResId: Int? = null
 ): File {
@@ -1759,6 +1831,11 @@ private fun generateLaporanPdfTppTemplate(
     val paintSmall = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textSize = 9.5f
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        color = GColor.BLACK
+    }
+    val paintTableHeader = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 7f
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         color = GColor.BLACK
     }
     val paintLine = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -1827,16 +1904,22 @@ private fun generateLaporanPdfTppTemplate(
 
         // Header Text Alignment
         fun drawH(txt: String, x0: Float, x1: Float, y: Float) {
-            canvas.drawText(txt, x0 + (x1 - x0 - measure(paintBold, txt)) / 2, y, paintBold)
+            canvas.drawText(
+                txt,
+                x0 + (x1 - x0 - measure(paintTableHeader, txt)) / 2,
+                y,
+                paintTableHeader
+            )
         }
         drawH("NO", colX[0], colX[1], yStart + 16f)
         drawH("JAM", colX[1], colX[2], yStart + 16f)
         drawH("AKTIVITAS", colX[2], colX[3], yStart + 16f)
-        drawH("KETERANGAN", colX[3], colX[4], yStart + 16f)
+        drawH("KETERANGAN AKTIVITAS", colX[3], colX[4], yStart + 16f)
         drawH("SATUAN", colX[4], colX[5], yStart + 16f)
-        drawH("LAMA", colX[5], colX[6], yt); drawH("(MENIT)", colX[5], colX[6], yt2)
-        drawH("CATATAN", colX[6], colX[7], yStart + 16f)
-        drawH("TTD", colX[7], colX[8], yt); drawH("VALIDATOR", colX[7], colX[8], yt2)
+        drawH("LAMA WAKTU", colX[5], colX[6], yt)
+        drawH("(MENIT)", colX[5], colX[6], yt2)
+        drawH("CATATAN ATASAN", colX[6], colX[7], yStart + 16f)
+        drawH("TTD VALIDATOR", colX[7], colX[8], yStart + 16f)
 
         return yStart + headerH
     }
@@ -1846,28 +1929,29 @@ private fun generateLaporanPdfTppTemplate(
     var canvas = pager.canvas!!
 
     // --- DRAW FULL HEADER (Logo & Employee Data) ---
-    val isNonAsn = asn.jabatan.isNonAsnJabatan()
-    val reportTitle = if (isNonAsn) {
-        "FORMULIR LAPORAN AKTIVITAS KERJA"
+    val reportTitle = if (isNonAsnReport) {
+        "FORMULIR LAPORAN AKTIVITAS KERJA PEGAWAI"
     } else {
         "FORMULIR LAPORAN AKTIVITAS KERJA TPP"
     }
-    val employeeColumnTitle = if (isNonAsn) "Pegawai Non-ASN" else "ASN"
-    var y = margin + 12f
-    canvas.drawText("TAHUN ANGGARAN $tahun", margin, y, paintBold)
+    val employeeColumnTitle = if (isNonAsnReport) "Pegawai" else "ASN"
+    val employeeIdentityLabel = if (isNonAsnReport) "NIK" else "NIP"
+    val titleY = margin + 12f
+    val centerX = (pageWidth / 2f) - (measure(paintBold, reportTitle) / 2f)
+    canvas.drawText(reportTitle, centerX, titleY, paintBold)
+
+    var y = titleY + 30f
+    val bLX = margin + 300f; val bRX = margin + 560f
+    canvas.drawText("TAHUN ANGGARAN $tahun", margin, y, paintText)
     canvas.drawText(skpdTitle, margin, y + 14f, paintBold)
     canvas.drawText("KABUPATEN MERAUKE", margin, y + 28f, paintBold)
-    val centerX = (pageWidth / 2f) - (measure(paintBold, reportTitle) / 2f)
-    canvas.drawText(reportTitle, centerX, y, paintBold)
-
-    y += 46f
-    val bLX = margin + 300f; val bRX = margin + 560f
-    canvas.drawText(employeeColumnTitle, bLX, y, paintBold); canvas.drawText("Atasan Langsung", bRX, y, paintBold)
-    y += 14f
+    canvas.drawText(employeeColumnTitle, bLX, y, paintBold)
+    canvas.drawText("Atasan Langsung", bRX, y, paintBold)
+    val identityStartY = y + 14f
     fun dKV(x: Float, y0: Float, k: String, v: String) = canvas.drawText("$k : $v", x, y0, paintText).run { y0 + 12f }
-    val yL = dKV(bLX, dKV(bLX, dKV(bLX, y, "Nama", asn.nama), "NIP", asn.nip), "Jabatan", asn.jabatan)
-    val yR = dKV(bRX, dKV(bRX, dKV(bRX, y, "Nama", atasan.nama), "NIP", atasan.nip), "Jabatan", atasan.jabatan)
-    y = maxOf(yL, yR) + 10f
+    val yL = dKV(bLX, dKV(bLX, dKV(bLX, identityStartY, "Nama", asn.nama), employeeIdentityLabel, asn.nip), "Jabatan", asn.jabatan)
+    val yR = dKV(bRX, dKV(bRX, dKV(bRX, identityStartY, "Nama", atasan.nama), "NIP", atasan.nip), "Jabatan", atasan.jabatan)
+    y = maxOf(y + 42f, yL, yR) + 10f
 
     y = drawMiniHeader(canvas, y)
     y = drawTableHeader(canvas, y)
@@ -1927,13 +2011,13 @@ private fun generateLaporanPdfTppTemplate(
     }
 
     val signX = pageWidth - margin - 320f
-    canvas.drawText("$kota, ${SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID")).format(Calendar.getInstance().time)}", signX, y, paintText)
-    canvas.drawText("Atasan Langsung", signX, y + 14f, paintText)
+    canvas.drawText("$kota, ${formatSignatureDate(signatureDateMillis)}", signX, y, paintText)
+    canvas.drawText(approver.jabatan.ifEmpty { "Kepala Dinas" }, signX, y + 14f, paintText)
 
     // TTD / Nama Atasan
     val nameY = y + 94f
-    canvas.drawText(atasan.nama, signX, nameY, paintBold)
-    canvas.drawText("NIP. ${atasan.nip}", signX, nameY + 14f, paintText)
+    canvas.drawText(approver.nama, signX, nameY, paintBold)
+    canvas.drawText("NIP. ${approver.nip}", signX, nameY + 14f, paintText)
 
     pager.finishPageIfAny()
     val outFile = File(context.cacheDir, "laporan_tpp_${bulan}_${tahun}.pdf")
@@ -2217,6 +2301,11 @@ private fun formatDateId(dateString: String): String {
     } catch (_: Exception) {
         dateString.split("T")[0]
     }
+}
+
+private fun formatSignatureDate(dateMillis: Long): String {
+    return SimpleDateFormat("dd MMMM yyyy", Locale.forLanguageTag("id-ID"))
+        .format(Date(dateMillis))
 }
 
 private fun mapStatusToEnum(status: String): StatusType {
