@@ -1,6 +1,6 @@
 # Laporan Perubahan Android IZAKOD-ASN
 
-Periode audit: 15 Januari 2026 sampai 7 Juli 2026  
+Periode audit: 15 Januari 2026 sampai 13 Juli 2026  
 Fokus utama: project Android IZAKOD-ASN  
 Lokasi repo: `E:\Android\izakod-asn\izakod-asn-android`
 
@@ -14,11 +14,11 @@ Audit ini tidak membahas seluruh detail perubahan backend/web secara lengkap. Pe
 
 | Item | Hasil |
 | --- | --- |
-| Jumlah commit pada periode audit | 31 commit |
-| Commit terakhir yang terdeteksi | `efa7dee` - 25 Juni 2026 |
-| Pembaruan setelah commit terakhir | Dicatat dari working tree lokal sampai 7 Juli 2026 |
-| Total penambahan baris | 37.042 baris |
-| Total penghapusan baris | 7.927 baris |
+| Jumlah commit pada periode audit | 37 commit |
+| Commit terakhir yang terdeteksi | `8f14137` - 12 Juli 2026 |
+| Pembaruan setelah commit terakhir | Patch routing klik FCM dicatat dari working tree lokal sampai 13 Juli 2026 |
+| Total penambahan baris dari riwayat commit | 42.054 baris |
+| Total penghapusan baris dari riwayat commit | 9.484 baris |
 | Area paling banyak berubah | `app/src/main/java` |
 | Status repo saat audit awal | Bersih sebelum file laporan ini dibuat |
 
@@ -48,10 +48,16 @@ Distribusi commit per tanggal:
 | 17 Juni 2026 | 3 |
 | 20 Juni 2026 | 1 |
 | 25 Juni 2026 | 1 |
+| 1 Juli 2026 | 1 |
+| 3 Juli 2026 | 1 |
+| 4 Juli 2026 | 1 |
+| 5 Juli 2026 | 1 |
+| 8 Juli 2026 | 1 |
+| 12 Juli 2026 | 1 |
 
 ## Ringkasan Besar
 
-Dari 15 Januari sampai 7 Juli 2026, aplikasi Android IZAKOD-ASN berubah dari aplikasi yang masih berfokus pada login, daftar laporan, profil, dan notifikasi dasar menjadi aplikasi kerja pegawai yang jauh lebih lengkap.
+Dari 15 Januari sampai 13 Juli 2026, aplikasi Android IZAKOD-ASN berubah dari aplikasi yang masih berfokus pada login, daftar laporan, profil, dan notifikasi dasar menjadi aplikasi kerja pegawai yang jauh lebih lengkap.
 
 Perubahan terbesar adalah:
 
@@ -67,10 +73,12 @@ Perubahan terbesar adalah:
 10. Penyetaraan SSO/deeplink E-NTAGO dengan login biasa, termasuk penyimpanan sesi E-NTAGO dan registrasi FCM setelah sesi berhasil.
 11. Penambahan Informasi Pilihan/Pengumuman di dashboard Android, halaman detail pengumuman, routing notifikasi ke detail pengumuman, dan dukungan link pada isi informasi.
 12. Perapian tampilan carousel dashboard agar card Informasi Pilihan dan Perlu Tindakan lebih konsisten dengan lebar hero identitas pegawai.
+13. Penyelarasan cetak PDF laporan kegiatan Android dengan format web, termasuk identitas ASN/Non-ASN, atasan langsung, kepala OPD, dan tanggal tanda tangan.
+14. Penguatan routing klik FCM agar pengumuman membuka detail yang benar dan payload lama tetap dapat membuka detail inbox, bukan berhenti di dashboard.
 
-## Pembaruan 26 Juni 2026 sampai 7 Juli 2026
+## Pembaruan 26 Juni 2026 sampai 13 Juli 2026
 
-Bagian ini mencatat perubahan lanjutan setelah audit awal 25 Juni 2026. Sebagian perubahan masih berada pada working tree lokal dan belum tentu sudah menjadi commit Git.
+Bagian ini mencatat perubahan lanjutan setelah audit awal 25 Juni 2026. Perubahan sampai 12 Juli sudah tercatat dalam commit lokal, sedangkan fallback routing klik FCM tanggal 13 Juli masih tercatat dari working tree lokal.
 
 Perubahan utama Android:
 
@@ -130,6 +138,32 @@ File Android penting pada pembaruan ini:
 - `app/src/main/java/com/kominfo_mkq/izakod_asn/data/repository/PayrollLiveEstimateRepository.kt`
 - `app/src/main/java/com/kominfo_mkq/izakod_asn/data/remote/GajiNonAsnRepository.kt`
 - `app/src/main/java/com/kominfo_mkq/izakod_asn/data/remote/TppRepository.kt`
+
+### Pembaruan 8-13 Juli 2026
+
+1. Cetak PDF laporan kegiatan pada Android diselaraskan dengan format cetak web IZAKOD-ASN.
+2. Model response cetak sekarang membaca identitas pegawai, atasan langsung, kepala OPD, daftar laporan, dan penanda jenis pegawai.
+3. Header PDF membedakan pegawai ASN/PPPK dan Non-ASN:
+   - ASN/PPPK memakai judul `FORMULIR LAPORAN AKTIVITAS KERJA TPP` dan identitas NIP.
+   - Non-ASN memakai judul `FORMULIR LAPORAN AKTIVITAS KERJA PEGAWAI` dan identitas NIK.
+4. Nama pegawai, identitas, jabatan, OPD, dan atasan langsung diambil dari response cetak yang sama agar informasi pada PDF konsisten dengan web.
+5. Bagian tanda tangan menggunakan kepala OPD bila tersedia, dengan fallback ke atasan langsung bila data kepala OPD belum tersedia.
+6. Pengguna dapat memilih tanggal tanda tangan dari dialog preview sebelum PDF dibuat.
+7. Judul kolom tabel PDF diperjelas menjadi `KETERANGAN AKTIVITAS`, `LAMA WAKTU (MENIT)`, `CATATAN ATASAN`, dan `TTD VALIDATOR`.
+8. Preview cetak memuat data laporan bulanan secara khusus ketika filter daftar belum aktif, sehingga hasil cetak tidak bergantung pada halaman atau filter visual yang sedang dibuka.
+9. Routing klik FCM diperkuat untuk tiga tujuan utama:
+   - pengumuman membuka detail Informasi/Pengumuman;
+   - laporan kegiatan membuka detail laporan;
+   - payload lama yang hanya membawa `notifikasi_id` membuka detail inbox notifikasi.
+10. Fallback berdasarkan `notifikasi_id` mencegah klik notifikasi berhenti di dashboard ketika payload lama belum membawa `pengumuman_id`.
+11. Patch routing FCM tanggal 13 Juli berada pada `MainActivity.kt` dan sudah lolos `compileDebugKotlin`.
+
+File Android penting pada pembaruan 8-13 Juli:
+
+- `app/src/main/java/com/kominfo_mkq/izakod_asn/data/model/LaporanCetakResponse.kt`
+- `app/src/main/java/com/kominfo_mkq/izakod_asn/ui/screens/ReportListScreen.kt`
+- `app/src/main/java/com/kominfo_mkq/izakod_asn/ui/viewmodel/LaporanListViewModel.kt`
+- `app/src/main/java/com/kominfo_mkq/izakod_asn/MainActivity.kt`
 
 ## Timeline Perubahan
 
@@ -770,6 +804,67 @@ Makna perubahan:
 
 Commit terakhir dalam periode audit membuat aplikasi lebih siap rilis production. Perubahan ini bukan hanya menaikkan versi, tetapi juga menambahkan kendali update dari server, mengurangi perbedaan perilaku antara login biasa dan SSO dari E-NTAGO, serta menutup celah agar operator/non-atasan tidak dapat membuat usulan bawahan personal dari Android.
 
+### 1-8 Juli 2026
+
+Commit terkait:
+
+- `22f9cbd` - 1 Juli 2026
+- `01f90e8` - 3 Juli 2026
+- `72e51b9` - 4 Juli 2026
+- `c9ccd9d` - 5 Juli 2026
+- `044fadf` - 8 Juli 2026
+
+Perubahan utama pada rangkaian ini:
+
+- Menambahkan dan merapikan Informasi Pilihan/Pengumuman pada dashboard Android.
+- Menambahkan halaman detail pengumuman, link publik, aksi buka web, dan berbagi.
+- Menjaga format konten TinyMCE seperti heading, bold, warna, dan link agar dapat dibaca di Android.
+- Memperbaiki ukuran thumbnail, carousel, dan URL asset pengumuman untuk server produksi.
+- Memperkuat permission notifikasi setelah sesi login aktif.
+- Menambahkan routing pengumuman dari FCM dan halaman inbox Android.
+
+Makna perubahan:
+
+Android tidak hanya menjadi aplikasi transaksi kerja, tetapi juga menjadi media penyampaian panduan dan informasi resmi kepada pegawai.
+
+### 12 Juli 2026
+
+Commit: `8f14137` - `12-07-2026`
+
+Perubahan utama:
+
+- Menyelaraskan cetak PDF laporan kegiatan Android dengan pola cetak web.
+- Menambahkan data atasan langsung dan kepala OPD pada model response cetak.
+- Membedakan judul dan identitas cetak ASN/PPPK dengan Non-ASN.
+- Menambahkan pemilihan tanggal tanda tangan pada preview PDF.
+- Menggunakan kepala OPD sebagai penandatangan jika tersedia.
+- Memperjelas judul kolom tabel dan memperbaiki sumber daftar laporan yang dicetak.
+
+File penting:
+
+- `app/src/main/java/com/kominfo_mkq/izakod_asn/data/model/LaporanCetakResponse.kt`
+- `app/src/main/java/com/kominfo_mkq/izakod_asn/ui/screens/ReportListScreen.kt`
+- `app/src/main/java/com/kominfo_mkq/izakod_asn/ui/viewmodel/LaporanListViewModel.kt`
+
+Makna perubahan:
+
+Pegawai dapat menghasilkan PDF laporan kegiatan dari Android dengan identitas, atasan, penandatangan, dan format tabel yang lebih konsisten dengan versi web.
+
+### 13 Juli 2026
+
+Status: patch working tree setelah commit `8f14137`.
+
+Perubahan utama:
+
+- Memperbaiki fallback klik notifikasi FCM pada `MainActivity.kt`.
+- Jika `pengumuman_id` tersedia, aplikasi membuka detail pengumuman.
+- Jika payload merupakan laporan, aplikasi membuka detail laporan.
+- Jika payload lama hanya membawa `notifikasi_id`, aplikasi membuka detail inbox notifikasi dan tidak berhenti di dashboard.
+
+Verifikasi:
+
+- `compileDebugKotlin` berhasil.
+
 ## Perubahan Berdasarkan Area Fitur
 
 ### 1. Login, Auth, Token, dan Session
@@ -1304,7 +1399,7 @@ Navigasi berubah karena aplikasi mendapat banyak halaman baru: Target, Penilaian
 
 ### `ReportListScreen.kt` dan `ReportDetailScreen.kt`
 
-Laporan kegiatan makin kompleks karena mendukung laporan sendiri, laporan bawahan, relasi target, revisi, review, detail, dan notifikasi.
+Laporan kegiatan makin kompleks karena mendukung laporan sendiri, laporan bawahan, relasi target, revisi, review, detail, notifikasi, dan cetak PDF dengan identitas serta penandatangan yang mengikuti data server.
 
 ### `TargetKinerjaScreens.kt` dan `PenilaianKinerjaScreens.kt`
 
@@ -1312,7 +1407,7 @@ Kedua area ini membentuk workflow kinerja ASN/PPPK yang sebelumnya belum ada di 
 
 ## Dampak Terhadap Pengalaman Pegawai
 
-Sebelum periode perubahan ini, Android IZAKOD-ASN lebih sederhana. Setelah perubahan sampai 25 Juni 2026, pegawai bisa:
+Sebelum periode perubahan ini, Android IZAKOD-ASN lebih sederhana. Setelah perubahan sampai 13 Juli 2026, pegawai bisa:
 
 - Login dan membuka dashboard yang lebih informatif.
 - Melihat pekerjaan prioritas dari carousel Perlu Tindakan.
@@ -1328,6 +1423,8 @@ Sebelum periode perubahan ini, Android IZAKOD-ASN lebih sederhana. Setelah perub
 - Bagi atasan, melihat/mengusulkan bawahan dan memproses laporan/penilaian bawahan.
 - Bagi role terkait, memverifikasi usulan atasan-bawahan.
 - Mendapat arahan update aplikasi jika versi terbaru tersedia atau jika versi lama sudah tidak didukung.
+- Membaca pengumuman/panduan lengkap dari carousel dashboard dan notifikasi FCM.
+- Mencetak PDF laporan kegiatan dari Android dengan format ASN/Non-ASN yang sesuai.
 
 ## Catatan Risiko dan Hal yang Perlu Dijaga
 
@@ -1376,6 +1473,8 @@ Untuk memastikan perubahan Android tetap aman, disarankan melakukan cek berikut:
 6. Uji notifikasi:
 
    - Klik notifikasi laporan harus membuka detail laporan yang benar.
+   - Klik notifikasi pengumuman baru harus membuka detail pengumuman.
+   - Payload lama yang hanya memiliki ID notifikasi harus membuka detail inbox, bukan dashboard.
    - Notifikasi lama tidak memakai wording lama yang membingungkan.
 
 7. Uji AI Tanya Asisten:
@@ -1393,7 +1492,7 @@ Untuk memastikan perubahan Android tetap aman, disarankan melakukan cek berikut:
 
 ## Kesimpulan
 
-Perubahan Android IZAKOD-ASN dari 15 Januari 2026 sampai 25 Juni 2026 sangat besar. Aplikasi berkembang dari aplikasi laporan dasar menjadi aplikasi kerja pegawai yang mencakup laporan kegiatan, target, penilaian, statistik, TPP, Gaji Non-ASN, estimasi berjalan, SSO E-NTAGO, notifikasi, AI Panduan, atasan-bawahan, verifikasi, dan kontrol versi aplikasi Android.
+Perubahan Android IZAKOD-ASN dari 15 Januari 2026 sampai 13 Juli 2026 sangat besar. Aplikasi berkembang dari aplikasi laporan dasar menjadi aplikasi kerja pegawai yang mencakup laporan kegiatan, target, penilaian, statistik, TPP, Gaji Non-ASN, estimasi berjalan, SSO E-NTAGO, notifikasi, pengumuman, AI Panduan, atasan-bawahan, verifikasi, kontrol versi, dan cetak PDF laporan kegiatan dari Android.
 
 Fokus terbesar project Android saat ini adalah menjaga konsistensi data dan pengalaman pegawai: dashboard harus cepat, tidak menampilkan status yang salah saat data belum selesai dimuat, dan semua badge/tindakan harus mengarah ke halaman yang tepat.
 

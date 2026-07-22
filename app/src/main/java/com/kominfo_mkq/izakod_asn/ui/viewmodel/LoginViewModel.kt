@@ -24,6 +24,14 @@ data class LoginUiState(
     val userData: AuthenticatedSession? = null
 )
 
+private data class MobileTokenIssueResult(
+    val token: String? = null,
+    val errorMessage: String? = null
+)
+
+private const val DEFAULT_MOBILE_TOKEN_ERROR_MESSAGE =
+    "Login berhasil, tetapi token aplikasi belum dapat dibuat. Silakan coba lagi."
+
 class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = AuthRepository()
@@ -112,17 +120,18 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     userPrefs.setEntagoAccessToken(authSession.token)
                     userPrefs.setEntagoRefreshToken(authSession.refreshToken)
 
-                    val mobileToken = issueAndPersistMobileToken(
+                    val mobileTokenResult = issueAndPersistMobileToken(
                         pegawaiId = pegawaiId,
                         pin = userData.pin
                     )
 
-                    if (mobileToken.isNullOrBlank()) {
+                    if (mobileTokenResult.token.isNullOrBlank()) {
                         userPrefs.clearSession()
                         TokenStore.setToken(null)
                         TokenStore.setRefreshToken(null)
                         _uiState.value = LoginUiState(
-                            errorMessage = "Login berhasil, tetapi token aplikasi gagal dibuat. Silakan coba lagi."
+                            errorMessage = mobileTokenResult.errorMessage
+                                ?: DEFAULT_MOBILE_TOKEN_ERROR_MESSAGE
                         )
                         return@launch
                     }
@@ -160,7 +169,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun issueAndPersistMobileToken(
         pegawaiId: Int,
         pin: String
-    ): String? {
+    ): MobileTokenIssueResult {
         return try {
             val response = repository.fetchNextJsMobileToken(pegawaiId, pin)
             val body: MobileTokenResponse? = response.body()
@@ -173,18 +182,42 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     "LoginViewModel",
                     "Failed to issue mobile token: code=${response.code()} message=${body?.message}"
                 )
-                null
+                MobileTokenIssueResult(
+                    errorMessage = readMobileTokenErrorMessage(response, body)
+                )
             } else {
                 userPrefs.setMobileJwtToken(token)
                 userPrefs.setRefreshToken(refreshToken)
                 TokenStore.setToken(token)
                 TokenStore.setRefreshToken(refreshToken)
-                token
+                MobileTokenIssueResult(token = token)
             }
         } catch (e: Exception) {
             android.util.Log.e("LoginViewModel", "Failed to issue mobile token: ${e.message}", e)
+            MobileTokenIssueResult(errorMessage = DEFAULT_MOBILE_TOKEN_ERROR_MESSAGE)
+        }
+    }
+
+    private fun readMobileTokenErrorMessage(
+        response: retrofit2.Response<MobileTokenResponse>,
+        body: MobileTokenResponse?
+    ): String {
+        val responseMessage = body
+            ?.takeIf { !it.success }
+            ?.message
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+
+        if (responseMessage != null) return responseMessage
+
+        val errorMessage = try {
+            val rawError = response.errorBody()?.string().orEmpty()
+            JSONObject(rawError).optString("message").trim().takeIf { it.isNotEmpty() }
+        } catch (_: Exception) {
             null
         }
+
+        return errorMessage ?: DEFAULT_MOBILE_TOKEN_ERROR_MESSAGE
     }
 
     private fun isLikelyMobileToken(token: String): Boolean {

@@ -584,20 +584,30 @@ class MainActivity : ComponentActivity() {
             return ExternalRoute(route = "pengumuman_detail/$pengumumanId")
         }
 
-        val laporanId = intent?.getStringExtra("laporan_id")
-            ?.trim()
-            ?.toIntOrNull()
-            ?.takeIf { it > 0 }
+        val laporanId = intent?.firstPositiveIntExtra("laporan_id")
             ?: extractLaporanIdFromLink(intent?.getStringExtra("link_tujuan"))
             ?: extractLaporanIdFromLink(intent?.data?.toString())
-            ?: return null
+
+        if (laporanId != null) {
+            Log.d(
+                "MainActivity",
+                "Notification route diterima: laporan_id=$laporanId"
+            )
+
+            return ExternalRoute(route = "laporan_detail/$laporanId")
+        }
+
+        val notifikasiId = intent?.firstPositiveIntExtra(
+            "notifikasi_id",
+            "notification_id"
+        ) ?: return null
 
         Log.d(
             "MainActivity",
-            "Notification route diterima: laporan_id=$laporanId"
+            "Notification route fallback diterima: notifikasi_id=$notifikasiId"
         )
 
-        return ExternalRoute(route = "laporan_detail/$laporanId")
+        return ExternalRoute(route = "notification_detail/$notifikasiId")
     }
 
     private fun Intent.firstPositiveIntExtra(vararg names: String): Int? {
